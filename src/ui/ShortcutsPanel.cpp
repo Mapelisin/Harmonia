@@ -46,6 +46,8 @@ namespace harmonia::ui
                 { "Z", "Zoom to fit: the whole song, or the selected clips" },
                 { "Click the ruler", "Play from there (Song mode)" },
                 { "Ctrl+drag on the ruler", "Loop region for Song mode (a click without dragging clears it)" },
+                { "Ctrl+Insert / Ctrl+Delete", "Empty bars before the loop region / delete its bars, on every track" },
+                { "Right button on the ruler", "Markers; duplicate, insert or delete bars on every track" },
                 { "Markers strip", "+ Marker, double-click: add; drag: move; double-click a marker: rename" },
                 { "Track header: right button", "Rename, colour, duplicate, move, render to audio, delete" },
                 { "Drag a track header", "Move the track up or down" } } },

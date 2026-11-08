@@ -6,6 +6,7 @@
 #include "core/Clips.h"
 #include "core/MidiFiles.h"
 #include "core/NoteEditor.h"
+#include "core/Sections.h"
 #include "core/Tracks.h"
 
 namespace harmonia::ui::arrangement
@@ -1028,6 +1029,95 @@ namespace harmonia::ui::arrangement
             project.beginGesture ("Rename clip");
             clip.setName (trimmed);
         }
+    }
+
+    //==============================================================================
+    void ArrangementModel::insertBars (double startBeat, double lengthBeats)
+    {
+        startBeat = std::max (0.0, startBeat);
+
+        if (lengthBeats <= 0.0)
+            return;
+
+        project.beginGesture ("Insert bars");
+        core::sections::insertSpace (getEdit(), startBeat, lengthBeats);
+
+        if (loopRegion.has_value())
+        {
+            if (loopRegion->start > startBeat + 1.0e-6)
+                loopRegion = core::note_ops::BeatRange { loopRegion->start + lengthBeats, loopRegion->end + lengthBeats };
+            else if (loopRegion->start < startBeat - 1.0e-6 && loopRegion->end > startBeat + 1.0e-6)
+                loopRegion->end += lengthBeats;
+        }
+
+        clipsDirty = true;
+        changed();
+    }
+
+    void ArrangementModel::deleteBars (double startBeat, double endBeat)
+    {
+        startBeat = std::max (0.0, startBeat);
+
+        if (endBeat <= startBeat)
+            return;
+
+        project.beginGesture ("Delete bars");
+        core::sections::deleteRange (getEdit(), startBeat, endBeat);
+
+        if (loopRegion.has_value())
+        {
+            const auto length = endBeat - startBeat;
+
+            if (loopRegion->start >= endBeat - 1.0e-6)
+                loopRegion = core::note_ops::BeatRange { loopRegion->start - length, loopRegion->end - length };
+            else if (loopRegion->end > startBeat + 1.0e-6)
+                loopRegion.reset();
+        }
+
+        clipsDirty = true;
+        changed();
+    }
+
+    int ArrangementModel::duplicateBars (double startBeat, double endBeat)
+    {
+        startBeat = std::max (0.0, startBeat);
+
+        if (endBeat <= startBeat)
+            return 0;
+
+        project.beginGesture ("Duplicate bars");
+        const auto copies = core::sections::duplicateRange (getEdit(), startBeat, endBeat);
+        const auto length = endBeat - startBeat;
+
+        if (loopRegion.has_value())
+        {
+            if (std::abs (loopRegion->start - startBeat) < 1.0e-6 && std::abs (loopRegion->end - endBeat) < 1.0e-6)
+                loopRegion = core::note_ops::BeatRange { endBeat, endBeat + length };
+            else if (loopRegion->start >= endBeat - 1.0e-6)
+                loopRegion = core::note_ops::BeatRange { loopRegion->start + length, loopRegion->end + length };
+            else if (loopRegion->end > endBeat + 1.0e-6)
+                loopRegion->end += length;
+        }
+
+        setSelection (copies);
+        clipsDirty = true;
+        changed();
+        return copies.size();
+    }
+
+    juce::String ArrangementModel::describeBars (core::note_ops::BeatRange range, double beatsPerBar)
+    {
+        const auto isWhole = [] (double x) { return std::abs (x - std::round (x)) < 1.0e-6; };
+
+        if (beatsPerBar > 0.0 && isWhole (range.start / beatsPerBar) && isWhole (range.end / beatsPerBar))
+        {
+            const auto first = juce::roundToInt (range.start / beatsPerBar) + 1;
+            const auto last = juce::roundToInt (range.end / beatsPerBar);
+            return first >= last ? "bar " + juce::String (first) : "bars " + juce::String (first) + "-" + juce::String (last);
+        }
+
+        const auto beat = [isWhole] (double b) { return juce::String (b + 1.0, isWhole (b) ? 0 : 2); };
+        return "beats " + beat (range.start) + "-" + beat (range.end);
     }
 
     void ArrangementModel::undo()

@@ -222,6 +222,27 @@ namespace harmonia::ui::arrangement
 
         void renameClip (te::Clip&, const juce::String&);
 
+        //==============================================================================
+        // Bars on every track (core::sections): one undo step each. Beats are song beats.
+
+        /** `lengthBeats` of empty space at `startBeat` on every track; what comes after (clips,
+            automation, tempo, markers) moves later. A loop region after it moves along (one
+            starting there stays, over the new bars). */
+        void insertBars (double startBeat, double lengthBeats);
+
+        /** Takes the stretch out of every track and closes the gap. A loop region over it goes;
+            one after it moves along. */
+        void deleteBars (double startBeat, double endBeat);
+
+        /** Plays the stretch twice: a copy right after it on every track (MIDI clips linked to
+            their originals, as Ctrl+B makes them), the rest later. The copies become the
+            selection; a loop region over the stretch moves onto the copy (so doing it again
+            repeats it once more). Returns how many clips were copied. */
+        int duplicateBars (double startBeat, double endBeat);
+
+        /** "bars 5-8", "bar 3", or "beats 2.50-5" when it isn't whole bars. */
+        static juce::String describeBars (core::note_ops::BeatRange, double beatsPerBar);
+
         void undo();
         void redo();
 

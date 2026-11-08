@@ -130,6 +130,20 @@ namespace harmonia::ui::arrangement
         const auto code = key.getKeyCode();
         const auto letter = keys::getLetter (key);   // the same keys with any layout
 
+        // Bars on every track: empty ones before the loop region, or its bars deleted.
+        if (mods.isCommandDown() && ! mods.isAltDown() && ! mods.isShiftDown()
+            && (code == juce::KeyPress::insertKey || code == juce::KeyPress::deleteKey))
+        {
+            if (const auto loop = model.getLoopRegion(); ! loop.has_value())
+                tell ("Choose the bars first: Ctrl+drag on the ruler (the loop region)", true);
+            else if (code == juce::KeyPress::insertKey)
+                model.insertBars (loop->start, loop->getLength());
+            else
+                model.deleteBars (loop->start, loop->end);
+
+            return true;
+        }
+
         if (mods.isCommandDown() && ! mods.isAltDown())
         {
             switch (letter)

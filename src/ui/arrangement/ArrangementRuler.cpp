@@ -132,7 +132,8 @@ namespace harmonia::ui::arrangement
         return found;
     }
 
-    juce::PopupMenu ArrangementRuler::createMenu (double beat, std::optional<core::markers::Marker> marker)
+    juce::PopupMenu ArrangementRuler::createMenu (double beat, std::optional<core::markers::Marker> marker,
+                                                  std::optional<double> clickedBeat)
     {
         juce::PopupMenu menu;
 
@@ -161,7 +162,50 @@ namespace harmonia::ui::arrangement
         });
 
         menu.addSubMenu ("Add marker here", names);
+        menu.addSeparator();
+        addBarItems (menu, std::max (0.0, clickedBeat.value_or (beat)));
         return menu;
+    }
+
+    void ArrangementRuler::addBarItems (juce::PopupMenu& menu, double clicked)
+    {
+        const auto beatsPerBar = model.getBeatsPerBar();
+
+        if (beatsPerBar <= 0.0)
+            return;
+
+        // The loop region if the click is in it, else the clicked bar.
+        const auto loop = model.getLoopRegion();
+        const auto onLoop = loop.has_value() && clicked >= loop->start && clicked < loop->end;
+        const auto bar = std::floor (clicked / beatsPerBar + 1.0e-9);
+        const auto range = onLoop ? *loop : core::note_ops::BeatRange { bar * beatsPerBar, (bar + 1.0) * beatsPerBar };
+        const auto what = ArrangementModel::describeBars (range, beatsPerBar);
+
+        // "before bar 5" / "before beat 2.50"; "an empty bar" / "4 empty bars" / "empty beats".
+        const auto bars = range.getLength() / beatsPerBar;
+        const auto wholeBars = std::abs (bars - std::round (bars)) < 1.0e-6;
+        const auto startsOnBar = std::abs (range.start / beatsPerBar - std::round (range.start / beatsPerBar)) < 1.0e-6;
+        const auto before = startsOnBar ? "bar " + juce::String (juce::roundToInt (range.start / beatsPerBar) + 1)
+                                        : "beat " + juce::String (range.start + 1.0, 2);
+        const auto empty = ! wholeBars ? juce::String ("empty space")
+                         : juce::roundToInt (bars) == 1 ? juce::String ("an empty bar")
+                                                        : juce::String (juce::roundToInt (bars)) + " empty bars";
+
+        const auto add = [&menu, onLoop] (const juce::String& text, const juce::String& shortcut, std::function<void()> action)
+        {
+            juce::PopupMenu::Item item (text);
+            item.action = std::move (action);
+
+            if (onLoop)
+                item.shortcutKeyDescription = shortcut;
+
+            menu.addItem (std::move (item));
+        };
+
+        add ("Duplicate " + what + " (all tracks)", {}, [this, range] { model.duplicateBars (range.start, range.end); });
+        add ("Insert " + empty + " before " + before + " (all tracks)", "Ctrl+Insert",
+             [this, range] { model.insertBars (range.start, range.getLength()); });
+        add ("Delete " + what + " (all tracks)", "Ctrl+Delete", [this, range] { model.deleteBars (range.start, range.end); });
     }
 
     void ArrangementRuler::setPlayheadBeat (std::optional<double> beat)
@@ -187,7 +231,7 @@ namespace harmonia::ui::arrangement
 
         if (e.mods.isPopupMenu())
         {
-            createMenu (snapped (e), marker).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this)
+            createMenu (snapped (e), marker, view.xToBeat (e.position.x)).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this)
                                                                                       .withMousePosition());
             return;
         }

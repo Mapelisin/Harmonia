@@ -569,17 +569,7 @@ namespace harmonia::ui
 
     juce::String MainComponent::describeBars (core::note_ops::BeatRange range, double beatsPerBar)
     {
-        const auto isWhole = [] (double x) { return std::abs (x - std::round (x)) < 1.0e-6; };
-
-        if (beatsPerBar > 0.0 && isWhole (range.start / beatsPerBar) && isWhole (range.end / beatsPerBar))
-        {
-            const auto first = juce::roundToInt (range.start / beatsPerBar) + 1;
-            const auto last = juce::roundToInt (range.end / beatsPerBar);
-            return first >= last ? "bar " + juce::String (first) : "bars " + juce::String (first) + "-" + juce::String (last);
-        }
-
-        const auto beat = [isWhole] (double b) { return juce::String (b + 1.0, isWhole (b) ? 0 : 2); };
-        return "beats " + beat (range.start) + "-" + beat (range.end);
+        return arrangement::ArrangementModel::describeBars (range, beatsPerBar);
     }
 
     void MainComponent::chooseFilesToImport()

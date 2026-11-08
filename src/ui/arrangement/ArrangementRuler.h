@@ -6,7 +6,8 @@
 namespace harmonia::ui::arrangement
 {
     /** Bar numbers above the clips. Click: play from there (song mode). Ctrl+drag: the loop
-        region; Ctrl+click: no loop region. In clip mode the open clip's range is marked. */
+        region; Ctrl+click: no loop region. In clip mode the open clip's range is marked. Right
+        button: markers, and bars on every track. */
     class ArrangementRuler final : public juce::Component
     {
     public:
@@ -33,8 +34,11 @@ namespace harmonia::ui::arrangement
         /** The marker whose flag is at this point (ruler coordinates), if any. */
         std::optional<core::markers::Marker> findMarkerAt (juce::Point<float>) const;
 
-        /** The right-click menu: add a marker at `beat`; rename, loop or delete `marker`. */
-        juce::PopupMenu createMenu (double beat, std::optional<core::markers::Marker> marker);
+        /** The right-click menu: add a marker at `beat`; rename, loop or delete `marker`;
+            duplicate, insert or delete bars on every track: the loop region if `clickedBeat`
+            (where the mouse was, not snapped; `beat` if none) is in it, else the bar there. */
+        juce::PopupMenu createMenu (double beat, std::optional<core::markers::Marker> marker,
+                                    std::optional<double> clickedBeat = std::nullopt);
 
     private:
         ArrangementModel& model;
@@ -53,5 +57,6 @@ namespace harmonia::ui::arrangement
         void paintMarkers (juce::Graphics&);
 
         double snapped (const juce::MouseEvent&) const;
+        void addBarItems (juce::PopupMenu&, double clickedBeat);
     };
 }

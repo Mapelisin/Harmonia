@@ -28,7 +28,8 @@ namespace harmonia::ui::arrangement
         ClipArea& getClipArea() noexcept            { return clipArea; }
         TrackHeaders& getHeaders() noexcept         { return headers; }
 
-        /** Delete, Ctrl+B (linked copies), Ctrl+Shift+B, Ctrl+A, Ctrl+D / Escape, Ctrl+C / X / V, Ctrl+E. */
+        /** Delete, Ctrl+B (linked copies), Ctrl+Shift+B, Ctrl+A, Ctrl+D / Escape, Ctrl+C / X / V, Ctrl+E;
+            Ctrl+Insert / Ctrl+Delete: bars on every track over the loop region. */
         bool handleShortcut (const juce::KeyPress&);
 
         /** Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+E, with a word for onMessage. Paste and split go where
