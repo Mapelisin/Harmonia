@@ -12,10 +12,14 @@ namespace harmonia::ui::pianoroll
         humanize,       // Alt+R
         scaleLevels,    // Alt+X
         chordProgression, // Alt+P: writes chords, needs no notes
-        drumPattern     // Alt+D: writes a groove, needs no notes
+        drumPattern,    // Alt+D: writes a groove, needs no notes
+        bassLine        // Alt+B: writes a bass under the other tracks' chords
     };
 
     const std::vector<NoteTool>& getAllNoteTools();
+
+    /** Whether a tool writes new notes (needing none in the clip) rather than changing them. */
+    bool writesNewNotes (NoteTool);
     juce::String getName (NoteTool);
     juce::String getShortcutDescription (NoteTool);
 
@@ -48,6 +52,9 @@ namespace harmonia::ui::pianoroll
         /** The window for this tool on the selected notes (or all), already showing its result
             with the default settings; nullptr if there are no notes to work on. */
         static std::unique_ptr<NoteToolWindow> create (PianoRollModel&, NoteTool);
+
+        /** Why create() gave nothing, for the user ("The clip has no notes..."). */
+        static juce::String getUnavailableReason (PianoRollModel&, NoteTool);
 
         /** Opens the window in a call-out box pointing at `area` of `parent`. */
         static void show (std::unique_ptr<NoteToolWindow>, juce::Component& parent, juce::Rectangle<int> area);
@@ -87,6 +94,7 @@ namespace harmonia::ui::pianoroll
 
         static std::unique_ptr<NoteToolWindow> createChordProgression (PianoRollModel&);
         static std::unique_ptr<NoteToolWindow> createDrumPattern (PianoRollModel&);
+        static std::unique_ptr<NoteToolWindow> createBassLine (PianoRollModel&);
         std::vector<double> getValues() const;
         void update();
         void close();

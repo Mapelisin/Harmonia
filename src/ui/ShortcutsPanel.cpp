@@ -104,6 +104,7 @@ namespace harmonia::ui
                 { "Alt+X", "Scale levels: velocity (or another property) all at once" },
                 { "Alt+P", "Chord progression: writes chords, even into an empty clip" },
                 { "Alt+D", "Drum pattern: writes a groove (rock, house, trap...), even into an empty clip" },
+                { "Alt+B", "Bass line: a bass under the chords the other tracks play" },
                 { "In the window", "Space: listen; Enter: accept; Esc: cancel" } } },
 
             { "Sounds (F6)", {

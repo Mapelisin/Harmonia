@@ -32,6 +32,8 @@ add_library(harmonia_core STATIC
     Progressions.cpp
     DrumPatterns.h
     DrumPatterns.cpp
+    BassLines.h
+    BassLines.cpp
     Markers.h
     Markers.cpp
     Drums.h

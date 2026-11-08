@@ -26,6 +26,7 @@ namespace harmonia::ui
 
         pianoRollModel.setAuditioner (&auditioner);
         pianoRollModel.addListener (this);
+        pianoRoll.onMessage = [this] (const juce::String& text) { showMessage (text); };
         arrangementModel.addListener (this);
         arrangementModel.onCurrentChanged = [this] { currentChanged(); };
 

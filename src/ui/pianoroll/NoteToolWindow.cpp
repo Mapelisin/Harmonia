@@ -1,4 +1,5 @@
 #include "ui/pianoroll/NoteToolWindow.h"
+#include "core/BassLines.h"
 #include "core/DrumPatterns.h"
 #include "core/Progressions.h"
 #include "ui/Theme.h"
@@ -28,8 +29,14 @@ namespace harmonia::ui::pianoroll
     const std::vector<NoteTool>& getAllNoteTools()
     {
         static const std::vector<NoteTool> all { NoteTool::strum, NoteTool::arpeggiate, NoteTool::humanize,
-                                                 NoteTool::scaleLevels, NoteTool::chordProgression, NoteTool::drumPattern };
+                                                 NoteTool::scaleLevels, NoteTool::chordProgression, NoteTool::drumPattern,
+                                                 NoteTool::bassLine };
         return all;
+    }
+
+    bool writesNewNotes (NoteTool tool)
+    {
+        return tool == NoteTool::chordProgression || tool == NoteTool::drumPattern || tool == NoteTool::bassLine;
     }
 
     juce::String getName (NoteTool tool)
@@ -42,6 +49,7 @@ namespace harmonia::ui::pianoroll
             case NoteTool::scaleLevels: return "Scale levels";
             case NoteTool::chordProgression: return "Chord progression";
             case NoteTool::drumPattern: return "Drum pattern";
+            case NoteTool::bassLine:    return "Bass line";
         }
 
         return {};
@@ -57,6 +65,7 @@ namespace harmonia::ui::pianoroll
             case NoteTool::scaleLevels: return "Alt+X";
             case NoteTool::chordProgression: return "Alt+P";
             case NoteTool::drumPattern: return "Alt+D";
+            case NoteTool::bassLine:    return "Alt+B";
         }
 
         return {};
@@ -248,6 +257,9 @@ namespace harmonia::ui::pianoroll
         if (tool == NoteTool::drumPattern)
             return createDrumPattern (model);
 
+        if (tool == NoteTool::bassLine)
+            return createBassLine (model);
+
         const auto targets = model.getSelectedOrAll();
 
         if (targets.isEmpty())
@@ -344,6 +356,7 @@ namespace harmonia::ui::pianoroll
 
             case NoteTool::chordProgression:
             case NoteTool::drumPattern:
+            case NoteTool::bassLine:
                 break;
         }
 
@@ -406,6 +419,61 @@ namespace harmonia::ui::pianoroll
                 s.repeats = juce::roundToInt (v[9]);
                 s.startBeat = start;
                 return tools::Result { {}, {}, progressions::generate (s) };
+            }, juce::Array<te::MidiNote*>());
+    }
+
+    juce::String NoteToolWindow::getUnavailableReason (PianoRollModel& model, NoteTool tool)
+    {
+        if (model.getClip() == nullptr)
+            return "Open a clip first (click one in the arrangement)";
+
+        if (tool == NoteTool::bassLine)
+            return "Bass line follows the chords the other tracks play here, and they play none (drum tracks don't count)";
+
+        if (writesNewNotes (tool))
+            return {};
+
+        return "The clip has no notes for " + pianoroll::getName (tool) + " to work on";
+    }
+
+    std::unique_ptr<NoteToolWindow> NoteToolWindow::createBassLine (PianoRollModel& model)
+    {
+        namespace bass = core::bass_lines;
+        auto* clip = model.getClip();
+
+        if (clip == nullptr)
+            return nullptr;
+
+        // Under the chords the other tracks play over the time selection, or else the clip.
+        const auto selection = model.getTimeSelection();
+        const auto start = selection.has_value() ? std::max (model.getMinBeat(), selection->start) : model.getClipStartBeat();
+        const auto end = selection.has_value() ? selection->end : model.getClipEndBeat();
+        const auto chords = core::chords::findChords (bass::getHarmony (model.getEdit(), clip->getTrack(), start, end));
+
+        if (chords.empty())
+            return nullptr;
+
+        juce::StringArray patterns;
+
+        for (auto p : bass::getPatterns())
+            patterns.add (bass::getName (p));
+
+        return std::make_unique<NoteToolWindow> (model, pianoroll::getName (NoteTool::bassLine), std::vector<Setting> {
+            { "Pattern", 0.0, 0.0, 0.0, 1.0, {}, patterns },
+            { "Octave", 1.0, 4.0, 1.0, 2.0, {}, {} },
+            { "Slash chords", 0.0, 0.0, 0.0, 0.0, {}, { "Their bass note (C/E: E)", "The chord's root (C/E: C)" } },
+            { "Gate", 10.0, 100.0, 1.0, 90.0, "%", {} },
+            { "Velocity", 40.0, 127.0, 1.0, 100.0, {}, {} } },
+            [chords] (const std::vector<core::Note>&, const std::vector<double>& v)
+            {
+                const auto& all = bass::getPatterns();
+                bass::Settings s;
+                s.pattern = all[(size_t) juce::jlimit (0, (int) all.size() - 1, juce::roundToInt (v[0]))];
+                s.octave = juce::roundToInt (v[1]);
+                s.slashBass = juce::roundToInt (v[2]) == 0;
+                s.gate = v[3] / 100.0;
+                s.velocity = juce::roundToInt (v[4]);
+                return tools::Result { {}, {}, bass::generate (chords, s) };
             }, juce::Array<te::MidiNote*>());
     }
 

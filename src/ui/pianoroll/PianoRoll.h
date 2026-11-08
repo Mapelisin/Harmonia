@@ -54,6 +54,9 @@ namespace harmonia::ui::pianoroll
             take it here: a call-out box needs the piano roll on the screen.) */
         std::function<void (std::unique_ptr<NoteToolWindow>)> onShowNoteTool;
 
+        /** Something to tell the user (why a tool didn't open...). */
+        std::function<void (const juce::String&)> onMessage;
+
         /** Off while the computer keyboard plays notes: letters, digits and punctuation are left
             to it (keyPressed returns false for them). */
         void setLetterShortcutsEnabled (bool shouldBeEnabled) noexcept   { letterShortcutsEnabled = shouldBeEnabled; }

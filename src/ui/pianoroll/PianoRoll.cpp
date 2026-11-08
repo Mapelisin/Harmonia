@@ -442,6 +442,10 @@ namespace harmonia::ui::pianoroll
             else
                 NoteToolWindow::show (std::move (window), *this, toolsButton.getBounds());
         }
+        else if (onMessage != nullptr)
+        {
+            onMessage (NoteToolWindow::getUnavailableReason (model, tool));
+        }
     }
 
     void PianoRoll::zoomToFit()
