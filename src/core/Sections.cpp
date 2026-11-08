@@ -21,7 +21,7 @@ namespace harmonia::core::sections
 
         /** Splits every clip across `beat`, so none crosses it (each half of a looping clip keeps
             showing its first time round, as the arrangement's split does). */
-        void splitAt (te::Edit& edit, double beat)
+        void splitClipsAt (te::Edit& edit, double beat)
         {
             for (auto* track : te::getAudioTracks (edit))
             {
@@ -36,7 +36,7 @@ namespace harmonia::core::sections
             }
         }
 
-        /** The clips that lie within the stretch (after splitAt its edges). */
+        /** The clips that lie within the stretch (after splitClipsAt its edges). */
         juce::Array<te::Clip*> getClipsWithin (te::Edit& edit, double startBeat, double endBeat)
         {
             juce::Array<te::Clip*> within;
@@ -159,6 +159,11 @@ namespace harmonia::core::sections
         }
     }
 
+    void splitAt (te::Edit& edit, double beat)
+    {
+        splitClipsAt (edit, beat);
+    }
+
     void insertSpace (te::Edit& edit, double startBeat, double lengthBeats)
     {
         startBeat = std::max (0.0, startBeat);
@@ -166,7 +171,7 @@ namespace harmonia::core::sections
         if (lengthBeats <= tolerance)
             return;
 
-        splitAt (edit, startBeat);
+        splitClipsAt (edit, startBeat);
 
         // As te::insertSpaceIntoEditFromBeatRange, but moving every clip: Tracktion's own clip
         // move stops at the first clip before the point, and a track's clips are only put back in
@@ -208,8 +213,8 @@ namespace harmonia::core::sections
         if (length <= tolerance)
             return;
 
-        splitAt (edit, startBeat);
-        splitAt (edit, endBeat);
+        splitClipsAt (edit, startBeat);
+        splitClipsAt (edit, endBeat);
 
         // Taken out here so their link groups are kept tidy; Tracktion closes the gap.
         clips::remove (getClipsWithin (edit, startBeat, endBeat));
@@ -235,8 +240,8 @@ namespace harmonia::core::sections
         if (length <= tolerance)
             return copies;
 
-        splitAt (edit, startBeat);
-        splitAt (edit, endBeat);
+        splitClipsAt (edit, startBeat);
+        splitClipsAt (edit, endBeat);
 
         // What the stretch holds, before making room for its copy moves the rest along.
         std::vector<te::Clip::Ptr> inside;

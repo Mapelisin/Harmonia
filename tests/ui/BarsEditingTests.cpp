@@ -161,6 +161,72 @@ TEST_SUITE ("arrangement bars")
         CHECK (layout (*f.keys) == juce::StringArray { "A 0-8", "B 8-16" });
     }
 
+    TEST_CASE ("a song from the loop region, from the ruler's menu")
+    {
+        Fixture f;
+
+        // Outside a loop region: not offered.
+        CHECK_FALSE (runItem (f.ruler().createMenu (0.0, std::nullopt, 1.0), "Pop: intro, verse, chorus, verse, chorus, outro"));
+
+        // A 2-bar loop of "A": each part is it four times (8 bars); "B" goes after the song.
+        f.model().setLoopRegion ({ 0.0, 8.0 });
+        auto menu = f.ruler().createMenu (2.0, std::nullopt, 2.0);
+        CHECK (runItem (menu, "Pop: intro, verse, chorus, verse, chorus, outro"));
+
+        const auto clips = layout (*f.keys);
+        CHECK (clips.size() == 21);                         // intro 2, verse 4, chorus 4, verse 4, chorus 4, outro 2; and B
+        CHECK (clips[20] == "B 160-168");
+        CHECK (core::markers::getAll (f.project->getEdit()).size() == 6);
+        CHECK_FALSE (f.model().getLoopRegion().has_value());
+        CHECK (f.model().getPlayMode() == arrangement::PlayMode::song);
+
+        f.model().undo();
+        CHECK (layout (*f.keys) == juce::StringArray { "A 0-8", "B 8-16" });
+        CHECK (core::markers::getAll (f.project->getEdit()).empty());
+    }
+
+    TEST_CASE ("a song from a loop, as it looks")
+    {
+        auto project = core::Project::createEmpty (test::session());
+        MainComponent main (test::session(), *project);
+        main.setBounds (0, 0, 1280, 800);
+
+        // Four parts in a 4-bar loop.
+        auto* drums = project->getTracks().getFirst();
+        drums->setName ("Drums");
+        const std::vector<std::pair<juce::String, std::vector<int>>> parts { { "Drums", { 36, 42, 38, 42 } }, { "Bass", { 36, 36, 43, 41 } },
+                                                                             { "Keys", { 60, 64, 67, 72 } }, { "Lead", { 76, 79, 77, 74 } } };
+
+        for (const auto& [name, pitches] : parts)
+        {
+            auto* track = name == "Drums" ? drums : project->addTrack (name);
+            REQUIRE (track != nullptr);
+            auto* clip = project->addMidiClip (*track, 0.0, 16.0, name);
+            REQUIRE (clip != nullptr);
+
+            for (int beat = 0; beat < 16; ++beat)
+                clip->getSequence().addNote (pitches[(size_t) (beat % 4)], te::BeatPosition::fromBeats (beat), te::BeatDuration::fromBeats (0.9),
+                                             100, 0, nullptr);
+        }
+
+        auto& model = main.getArrangementModel();
+        model.setLoopRegion ({ 0.0, 16.0 });
+        CHECK (model.makeSong (core::song_forms::getForms()[0]) == doctest::Approx (160.0));
+
+        main.getArrangement().zoomToFit();
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
+        const auto image = main.createComponentSnapshot (main.getLocalBounds());
+        CHECK (image.isValid());
+
+        if (const auto dir = juce::SystemStats::getEnvironmentVariable ("HARMONIA_SNAPSHOT_DIR", {}); dir.isNotEmpty())
+        {
+            juce::FileOutputStream out (juce::File (dir).getChildFile ("main-song-from-loop.png"));
+            out.setPosition (0);
+            out.truncate();
+            juce::PNGImageFormat().writeImageToStream (image, out);
+        }
+    }
+
     TEST_CASE ("describing bars")
     {
         using arrangement::ArrangementModel;

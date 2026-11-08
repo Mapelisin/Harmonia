@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Markers.h"
+#include "core/SongForms.h"
 #include "core/NoteOps.h"
 #include "core/Project.h"
 #include "core/Snap.h"
@@ -239,6 +240,12 @@ namespace harmonia::ui::arrangement
             selection; a loop region over the stretch moves onto the copy (so doing it again
             repeats it once more). Returns how many clips were copied. */
         int duplicateBars (double startBeat, double endBeat);
+
+        /** A song from the loop region (core::song_forms::build): its clips laid out section by
+            section from where it starts, markers at the sections. One undo step; the loop region
+            goes and Song mode comes on. Returns how many beats the song is (0: nothing in the
+            loop region, or none). */
+        double makeSong (const core::song_forms::Form&);
 
         /** "bars 5-8", "bar 3", or "beats 2.50-5" when it isn't whole bars. */
         static juce::String describeBars (core::note_ops::BeatRange, double beatsPerBar);

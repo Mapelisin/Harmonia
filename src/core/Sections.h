@@ -8,6 +8,9 @@
     begins it). */
 namespace harmonia::core::sections
 {
+    /** Splits every clip that crosses `beat` in two there (core::clips::split), so none does. */
+    void splitAt (te::Edit&, double beat);
+
     /** Empty space of `lengthBeats` at `startBeat`: everything from there on moves later. */
     void insertSpace (te::Edit&, double startBeat, double lengthBeats);
 

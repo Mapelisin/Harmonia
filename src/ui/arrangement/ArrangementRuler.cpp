@@ -206,6 +206,17 @@ namespace harmonia::ui::arrangement
         add ("Insert " + empty + " before " + before + " (all tracks)", "Ctrl+Insert",
              [this, range] { model.insertBars (range.start, range.getLength()); });
         add ("Delete " + what + " (all tracks)", "Ctrl+Delete", [this, range] { model.deleteBars (range.start, range.end); });
+
+        // A whole song from the loop: intro, verses, choruses...
+        if (onLoop)
+        {
+            juce::PopupMenu forms;
+
+            for (const auto& form : core::song_forms::getForms())
+                forms.addItem (form.name, [this, form] { model.makeSong (form); });
+
+            menu.addSubMenu ("Make a song from " + what, forms);
+        }
     }
 
     void ArrangementRuler::setPlayheadBeat (std::optional<double> beat)

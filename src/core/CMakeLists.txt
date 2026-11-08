@@ -40,6 +40,8 @@ add_library(harmonia_core STATIC
     Markers.cpp
     Sections.h
     Sections.cpp
+    SongForms.h
+    SongForms.cpp
     Drums.h
     Drums.cpp
     NoteRecorder.h

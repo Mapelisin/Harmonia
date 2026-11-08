@@ -1105,6 +1105,26 @@ namespace harmonia::ui::arrangement
         return copies.size();
     }
 
+    double ArrangementModel::makeSong (const core::song_forms::Form& form)
+    {
+        if (! loopRegion.has_value())
+            return 0.0;
+
+        project.beginGesture ("Make a song");
+        const auto length = core::song_forms::build (getEdit(), loopRegion->start, loopRegion->end, form, getBeatsPerBar());
+
+        if (length > 0.0)
+        {
+            loopRegion.reset();
+            playMode = PlayMode::song;
+            deselectAll();
+        }
+
+        clipsDirty = true;
+        changed();
+        return length;
+    }
+
     juce::String ArrangementModel::describeBars (core::note_ops::BeatRange range, double beatsPerBar)
     {
         const auto isWhole = [] (double x) { return std::abs (x - std::round (x)) < 1.0e-6; };

@@ -22,6 +22,7 @@ add_executable(harmonia_tests
     core/BassLinesTests.cpp
     core/MelodiesTests.cpp
     core/SectionsTests.cpp
+    core/SongFormsTests.cpp
     core/ClipLoopTests.cpp
     audio/DeviceStatusTests.cpp
     audio/AudioTests.cpp
