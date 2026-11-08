@@ -56,8 +56,8 @@ namespace harmonia::audio
 
         /** Renders these tracks right here (no progress window). Unlike Renderer::renderToFile,
             changes nothing in the edit: that one solo-isolates and unmutes the rendered tracks for
-            the time being as undoable steps, which left an export as a step Ctrl+Z took back, with
-            nothing to see. The tracks given here are all heard anyway. */
+            the time being, which Tracktion counts as a change to save (the project showed unsaved
+            changes after an export). The tracks given here are all heard anyway. */
         juce::String render (te::Edit& edit, const juce::File& file, const juce::Array<te::Track*>& tracks,
                              te::TimeRange range, bool withMaster)
         {
@@ -96,6 +96,54 @@ namespace harmonia::audio
 
             return {};
         }
+    }
+
+    juce::String renderTrack (te::AudioTrack& track, const juce::File& file, te::TimeRange range)
+    {
+        // Heard for the render whatever its mute and the others' solo say. Put straight into the
+        // state and back, not as undo steps.
+        struct Heard
+        {
+            explicit Heard (te::AudioTrack& t) : edit (t.edit), state (t.state), wasChanged (t.edit.hasChangedSinceSaved())
+            {
+                for (const auto& [id, value] : { std::pair { te::IDs::mute, false }, std::pair { te::IDs::soloIsolate, true } })
+                {
+                    saved.push_back ({ id, state.getPropertyPointer (id) != nullptr ? std::optional<juce::var> (state[id]) : std::nullopt });
+                    state.setProperty (id, value, nullptr);
+                }
+            }
+
+            ~Heard()
+            {
+                for (const auto& [id, value] : saved)
+                {
+                    if (value.has_value())
+                        state.setProperty (id, *value, nullptr);
+                    else
+                        state.removeProperty (id, nullptr);
+                }
+
+                // Tracktion counts any mute or solo change as a change to save.
+                if (! wasChanged)
+                    edit.resetChangedStatus();
+            }
+
+            te::Edit& edit;
+            juce::ValueTree state;
+            bool wasChanged;
+            std::vector<std::pair<juce::Identifier, std::optional<juce::var>>> saved;
+        };
+
+        juce::Array<te::Track*> tracks;
+
+        for (auto* other : te::getAllTracks (track.edit))
+            if (dynamic_cast<te::AudioTrack*> (other) == nullptr)
+                tracks.add (other);
+
+        tracks.add (&track);
+
+        const Heard heard (track);
+        return render (track.edit, file, tracks, range, false);
     }
 
     juce::String exportWav (te::Edit& edit, const juce::File& file)

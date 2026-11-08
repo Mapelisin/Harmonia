@@ -1,5 +1,7 @@
 #include "ui/arrangement/ArrangementModel.h"
+#include "audio/Export.h"
 #include "audio/Instruments.h"
+#include "audio/Sends.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
 #include "core/MidiFiles.h"
@@ -533,6 +535,154 @@ namespace harmonia::ui::arrangement
 
         clipsDirty = true;
         changed();
+    }
+
+    juce::String ArrangementModel::makeCopyName (const juce::String& name) const
+    {
+        auto base = name.trim();
+        auto number = 2;
+
+        if (const auto last = base.fromLastOccurrenceOf (" ", false, false);
+                base.containsChar (' ') && last.isNotEmpty() && last.containsOnly ("0123456789"))
+        {
+            number = last.getIntValue() + 1;
+            base = base.upToLastOccurrenceOf (" ", false, false).trimEnd();
+        }
+
+        if (base.isEmpty())
+            base = "Track";
+
+        const auto taken = [this] (const juce::String& candidate)
+        {
+            for (auto* track : getTracks())
+                if (track->getName() == candidate)
+                    return true;
+
+            return false;
+        };
+
+        while (taken (base + " " + juce::String (number)))
+            ++number;
+
+        return base + " " + juce::String (number);
+    }
+
+    te::AudioTrack* ArrangementModel::duplicateTrack (te::AudioTrack& track)
+    {
+        if (indexOf (&track) < 0)
+            return nullptr;
+
+        const auto oldName = track.getName();
+        const auto name = makeCopyName (oldName);
+
+        project.beginGesture ("Duplicate track");
+        const auto copied = getEdit().copyTrack (&track, te::TrackInsertPoint (nullptr, &track));
+        auto* copy = dynamic_cast<te::AudioTrack*> (copied.get());
+
+        if (copy == nullptr)
+            return nullptr;
+
+        copy->setName (name);
+
+        for (auto* clip : clips::getClips (*copy))
+        {
+            if (clip->getName() == oldName)
+                clip->setName (name);
+
+            // The copies are the new track's own: editing them leaves the originals alone.
+            if (auto* midi = dynamic_cast<te::MidiClip*> (clip); midi != nullptr && core::clip_links::isLinked (*midi))
+                core::clip_links::unlink (*midi);
+        }
+
+        setSelection ({});
+        setCurrentTrack (copy);
+        clipsDirty = true;
+        changed();
+        return copy;
+    }
+
+    void ArrangementModel::moveTrack (te::AudioTrack& track, int newIndex)
+    {
+        auto others = getTracks();
+        const auto oldIndex = others.indexOf (&track);
+        newIndex = juce::jlimit (0, others.size() - 1, newIndex);
+
+        if (oldIndex < 0 || newIndex == oldIndex)
+            return;
+
+        others.remove (oldIndex);
+        te::Track* preceding = nullptr;
+
+        if (newIndex > 0)
+        {
+            preceding = others[newIndex - 1];
+        }
+        else
+        {
+            // Before the first song track: after whatever the edit has before it (its own tracks).
+            auto all = te::getAllTracks (getEdit());
+            all.removeFirstMatchingValue (&track);
+            const auto first = all.indexOf (others.getFirst());
+            preceding = first > 0 ? all[first - 1] : nullptr;
+        }
+
+        project.beginGesture ("Move track");
+        getEdit().moveTrack (&track, te::TrackInsertPoint (nullptr, preceding));
+        clipsDirty = true;
+        changed();
+    }
+
+    juce::String ArrangementModel::renderToAudio (te::AudioTrack& track)
+    {
+        const auto onTrack = clips::getClips (track);
+
+        if (onTrack.isEmpty())
+            return "Nothing to render: " + track.getName() + " has no clips";
+
+        auto start = std::numeric_limits<double>::max(), end = 0.0;
+
+        for (auto* clip : onTrack)
+        {
+            start = std::min (start, clips::getStartBeat (*clip));
+            end = std::max (end, clips::getEndBeat (*clip));
+        }
+
+        auto& edit = getEdit();
+        const te::TimeRange range (edit.tempoSequence.toTime (te::BeatPosition::fromBeats (start)),
+                                   edit.tempoSequence.toTime (te::BeatPosition::fromBeats (end))
+                                       + te::TimeDuration::fromSeconds (audio::exportTailSeconds));
+        const auto file = edit.engine.getEngineBehaviour().getFileForNewAudioRecording (track, ".wav");
+
+        if (const auto error = audio::renderTrack (track, file, range); error.isNotEmpty())
+            return error;
+
+        project.beginGesture ("Render to audio");
+        const auto name = track.getName() + " (audio)";
+        auto* audioTrack = createAudioTrack (name, &track);
+
+        if (audioTrack == nullptr)
+            return "Couldn't add a track for the audio";
+
+        juce::String error;
+        auto* clip = project.addAudioClip (*audioTrack, file, start, error);
+
+        if (clip == nullptr)
+            return error;
+
+        clip->setName (name);
+
+        // Its reverb and delay as before: the muted track sends nothing any more.
+        for (auto* returnTrack : project.getReturnTracks())
+            if (audio::sends::getSend (track, *returnTrack) != nullptr)
+                audio::sends::setLevel (*audioTrack, *returnTrack, audio::sends::getLevel (track, *returnTrack));
+
+        // Tracktion's mute isn't undoable: set it so that undo unmutes the track again.
+        track.state.setProperty (te::IDs::mute, true, &edit.getUndoManager());
+        setSelection ({ clip });
+        setCurrentTrack (audioTrack);
+        clipsDirty = true;
+        changed();
+        return {};
     }
 
     void ArrangementModel::renameTrack (te::AudioTrack& track, const juce::String& name)

@@ -31,4 +31,9 @@ namespace harmonia::audio
 
     /** The file name exportStems gives the stem of the `number`th (from 1) track called `trackName`. */
     juce::String getStemFileName (const juce::String& prefix, int number, const juce::String& trackName);
+
+    /** Renders `range` of one track as it sounds through its own instrument, effects, volume and
+        pan (not its sends, nor the master) to a 24-bit WAV: even while it's muted or another track
+        is soloed. Blocks until done. Changes nothing in the project. */
+    juce::String renderTrack (te::AudioTrack&, const juce::File&, te::TimeRange);
 }

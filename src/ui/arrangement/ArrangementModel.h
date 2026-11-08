@@ -143,6 +143,26 @@ namespace harmonia::ui::arrangement
 
         void deleteTrack (te::AudioTrack&);
 
+        /** A copy of the track right below it: instrument, effects with their settings and
+            automation, sends, volume and pan, and clips (copies of their own, not linked to the
+            originals). Named "<name> 2" (or the next number not taken). It becomes current.
+            One undo step. */
+        te::AudioTrack* duplicateTrack (te::AudioTrack&);
+
+        /** Moves the track to `newIndex` among the song tracks. One undo step. */
+        void moveTrack (te::AudioTrack&, int newIndex);
+
+        /** "Render to audio": the track as it sounds through its instrument and effects (with its
+            volume and pan), from where its first clip starts to where its last ends plus a moment
+            to ring out, into a sound file next to the project (as recordings go); onto a new audio
+            track below it that sends to the return tracks what the track did. The track is muted,
+            so the song sounds as before. One undo step (the file stays). Returns what went wrong. */
+        juce::String renderToAudio (te::AudioTrack&);
+
+        /** The name for a copy of a track called `name`: "Bass" -> "Bass 2", "Bass 2" -> "Bass 3",
+            skipping names the song's tracks already have. */
+        juce::String makeCopyName (const juce::String& name) const;
+
         /** Clips still named after the track get the new name too. */
         void renameTrack (te::AudioTrack&, const juce::String&);
 

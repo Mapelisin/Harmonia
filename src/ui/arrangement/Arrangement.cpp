@@ -39,6 +39,7 @@ namespace harmonia::ui::arrangement
 
         clipArea.onViewChanged = [this] { viewChanged(); };
         headers.onViewChanged = [this] { viewChanged(); };
+        headers.onMessage = [this] (const juce::String& text, bool isProblem) { tell (text, isProblem); };
         clipArea.getGestures().onClipMenuRequested = [this] (te::Clip& clip, juce::Point<float> position)
         {
             showClipMenu (clip, position);

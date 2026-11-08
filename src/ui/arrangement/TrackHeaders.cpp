@@ -1,6 +1,7 @@
 #include "ui/arrangement/TrackHeaders.h"
 #include "audio/AudioInputs.h"
 #include "audio/Instruments.h"
+#include "core/Clips.h"
 #include "core/Tracks.h"
 #include "ui/Theme.h"
 
@@ -267,9 +268,31 @@ namespace harmonia::ui::arrangement
         void mouseDown (const juce::MouseEvent& e) override
         {
             model.setCurrentTrack (track.get());
+            dragging = false;
 
             if (e.mods.isPopupMenu())
                 showMenu();
+        }
+
+        void mouseDrag (const juce::MouseEvent& e) override
+        {
+            if (e.mods.isPopupMenu())
+                return;
+
+            auto* owner = findParentComponentOfClass<TrackHeaders>();
+            dragging = dragging || std::abs (e.getDistanceFromDragStartY()) > 4;
+
+            if (owner != nullptr && dragging)
+                owner->dragHeader (model.indexOf (track.get()), e.getEventRelativeTo (owner).position.y);
+        }
+
+        void mouseUp (const juce::MouseEvent& e) override
+        {
+            if (! std::exchange (dragging, false))
+                return;
+
+            if (auto* owner = findParentComponentOfClass<TrackHeaders>())
+                owner->endHeaderDrag (model.indexOf (track.get()), e.getEventRelativeTo (owner).position.y);
         }
 
         void mouseDoubleClick (const juce::MouseEvent& e) override
@@ -286,6 +309,7 @@ namespace harmonia::ui::arrangement
         juce::TextButton mute { "M" }, solo { "S" }, arm { juce::String::fromUTF8 ("\xe2\x97\x8f") };
         juce::Slider volume;
         InputMeter inputMeter;
+        bool dragging = false;
 
         void showMenu()
         {
@@ -324,6 +348,20 @@ namespace harmonia::ui::arrangement
                 menu.addSeparator();
             }
 
+            const auto index = model.indexOf (track.get());
+            const auto hasClips = ! core::clips::getClips (*track).isEmpty();
+
+            menu.addItem ("Duplicate track", [&m = model, t = track] { m.duplicateTrack (*t); });
+            menu.addItem ("Move up", index > 0, false, [&m = model, t = track] { m.moveTrack (*t, m.indexOf (t.get()) - 1); });
+            menu.addItem ("Move down", index < model.getNumTracks() - 1, false,
+                          [&m = model, t = track] { m.moveTrack (*t, m.indexOf (t.get()) + 1); });
+            menu.addItem ("Render to audio track", hasClips, false, [safe = juce::Component::SafePointer<Header> (this), t = track]
+            {
+                if (safe != nullptr)
+                    if (auto* owner = safe->findParentComponentOfClass<TrackHeaders>())
+                        owner->renderToAudio (*t);
+            });
+            menu.addSeparator();
             menu.addItem ("Add instrument track", [&m = model] { m.addTrack(); });
             menu.addItem ("Add audio track", [&m = model] { m.addAudioTrack(); });
             menu.addSeparator();
@@ -383,6 +421,58 @@ namespace harmonia::ui::arrangement
         }
 
         resized();
+    }
+
+    int TrackHeaders::gapAt (float y) const
+    {
+        return juce::jlimit (0, headers.size(), (int) std::round ((y + view.scrollY) / view.trackHeight));
+    }
+
+    void TrackHeaders::dragHeader (int trackIndex, float y)
+    {
+        if (trackIndex < 0)
+            return;
+
+        // The gaps right above and below the track itself would leave it where it is.
+        const auto gap = gapAt (y);
+        const std::optional<int> newGap = gap == trackIndex || gap == trackIndex + 1 ? std::nullopt : std::optional<int> (gap);
+
+        if (newGap != dropGap)
+        {
+            dropGap = newGap;
+            repaint();
+        }
+    }
+
+    void TrackHeaders::endHeaderDrag (int trackIndex, float y)
+    {
+        dragHeader (trackIndex, y);
+        const auto gap = std::exchange (dropGap, std::nullopt);
+        repaint();
+
+        if (auto* track = model.getTrack (trackIndex); track != nullptr && gap.has_value())
+            model.moveTrack (*track, *gap > trackIndex ? *gap - 1 : *gap);
+    }
+
+    void TrackHeaders::paintOverChildren (juce::Graphics& g)
+    {
+        if (! dropGap.has_value())
+            return;
+
+        const auto y = view.trackToY (*dropGap);
+        g.setColour (theme::colour::accent);
+        g.fillRect (juce::Rectangle<float> (0.0f, y - 1.5f, (float) getWidth(), 3.0f));
+    }
+
+    void TrackHeaders::renderToAudio (te::AudioTrack& track)
+    {
+        juce::MouseCursor::showWaitCursor();
+        const auto name = track.getName();
+        const auto error = model.renderToAudio (track);
+        juce::MouseCursor::hideWaitCursor();
+
+        if (onMessage != nullptr)
+            onMessage (error.isNotEmpty() ? error : "Rendered " + name + " to audio (the track is muted)", error.isNotEmpty());
     }
 
     void TrackHeaders::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)

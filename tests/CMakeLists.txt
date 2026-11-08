@@ -32,7 +32,8 @@ add_executable(harmonia_tests
     ui/AutomationPanelTests.cpp
     ui/ClipFadeTests.cpp
     ui/TempoUiTests.cpp
-    ui/MidiImportTests.cpp)
+    ui/MidiImportTests.cpp
+    ui/TrackOpsTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)
