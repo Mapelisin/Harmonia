@@ -27,6 +27,13 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Весь платформенный код — за абстракциями: macOS (Apple Silicon) добавим позже.
 - Код, имена и комментарии в коде — на английском. Документация для пользователя — на русском.
 
+## Сборка
+- Зависимости: подмодуль `external/tracktion_engine` (JUCE внутри него, `modules/juce`). Вложенный подмодуль
+  прописан через SSH, поэтому инициализировать так:
+  `git -c url."https://github.com/".insteadOf="git@github.com:" submodule update --init --recursive`
+- C++: MSVC + CMake + Ninja из Visual Studio 2026 через `vcvars64.bat` (пример — `spikes/01-engine-playback/build.cmd`).
+- Сборки — в `build/` (не в git). Пробные программы — в `spikes/`, их выводы — в `docs/research/`.
+
 ## Git
 - Коммитить по завершении проверенного шага, с понятным сообщением; затем `git push`.
 - Не коммитить аудио, сэмплы и веса моделей (см. `.gitignore`).
