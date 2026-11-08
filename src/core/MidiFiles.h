@@ -16,6 +16,7 @@ namespace harmonia::core::midi_files
         juce::String name;              // the track's name in the file (may be empty)
         std::vector<Note> notes;        // from the file's start; the MIDI channel is the colour
         double endBeat = 0.0;           // where its last note ends
+        bool pedalled = false;          // the sustain pedal lengthened some of its notes
     };
 
     struct Contents
@@ -26,7 +27,10 @@ namespace harmonia::core::midi_files
     };
 
     /** Reads a MIDI file. Fails (nullopt, the reason in `error`) if it can't be read, uses SMPTE
-        time instead of beats, or has no notes. */
+        time instead of beats, or has no notes. The sustain pedal (controller 64) is written into
+        the notes' lengths: a key let go while the pedal is down sounds on until the pedal comes up
+        (or the same key is struck again), so a piano part sounds as it was played on any
+        instrument. */
     std::optional<Contents> read (const juce::File&, juce::String& error);
 
     /** Writes the clip's notes as it plays them (from its start to its end; muted notes left out)

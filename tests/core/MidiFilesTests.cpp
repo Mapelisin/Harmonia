@@ -88,6 +88,76 @@ TEST_SUITE ("core::midi_files")
         CHECK (bass.endBeat == doctest::Approx (6.5));
     }
 
+    TEST_CASE ("the sustain pedal is written into the notes' lengths")
+    {
+        test::TempFolder temp;
+        const auto file = temp.getFile ("Pedal.mid");
+        constexpr double ppq = 480.0;
+
+        juce::MidiMessageSequence piano;
+        const auto note = [&] (int channel, int pitch, double from, double to)
+        {
+            piano.addEvent (juce::MidiMessage::noteOn (channel, pitch, (juce::uint8) 90), from * ppq);
+            piano.addEvent (juce::MidiMessage::noteOff (channel, pitch), to * ppq);
+        };
+        const auto pedal = [&] (int channel, double beat, bool down)
+        {
+            piano.addEvent (juce::MidiMessage::controllerEvent (channel, 64, down ? 127 : 0), beat * ppq);
+        };
+
+        note (1, 67, 0.0, 0.2);         // let go before the pedal: as it was
+        pedal (1, 0.25, true);
+        note (1, 60, 0.0, 0.5);         // let go with the pedal down: until it comes up at 2
+        note (1, 64, 0.0, 0.5);         // ... but struck again at 1: stops there
+        note (1, 64, 1.0, 1.5);
+        pedal (1, 2.0, false);
+        note (1, 72, 2.0, 2.5);         // after the pedal: as it was
+        note (2, 48, 0.0, 0.5);         // another channel: its own pedal, down from 3 to the end
+        pedal (2, 3.0, true);
+        note (2, 50, 3.0, 3.5);
+        note (2, 52, 4.0, 6.0);
+
+        juce::MidiFile midi;
+        midi.setTicksPerQuarterNote ((int) ppq);
+        midi.addTrack (piano);
+        {
+            juce::FileOutputStream out (file);
+            REQUIRE (midi.writeTo (out, 1));
+        }
+
+        juce::String error;
+        const auto contents = midi_files::read (file, error);
+        REQUIRE_MESSAGE (contents.has_value(), error.toStdString());
+        REQUIRE (contents->parts.size() == 1);
+        const auto& part = contents->parts[0];
+        CHECK (part.pedalled);
+
+        const auto lengthOf = [&part] (int pitch, double start)
+        {
+            for (const auto& n : part.notes)
+                if (n.pitch == pitch && std::abs (n.startBeat - start) < 1.0e-6)
+                    return n.lengthBeats;
+
+            return -1.0;
+        };
+
+        CHECK (lengthOf (67, 0.0) == doctest::Approx (0.2));
+        CHECK (lengthOf (60, 0.0) == doctest::Approx (2.0));
+        CHECK (lengthOf (64, 0.0) == doctest::Approx (1.0));
+        CHECK (lengthOf (64, 1.0) == doctest::Approx (1.0));
+        CHECK (lengthOf (72, 2.0) == doctest::Approx (0.5));
+        CHECK (lengthOf (48, 0.0) == doctest::Approx (0.5));
+        CHECK (lengthOf (50, 3.0) == doctest::Approx (3.0));     // to the end: the last note ends at 6
+        CHECK (lengthOf (52, 4.0) == doctest::Approx (2.0));
+        CHECK (part.endBeat == doctest::Approx (6.0));
+
+        // Without a pedal, nothing changes.
+        juce::String noError;
+        const auto plain = midi_files::read (writeTwoPartFile (temp.getFile ("Song.mid")), noError);
+        REQUIRE (plain.has_value());
+        CHECK_FALSE (plain->parts[0].pedalled);
+    }
+
     TEST_CASE ("files that can't be used say why")
     {
         test::TempFolder temp;

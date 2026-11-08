@@ -7,6 +7,45 @@ namespace harmonia::core::midi_files
     namespace
     {
         constexpr double minNoteBeats = 1.0 / 64.0;
+        constexpr double tolerance = 1.0e-6;
+
+        /** When the sustain pedal was down, on each MIDI channel (from, to; in beats). */
+        using PedalTimes = std::array<std::vector<std::pair<double, double>>, 16>;
+
+        /** Lengthens the notes let go while the pedal was down, to where it came up (or where the
+            same key is struck again). True if any changed. */
+        bool applySustainPedal (std::vector<Note>& notes, const PedalTimes& pedal)
+        {
+            auto changed = false;
+
+            for (auto& note : notes)
+            {
+                const auto release = note.getEndBeat();
+
+                for (const auto& [down, up] : pedal[(size_t) juce::jlimit (0, 15, note.colour)])
+                {
+                    if (release < down - tolerance || release >= up)
+                        continue;
+
+                    auto end = up;
+
+                    for (const auto& other : notes)
+                        if (other.pitch == note.pitch && other.colour == note.colour
+                            && other.startBeat > note.startBeat + tolerance && other.startBeat < end)
+                            end = other.startBeat;
+
+                    if (end > release + tolerance)
+                    {
+                        note.lengthBeats = end - note.startBeat;
+                        changed = true;
+                    }
+
+                    break;
+                }
+            }
+
+            return changed;
+        }
 
         /** A note as it plays in the song: its beats there. */
         struct SongNote
@@ -119,6 +158,8 @@ namespace harmonia::core::midi_files
             juce::MidiMessageSequence sequence (*midi.getTrack (t));
             sequence.updateMatchedPairs();
             Part part;
+            PedalTimes pedal;
+            std::array<std::optional<double>, 16> pedalDown;
 
             for (int i = 0; i < sequence.getNumEvents(); ++i)
             {
@@ -145,6 +186,21 @@ namespace harmonia::core::midi_files
                     if (denominator == 4 && numerator > 0)
                         contents.beatsPerBar = numerator;
                 }
+                else if (message.isControllerOfType (64))
+                {
+                    const auto channel = (size_t) juce::jlimit (0, 15, message.getChannel() - 1);
+
+                    if (message.getControllerValue() >= 64)
+                    {
+                        if (! pedalDown[channel].has_value())
+                            pedalDown[channel] = beat;
+                    }
+                    else if (pedalDown[channel].has_value())
+                    {
+                        pedal[channel].push_back ({ *pedalDown[channel], beat });
+                        pedalDown[channel].reset();
+                    }
+                }
                 else if (message.isNoteOn())
                 {
                     Note note;
@@ -168,6 +224,19 @@ namespace harmonia::core::midi_files
                     part.endBeat = std::max (part.endBeat, note.getEndBeat());
                     part.notes.push_back (note.clamped());
                 }
+            }
+
+            // A pedal still down at the end holds to the last note's end.
+            for (size_t channel = 0; channel < pedal.size(); ++channel)
+                if (pedalDown[channel].has_value())
+                    pedal[channel].push_back ({ *pedalDown[channel], part.endBeat });
+
+            if (applySustainPedal (part.notes, pedal))
+            {
+                part.pedalled = true;
+
+                for (const auto& note : part.notes)
+                    part.endBeat = std::max (part.endBeat, note.getEndBeat());
             }
 
             if (! part.notes.empty())
