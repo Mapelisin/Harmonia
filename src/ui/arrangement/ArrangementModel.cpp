@@ -513,6 +513,10 @@ namespace harmonia::ui::arrangement
                 if (auto* clip = project.addMidiClip (*track, start, bars * beatsPerBar, name))
                 {
                     core::NoteEditor (*clip).add (part.notes);
+
+                    for (const auto& [controller, points] : part.controllerEvents)
+                        core::controllers::set (*clip, controller, points);
+
                     added.add (clip);
                 }
 

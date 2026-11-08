@@ -11,6 +11,7 @@
 #include "audio/Transport.h"
 #include "core/AudioTempo.h"
 #include "core/Clips.h"
+#include "core/Controllers.h"
 #include "core/Project.h"
 #include "core/Tracks.h"
 #include "TestAudioFiles.h"
@@ -20,6 +21,54 @@ namespace instruments = audio::instruments;
 
 namespace
 {
+    /** The song exported, its first channel. */
+    juce::AudioBuffer<float> exportFirstChannel (te::Edit& edit, double& sampleRate)
+    {
+        juce::TemporaryFile file (".wav");
+        const auto error = audio::exportWav (edit, file.getFile());
+        REQUIRE_MESSAGE (error.isEmpty(), error.toStdString());
+
+        juce::AudioFormatManager formats;
+        formats.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file.getFile()));
+        REQUIRE (reader != nullptr);
+        sampleRate = reader->sampleRate;
+
+        juce::AudioBuffer<float> buffer ((int) reader->numChannels, (int) reader->lengthInSamples);
+        reader->read (&buffer, 0, buffer.getNumSamples(), 0, true, true);
+        buffer.setSize (1, buffer.getNumSamples(), true);
+        return buffer;
+    }
+
+    /** The pitch of the sound between the two times, from where it best repeats: around A4
+        (300..700 Hz, so neither an octave down nor up can be mistaken for it). */
+    double pitchBetween (const juce::AudioBuffer<float>& buffer, double sampleRate, double from, double to)
+    {
+        const auto* x = buffer.getReadPointer (0);
+        const auto start = (int) (from * sampleRate), length = (int) ((to - from) * sampleRate);
+        auto bestLag = 0;
+        auto best = -1.0;
+
+        for (auto lag = (int) (sampleRate / 700.0); lag <= (int) (sampleRate / 300.0); ++lag)
+        {
+            double sum = 0.0, energy = 0.0;
+
+            for (int i = start; i < start + length; ++i)
+            {
+                sum += (double) x[i] * x[i + lag];
+                energy += (double) x[i + lag] * x[i + lag];
+            }
+
+            if (const auto score = energy > 0.0 ? sum / std::sqrt (energy) : 0.0; score > best)
+            {
+                best = score;
+                bestLag = lag;
+            }
+        }
+
+        return bestLag > 0 ? sampleRate / bestLag : 0.0;
+    }
+
     int countSynths (te::AudioTrack& track)
     {
         int n = 0;
@@ -267,6 +316,42 @@ TEST_SUITE ("audio::exportWav")
             CHECK (clip->getAudioFile().getFile().isAChildOf (temp.getFile ("Song Audio")));
             CHECK (exportedLevel() > 0.1f);
         }
+    }
+
+    TEST_CASE ("pitch bend drawn in a clip bends the built-in synth's notes; the pedal holds them")
+    {
+        auto project = core::Project::createEmpty (test::session());
+        auto& track = *project->getTracks().getFirst();
+        REQUIRE (instruments::useBuiltInSynth (track).isEmpty());
+        auto* clip = project->addMidiClip (track, 0.0, 8.0, "Bend");
+        REQUIRE (clip != nullptr);
+
+        // A4 for 4 seconds, bent all the way up (2 semitones) from beat 4 (2 seconds).
+        clip->getSequence().addNote (69, te::BeatPosition(), te::BeatDuration::fromBeats (8.0), 100, 0, nullptr);
+        core::controllers::add (*clip, core::controllers::Controller::pitchBend, 4.0, 1.0f);
+
+        auto sampleRate = 0.0;
+        const auto bent = exportFirstChannel (project->getEdit(), sampleRate);
+        const auto before = pitchBetween (bent, sampleRate, 0.5, 1.5);
+        const auto after = pitchBetween (bent, sampleRate, 2.5, 3.5);
+        CHECK (before == doctest::Approx (440.0).epsilon (0.02));
+        CHECK (after / before == doctest::Approx (std::pow (2.0, 2.0 / 12.0)).epsilon (0.01));
+
+        // A short note: silent after its release, unless the pedal is down.
+        clip->getSequence().clear (nullptr);
+        clip->getSequence().addNote (69, te::BeatPosition(), te::BeatDuration::fromBeats (0.5), 100, 0, nullptr);
+        const auto level = [&]
+        {
+            const auto sound = exportFirstChannel (project->getEdit(), sampleRate);
+            return sound.getRMSLevel (0, (int) (1.5 * sampleRate), (int) (0.5 * sampleRate));
+        };
+
+        const auto released = level();
+        core::controllers::add (*clip, core::controllers::Controller::sustain, 0.0, 1.0f);
+        core::controllers::add (*clip, core::controllers::Controller::sustain, 6.0, 0.0f);
+        const auto held = level();
+        CHECK (released < 0.001f);
+        CHECK (held > 0.01f);
     }
 
     TEST_CASE ("an empty song is not exported")

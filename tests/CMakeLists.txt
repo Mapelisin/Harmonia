@@ -8,6 +8,7 @@ add_executable(harmonia_tests
     core/NoteTests.cpp
     core/NoteEditorTests.cpp
     core/ClipLinksTests.cpp
+    core/ControllersTests.cpp
     core/SnapTests.cpp
     core/NoteOpsTests.cpp
     core/NoteRecorderTests.cpp
@@ -69,7 +70,8 @@ add_executable(harmonia_tests
     ui/LoopExportTests.cpp
     ui/MainMenuTests.cpp
     ui/MixDoctorMenuTests.cpp
-    ui/ChordLaneTests.cpp)
+    ui/ChordLaneTests.cpp
+    ui/ControllerLaneTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)

@@ -12,6 +12,8 @@ add_library(harmonia_core STATIC
     ClipLinks.cpp
     Clips.h
     Clips.cpp
+    Controllers.h
+    Controllers.cpp
     Tracks.h
     Tracks.cpp
     Snap.h

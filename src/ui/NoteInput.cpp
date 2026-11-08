@@ -77,6 +77,20 @@ namespace harmonia::ui
             noteOff (message.getNoteNumber(), Source::midiKeyboard, wallMs);
         else if (message.isSustainPedalOn() || message.isSustainPedalOff())
             setSustain (message.isSustainPedalOn(), wallMs);
+        else if (const auto moved = core::controllers::fromMidi (message))
+            recordController (moved->first, moved->second, wallMs);
+    }
+
+    void NoteInput::recordController (core::controllers::Controller c, float value, double wallMs)
+    {
+        update();   // playback may have started since the last timer tick
+
+        if (! recorder.isActive() || model.getClip() == nullptr || model.getClip() != takeClip.get())
+            return;
+
+        if (const auto beat = heardBeat (wallMs))
+            if (const auto placed = placeInsideClip (*beat))
+                model.addRecordedController (c, *placed, value);
     }
 
     //==============================================================================
@@ -189,36 +203,45 @@ namespace harmonia::ui
 
     std::vector<core::Note> NoteInput::keepInsideClip (std::vector<core::Note> notes) const
     {
-        // A looping clip: what is played in any time round goes into the loop.
-        if (const auto loopLength = takeClipRange.end - takeClipRange.start;
-            loopLength > 0.0 && (takeWholeClip.start != takeClipRange.start || takeWholeClip.end != takeClipRange.end))
+        std::vector<core::Note> inside;
+
+        for (auto n : notes)
         {
-            for (auto& n : notes)
+            if (const auto start = placeInsideClip (n.startBeat))
             {
-                if (n.startBeat < takeWholeClip.start - 1.0e-9 || n.startBeat >= takeWholeClip.end - 1.0e-9)
-                    continue;
-
-                auto offset = std::fmod (n.startBeat - takeClipRange.start, loopLength);
-
-                if (offset < 0.0)
-                    offset += loopLength;
-
-                if (offset > loopLength - 1.0e-9)
-                    offset = 0.0;
-
-                n.startBeat = takeClipRange.start + offset;
+                // A note held past the clip's end stops there.
+                n.startBeat = *start;
+                n.lengthBeats = std::min (n.lengthBeats, takeClipRange.end - n.startBeat);
+                inside.push_back (n);
             }
         }
 
-        // In song mode the song plays past the clip: notes outside it aren't the clip's, and a
-        // note held past its end stops there.
-        std::erase_if (notes, [this] (const core::Note& n)
-                       { return n.startBeat < takeClipRange.start - 1.0e-9 || n.startBeat >= takeClipRange.end - 1.0e-9; });
+        return inside;
+    }
 
-        for (auto& n : notes)
-            n.lengthBeats = std::min (n.lengthBeats, takeClipRange.end - n.startBeat);
+    std::optional<double> NoteInput::placeInsideClip (double beat) const
+    {
+        // A looping clip: what is played in any time round goes into the loop.
+        if (const auto loopLength = takeClipRange.end - takeClipRange.start;
+            loopLength > 0.0 && (takeWholeClip.start != takeClipRange.start || takeWholeClip.end != takeClipRange.end)
+            && beat >= takeWholeClip.start - 1.0e-9 && beat < takeWholeClip.end - 1.0e-9)
+        {
+            auto offset = std::fmod (beat - takeClipRange.start, loopLength);
 
-        return notes;
+            if (offset < 0.0)
+                offset += loopLength;
+
+            if (offset > loopLength - 1.0e-9)
+                offset = 0.0;
+
+            beat = takeClipRange.start + offset;
+        }
+
+        // In song mode the song plays past the clip: what is played outside it isn't the clip's.
+        if (beat < takeClipRange.start - 1.0e-9 || beat >= takeClipRange.end - 1.0e-9)
+            return std::nullopt;
+
+        return beat;
     }
 
     void NoteInput::showHeld()

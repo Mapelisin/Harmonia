@@ -86,11 +86,41 @@ namespace harmonia::core::midi_files
             return track;
         }
 
-        juce::MidiMessageSequence makeTrack (const juce::String& name, const std::vector<SongNote>& notes, double offsetBeats)
+        /** Each controller's events where they play in the song. */
+        using SongControllers = std::map<controllers::Controller, std::vector<controllers::Point>>;
+
+        void addPlayedControllers (SongControllers& moves, const te::MidiClip& clip)
+        {
+            for (auto c : controllers::getAll())
+                for (const auto& p : controllers::getPlayed (clip, c))
+                    moves[c].push_back (p);
+        }
+
+        juce::MidiMessageSequence makeTrack (const juce::String& name, const std::vector<SongNote>& notes,
+                                             const SongControllers& moves, double offsetBeats)
         {
             juce::MidiMessageSequence track;
             track.addEvent (juce::MidiMessage::textMetaEvent (3, name), 0.0);
             auto lastTick = 0;
+
+            // A wheel bends every note of the part: sent on each channel its notes use.
+            std::set<int> channels;
+
+            for (const auto& n : notes)
+                channels.insert (juce::jlimit (1, 16, n.note.colour + 1));
+
+            for (const auto& [c, points] : moves)
+            {
+                for (const auto& p : points)
+                {
+                    const auto tick = std::max (0, toTicks (p.beat - offsetBeats));
+
+                    for (auto channel : channels)
+                        track.addEvent (controllers::toMidi (c, p.value, channel), tick);
+
+                    lastTick = std::max (lastTick, tick);
+                }
+            }
 
             for (const auto& n : notes)
             {
@@ -104,6 +134,7 @@ namespace harmonia::core::midi_files
             }
 
             track.addEvent (juce::MidiMessage::endOfTrack(), lastTick);
+            track.sort();
             track.updateMatchedPairs();
             return track;
         }
@@ -201,6 +232,10 @@ namespace harmonia::core::midi_files
                         pedalDown[channel].reset();
                     }
                 }
+                else if (const auto moved = controllers::fromMidi (message); moved.has_value())
+                {
+                    part.controllerEvents[moved->first].push_back ({ beat, moved->second });
+                }
                 else if (message.isNoteOn())
                 {
                     Note note;
@@ -263,7 +298,9 @@ namespace harmonia::core::midi_files
         midi.setTicksPerQuarterNote (ticksPerBeat);
         midi.addTrack (makeConductor (clip.edit, clip.getName()));
 
-        midi.addTrack (makeTrack (clip.getName(), notes, clips::getStartBeat (clip)));
+        SongControllers moves;
+        addPlayedControllers (moves, clip);
+        midi.addTrack (makeTrack (clip.getName(), notes, moves, clips::getStartBeat (clip)));
         return writeFile (midi, file);
     }
 
@@ -280,16 +317,21 @@ namespace harmonia::core::midi_files
                 continue;
 
             std::vector<SongNote> notes;
+            SongControllers moves;
 
             for (auto* clip : clips::getMidiClips (*track))
+            {
                 for (const auto& n : getPlayedNotes (*clip))
                     notes.push_back (n);
+
+                addPlayedControllers (moves, *clip);
+            }
 
             if (notes.empty())
                 continue;
 
             std::stable_sort (notes.begin(), notes.end(), [] (const SongNote& a, const SongNote& b) { return a.songStart < b.songStart; });
-            midi.addTrack (makeTrack (track->getName(), notes, 0.0));
+            midi.addTrack (makeTrack (track->getName(), notes, moves, 0.0));
             anyNotes = true;
         }
 

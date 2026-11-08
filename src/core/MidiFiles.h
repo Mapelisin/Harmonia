@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Controllers.h"
 #include "core/Note.h"
 #include "core/Project.h"
 
@@ -17,6 +18,10 @@ namespace harmonia::core::midi_files
         std::vector<Note> notes;        // from the file's start; the MIDI channel is the colour
         double endBeat = 0.0;           // where its last note ends
         bool pedalled = false;          // the sustain pedal lengthened some of its notes
+
+        /** How the pitch-bend and mod wheels moved, from the file's start (all channels together;
+            the pedal is in the notes' lengths). */
+        std::map<controllers::Controller, std::vector<controllers::Point>> controllerEvents;
     };
 
     struct Contents
@@ -33,12 +38,13 @@ namespace harmonia::core::midi_files
         instrument. */
     std::optional<Contents> read (const juce::File&, juce::String& error);
 
-    /** Writes the clip's notes as it plays them (from its start to its end; muted notes left out)
-        with the song's tempo. Returns what went wrong, or an empty string. */
+    /** Writes the clip's notes as it plays them (from its start to its end; muted notes left out),
+        its pitch bend, mod wheel and pedal (on the notes' channels) and the song's tempo. Returns
+        what went wrong, or an empty string. */
     juce::String writeClip (te::MidiClip&, const juce::File&);
 
     /** Writes the song: a MIDI track for each instrument track with notes, named after it, its
-        clips' notes where they play in the song; the tempo and the time signature. Returns what went
+        clips' notes and controllers where they play in the song; the tempo and the time signature. Returns what went
         wrong ("Nothing to export..." without notes), or an empty string. */
     juce::String writeSong (Project&, const juce::File&);
 

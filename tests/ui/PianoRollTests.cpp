@@ -583,7 +583,10 @@ TEST_SUITE ("piano roll: commands")
         f.model.setLaneProperty (core::NoteProperty::velocity);
         f.model.cycleLaneProperty (1);
         CHECK (f.model.getLaneProperty() == core::NoteProperty::release);
-        f.model.cycleLaneProperty (-2);
+        f.model.cycleLaneProperty (-2);     // back past the first: the controllers come last
+        CHECK (f.model.getLaneController() == core::controllers::Controller::sustain);
+        f.model.cycleLaneProperty (-3);
+        CHECK_FALSE (f.model.getLaneController().has_value());
         CHECK (f.model.getLaneProperty() == core::NoteProperty::finePitch);
     }
 }

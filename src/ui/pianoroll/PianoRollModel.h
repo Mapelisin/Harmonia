@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Controllers.h"
 #include "core/Markers.h"
 #include "core/NoteEditor.h"
 #include "core/NoteOps.h"
@@ -148,8 +149,16 @@ namespace harmonia::ui::pianoroll
         core::snap::Context getSnapContext() const;
         double getGridBeats() const;
 
+        /** The note value the lower panel shows (unless it shows a controller). Choosing one
+            leaves the controllers. */
         core::NoteProperty getLaneProperty() const noexcept  { return laneProperty; }
         void setLaneProperty (core::NoteProperty);
+
+        /** The controller the lower panel shows instead of a note value, if any. */
+        std::optional<core::controllers::Controller> getLaneController() const noexcept  { return laneController; }
+        void setLaneController (std::optional<core::controllers::Controller>);
+
+        /** F / Shift+F: the next or previous note value, then pitch bend, mod wheel and the pedal. */
         void cycleLaneProperty (int direction);
 
         bool areGhostsVisible() const noexcept          { return ghostsVisible; }
@@ -289,6 +298,23 @@ namespace harmonia::ui::pianoroll
             mouse when the hand drifts a little sideways. Goes into the current undo transaction. */
         void setLaneValues (double beatA, float valueA, double beatB, float valueB, double grabBeats);
 
+        //==============================================================================
+        // Controllers of the clip (core::controllers), in song beats
+
+        /** The clip's events of the controller, at their song beats. */
+        std::vector<core::controllers::Point> getControllerPoints (core::controllers::Controller) const;
+        float getControllerValueAt (core::controllers::Controller, double songBeat) const;
+
+        /** One step of drawing the lane's controller: a line from (beatA, valueA) to (beatB, valueB),
+            the part inside the clip. Goes into the current undo transaction. */
+        void drawControllerLine (double beatA, float valueA, double beatB, float valueB);
+
+        /** Removes the lane's controller events between the two beats (inside the clip). */
+        void eraseControllers (double beatA, double beatB);
+
+        /** A value played on a MIDI keyboard while recording, at a song beat inside the clip. */
+        void addRecordedController (core::controllers::Controller, double songBeat, float value);
+
         /** Alt+wheel over a note: changes the panel's value of the note (and of the rest of the
             selection if the note is selected) by `delta` on the 0..1 scale. Quick successive
             changes are one undo step. */
@@ -345,6 +371,7 @@ namespace harmonia::ui::pianoroll
         core::snap::Mode snapMode = core::snap::Mode::line;
         double pixelsPerBeat = 80.0;
         core::NoteProperty laneProperty = core::NoteProperty::velocity;
+        std::optional<core::controllers::Controller> laneController;
         bool ghostsVisible = true, chordNamesShown = true;
         std::vector<core::chords::Span> chords;
         double newNoteLength = 0.25;

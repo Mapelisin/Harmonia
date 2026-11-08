@@ -401,19 +401,40 @@ namespace harmonia::ui::pianoroll
 
     void PianoRollModel::setLaneProperty (core::NoteProperty p)
     {
-        if (laneProperty != p)
+        if (laneProperty != p || laneController.has_value())
         {
             laneProperty = p;
+            laneController.reset();
+            notifyChanged();
+        }
+    }
+
+    void PianoRollModel::setLaneController (std::optional<core::controllers::Controller> c)
+    {
+        if (laneController != c)
+        {
+            laneController = c;
             notifyChanged();
         }
     }
 
     void PianoRollModel::cycleLaneProperty (int direction)
     {
-        const auto& all = core::note_property::getAll();
-        const auto current = (int) (std::find (all.begin(), all.end(), laneProperty) - all.begin());
-        const auto count = (int) all.size();
-        setLaneProperty (all[(size_t) (((current + direction) % count + count) % count)]);
+        // The note values, then the controllers, round and round.
+        const auto& properties = core::note_property::getAll();
+        const auto& controllers = core::controllers::getAll();
+        const auto numProperties = (int) properties.size();
+        const auto count = numProperties + (int) controllers.size();
+
+        const auto current = laneController.has_value()
+                               ? numProperties + (int) (std::find (controllers.begin(), controllers.end(), *laneController) - controllers.begin())
+                               : (int) (std::find (properties.begin(), properties.end(), laneProperty) - properties.begin());
+        const auto next = ((current + direction) % count + count) % count;
+
+        if (next < numProperties)
+            setLaneProperty (properties[(size_t) next]);
+        else
+            setLaneController (controllers[(size_t) (next - numProperties)]);
     }
 
     const std::vector<core::chords::Span>& PianoRollModel::getChords()
@@ -1168,6 +1189,74 @@ namespace harmonia::ui::pianoroll
             end = std::max (end, n.getEndBeat());
 
         core::clips::extendToCover (*clip, end - getContentStartBeat());
+    }
+
+    //==============================================================================
+    std::vector<core::controllers::Point> PianoRollModel::getControllerPoints (core::controllers::Controller c) const
+    {
+        if (clip == nullptr)
+            return {};
+
+        auto points = core::controllers::getPoints (*clip, c);
+        const auto offset = getContentStartBeat();
+
+        for (auto& p : points)
+            p.beat += offset;
+
+        return points;
+    }
+
+    float PianoRollModel::getControllerValueAt (core::controllers::Controller c, double songBeat) const
+    {
+        if (clip == nullptr)
+            return core::controllers::getDefault (c);
+
+        return core::controllers::getValueAt (*clip, c, songBeat - getContentStartBeat());
+    }
+
+    void PianoRollModel::drawControllerLine (double beatA, float valueA, double beatB, float valueB)
+    {
+        if (! canEdit() || ! laneController.has_value())
+            return;
+
+        if (beatB < beatA)
+        {
+            std::swap (beatA, beatB);
+            std::swap (valueA, valueB);
+        }
+
+        // The part of the line inside the clip, its values where it is cut.
+        const auto start = getClipStartBeat(), end = getClipEndBeat();
+
+        if (beatB < start || beatA > end || end <= start)
+            return;
+
+        const auto valueAt = [&] (double beat)
+        {
+            return beatB > beatA ? valueA + (valueB - valueA) * (float) ((beat - beatA) / (beatB - beatA)) : valueB;
+        };
+
+        const auto from = std::max (beatA, start), to = std::min (beatB, end);
+        const auto offset = getContentStartBeat();
+        core::controllers::drawLine (*clip, *laneController, from - offset, valueAt (from), to - offset, valueAt (to));
+    }
+
+    void PianoRollModel::eraseControllers (double beatA, double beatB)
+    {
+        if (! canEdit() || ! laneController.has_value())
+            return;
+
+        const auto from = std::max (std::min (beatA, beatB), getClipStartBeat());
+        const auto to = std::min (std::max (beatA, beatB), getClipEndBeat());
+
+        if (to > from)
+            core::controllers::erase (*clip, *laneController, from - getContentStartBeat(), to - getContentStartBeat());
+    }
+
+    void PianoRollModel::addRecordedController (core::controllers::Controller c, double songBeat, float value)
+    {
+        if (canEdit() && songBeat >= getClipStartBeat() - 1.0e-9 && songBeat < getClipEndBeat())
+            core::controllers::add (*clip, c, songBeat - getContentStartBeat(), value);
     }
 
     //==============================================================================

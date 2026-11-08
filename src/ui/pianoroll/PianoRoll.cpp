@@ -56,17 +56,29 @@ namespace harmonia::ui::pianoroll
         };
         addAndMakeVisible (snapBox);
 
+        // The note values (ids from 1), then the clip's controllers (ids from firstControllerId).
         const auto& laneProperties = property::getAll();
+        const auto& laneControllers = core::controllers::getAll();
 
         for (size_t i = 0; i < laneProperties.size(); ++i)
             laneBox.addItem (property::getName (laneProperties[i]), (int) i + 1);
 
+        laneBox.addSeparator();
+
+        for (size_t i = 0; i < laneControllers.size(); ++i)
+            laneBox.addItem (core::controllers::getName (laneControllers[i]), firstControllerId + (int) i);
+
         laneBox.setWantsKeyboardFocus (false);
-        laneBox.setTooltip ("Value shown in the lower panel (F / Shift+F)");
-        laneBox.onChange = [this, &laneProperties]
+        laneBox.setTooltip ("Shown in the lower panel: a value of each note, or the pitch bend, mod wheel or "
+                            "sustain pedal of the clip (F / Shift+F)");
+        laneBox.onChange = [this, &laneProperties, &laneControllers]
         {
-            if (auto index = laneBox.getSelectedId() - 1; index >= 0)
-                model.setLaneProperty (laneProperties[(size_t) index]);
+            const auto id = laneBox.getSelectedId();
+
+            if (id >= firstControllerId)
+                model.setLaneController (laneControllers[(size_t) (id - firstControllerId)]);
+            else if (id > 0)
+                model.setLaneProperty (laneProperties[(size_t) (id - 1)]);
         };
         addAndMakeVisible (laneBox);
 
@@ -567,9 +579,18 @@ namespace harmonia::ui::pianoroll
         const auto modeIndex = std::find (modes.begin(), modes.end(), model.getSnap()) - modes.begin();
         snapBox.setSelectedId ((int) modeIndex + 1, juce::dontSendNotification);
 
-        const auto& laneProperties = property::getAll();
-        const auto propertyIndex = std::find (laneProperties.begin(), laneProperties.end(), model.getLaneProperty()) - laneProperties.begin();
-        laneBox.setSelectedId ((int) propertyIndex + 1, juce::dontSendNotification);
+        if (const auto controller = model.getLaneController())
+        {
+            const auto& laneControllers = core::controllers::getAll();
+            const auto index = std::find (laneControllers.begin(), laneControllers.end(), *controller) - laneControllers.begin();
+            laneBox.setSelectedId (firstControllerId + (int) index, juce::dontSendNotification);
+        }
+        else
+        {
+            const auto& laneProperties = property::getAll();
+            const auto propertyIndex = std::find (laneProperties.begin(), laneProperties.end(), model.getLaneProperty()) - laneProperties.begin();
+            laneBox.setSelectedId ((int) propertyIndex + 1, juce::dontSendNotification);
+        }
 
         ghostsButton.setToggleState (model.areGhostsVisible(), juce::dontSendNotification);
 

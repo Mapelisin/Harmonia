@@ -17,7 +17,8 @@ namespace harmonia::ui
         the song is inside the clip go in. A whole take, from Play to Stop, is one undo step. Notes are placed where the
         player heard the song when they pressed the key (see audio::PlaybackClock), then
         quantized if asked. Keys being held are shown in the piano roll before they are
-        released and become notes. */
+        released and become notes. The pitch-bend and mod wheels are recorded into the clip
+        as they move (core::controllers); the sustain pedal makes the notes longer instead. */
     class NoteInput final : private juce::Timer
     {
     public:
@@ -36,7 +37,7 @@ namespace harmonia::ui
         void noteOff (int pitch, Source, double wallMs = now());
         void setSustain (bool down, double wallMs = now());
 
-        /** A message from a MIDI keyboard (notes and the sustain pedal are used). */
+        /** A message from a MIDI keyboard (notes, the sustain pedal and the wheels are used). */
         void handleMidiMessage (const juce::MidiMessage&, double wallMs);
 
         void setRecordArmed (bool);
@@ -81,6 +82,8 @@ namespace harmonia::ui
         void commit (const std::vector<core::Note>&);
         void commit (const std::optional<core::Note>&);
         std::vector<core::Note> keepInsideClip (std::vector<core::Note>) const;
+        std::optional<double> placeInsideClip (double beat) const;
+        void recordController (core::controllers::Controller, float value, double wallMs);
         void showHeld();
         void stateChanged();
         void timerCallback() override;

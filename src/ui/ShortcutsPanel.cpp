@@ -76,7 +76,8 @@ namespace harmonia::ui
                 { "Ctrl+drag on the ruler", "Select time (for rotate, insert / delete space)" },
                 { "Click a marker on the ruler", "Play from it (markers are added in the arrangement)" },
                 { "Drag the bracket on the ruler", "A looping clip: make its loop longer or shorter" },
-                { "Lower panel: drag", "Set velocity (or the property chosen); Alt: reset" } } },
+                { "Lower panel: drag", "Set velocity (or the property chosen); Alt: reset" },
+                { "Lower panel, pitch bend / mod wheel / pedal", "Drag: draw the line; right button: erase; Alt: back to rest" } } },
 
             { "Piano roll: keys (on the selected notes, or all)", {
                 { "Del", "Delete" },
@@ -96,7 +97,7 @@ namespace harmonia::ui
                 { "Alt+M / Alt+Shift+M", "Mute / unmute" },
                 { "Shift+I", "Invert the selection" },
                 { "Ctrl+Insert / Ctrl+Delete", "Insert / delete the selected time" },
-                { "F / Shift+F", "Next / previous property in the lower panel" },
+                { "F / Shift+F", "Lower panel: next / previous note value, then pitch bend, mod wheel, pedal" },
                 { "PgUp / PgDn", "Zoom in / out" },
                 { "Z", "Zoom to fit: the selected notes, or the whole clip" },
                 { "Alt+V", "Show / hide the other tracks' notes" } } },

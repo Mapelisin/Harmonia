@@ -73,6 +73,7 @@ namespace harmonia::ui::pianoroll
 
         juce::OwnedArray<juce::TextButton> toolButtons;
         juce::ComboBox snapBox, laneBox;
+        static constexpr int firstControllerId = 101;     // laneBox: the controllers after the note values
         juce::TextButton toolsButton { "Tools" }, scaleButton, chordButton;
         juce::ToggleButton ghostsButton { "Ghost notes" };
         juce::Label snapLabel, infoLabel;
