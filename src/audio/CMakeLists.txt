@@ -15,6 +15,8 @@ add_library(harmonia_audio STATIC
     FilePreview.cpp
     MidiRender.h
     MidiRender.cpp
+    Loudness.h
+    Loudness.cpp
     Instruments.h
     Instruments.cpp
     MidiInputs.h

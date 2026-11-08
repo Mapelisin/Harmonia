@@ -3,6 +3,7 @@
 #include "core/MidiFiles.h"
 #include "core/Tracks.h"
 #include "audio/DeviceStatus.h"
+#include "audio/Loudness.h"
 #include "ui/ComputerKeyboard.h"
 #include "ui/Theme.h"
 
@@ -558,6 +559,8 @@ namespace harmonia::ui
                                        : juce::String ("Export the loop region as WAV (Ctrl+drag on the ruler first)"),
                       hasCommands && loop.has_value(), false, run (&FileCommands::exportLoopWav));
         menu.addItem ("Export MIDI...", [safe] { if (safe != nullptr) safe->chooseMidiExport(); });
+        menu.addSeparator();
+        menu.addItem ("Check loudness for streaming...", [safe] { if (safe != nullptr) safe->checkLoudness(); });
         return menu;
     }
 
@@ -607,6 +610,52 @@ namespace harmonia::ui
         else
             showMessage (files.size() == 1 ? "Added " + files.getFirst().getFileName()
                                            : "Added " + juce::String (files.size()) + " files");
+    }
+
+    void MainComponent::checkLoudness()
+    {
+        // Rendering takes over the engine: stop first, or playback would resume over it.
+        transport.stop();
+
+        juce::String error;
+        const auto measured = audio::loudness::measureSong (project.getEdit(), error);
+
+        if (! measured.has_value())
+        {
+            showWarning (error);
+            return;
+        }
+
+        const auto advice = audio::loudness::advise (*measured);
+        const auto canApply = std::abs (advice.gainDb) >= 0.1f;
+        auto options = juce::MessageBoxOptions().withIconType (juce::MessageBoxIconType::InfoIcon)
+                                                .withTitle ("Loudness for streaming")
+                                                .withMessage (advice.text)
+                                                .withAssociatedComponent (this);
+
+        if (canApply)
+            options = options.withButton ((advice.gainDb > 0.0f ? "Raise the master by " : "Lower the master by ")
+                                              + juce::String (std::abs (advice.gainDb), 1) + " dB", 1);
+
+        options = options.withButton ("Close", 0);
+
+        juce::AlertWindow::showAsync (options, [safe = juce::Component::SafePointer<MainComponent> (this), gain = advice.gainDb] (int result)
+        {
+            if (safe != nullptr && result == 1)
+                safe->applyLoudnessGain (gain);
+        });
+    }
+
+    void MainComponent::applyLoudnessGain (float gainDb)
+    {
+        project.beginGesture ("Master volume for streaming");
+        const auto added = audio::loudness::addToMasterVolume (project.getEdit(), gainDb);
+        auto text = "Master volume " + juce::String (added >= 0.0f ? "+" : "") + juce::String (added, 1) + " dB";
+
+        if (std::abs (added - gainDb) > 0.05f)
+            text << " (as far as its fader goes)";
+
+        showMessage (text);
     }
 
     void MainComponent::chooseMidiExport()
