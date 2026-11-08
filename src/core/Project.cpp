@@ -1,4 +1,5 @@
 #include "core/Project.h"
+#include "core/Tempo.h"
 #include "core/Tracks.h"
 
 namespace harmonia::core
@@ -211,7 +212,19 @@ namespace harmonia::core
 
     void Project::setTempoBpm (double bpm)
     {
-        edit->tempoSequence.getTempo (0)->setBpm (bpm);
+        edit->tempoSequence.getTempo (0)->setBpm (tempo::clampBpm (bpm));
+    }
+
+    int Project::getBeatsPerBar() const
+    {
+        return edit->tempoSequence.getTimeSig (0)->numerator;
+    }
+
+    void Project::setBeatsPerBar (int beats)
+    {
+        auto& timeSig = *edit->tempoSequence.getTimeSig (0);
+        timeSig.numerator = juce::jlimit (1, 16, beats);
+        timeSig.denominator = 4;
     }
 
     void Project::beginGesture (const juce::String& name)

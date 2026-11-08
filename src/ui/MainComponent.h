@@ -50,6 +50,7 @@ namespace harmonia::ui
         pianoroll::PianoRoll& getPianoRoll() noexcept                   { return pianoRoll; }
         NoteInput& getNoteInput() noexcept                              { return noteInput; }
         audio::Transport& getTransport() noexcept                       { return transport; }
+        TransportBar& getTransportBar() noexcept                        { return transportBar; }
         mixer::Mixer& getMixer() noexcept                               { return mixer; }
         automation::AutomationPanel& getAutomationPanel() noexcept      { return automationPanel; }
         audio::AudioInputs& getAudioInputs() noexcept                   { return audioInputs; }

@@ -58,12 +58,29 @@ namespace harmonia::ui
                 noteInput.setQuantize (modes[(size_t) index]);
         };
 
+        // The tempo: drag it, type it (double-click) or tap it; each change is one undo step.
+        auto& project = arrangementModel.getProject();
+        tempoBox.setRange (core::tempo::minBpm, core::tempo::maxBpm);
+        tempoBox.setSteps (1.0, 0.1);
+        tempoBox.textFromValue = [] (double bpm) { return core::tempo::toText (bpm); };
+        tempoBox.setTooltip ("Tempo: drag up / down (Shift: finer), mouse wheel, or double-click and type.\n"
+                             "Clips, notes and automation stay on their beats; audio clips keep their speed.");
+        tempoBox.onGestureStart = [&project] { project.beginGesture ("Change tempo"); };
+        tempoBox.onValueChange = [&project] (double bpm) { project.setTempoBpm (bpm); };
+
+        timeSigButton.setTooltip ("Time signature: beats per bar");
+        timeSigButton.onClick = [this] { showTimeSigMenu(); };
+
+        tapButton.setTooltip ("Tap tempo: click in time with the music (4 clicks or more); a pause starts over");
+        tapButton.onClick = [this] { tap (juce::Time::getMillisecondCounterHiRes() / 1000.0); };
+
         positionLabel.setColour (juce::Label::textColourId, theme::colour::textPrimary);
         positionLabel.setFont (juce::FontOptions (theme::size::fontSize));
         positionLabel.setJustificationType (juce::Justification::centredLeft);
 
         for (auto* c : std::initializer_list<juce::Component*> { &playButton, &recordButton, &clickButton, &countInButton, &modeButton,
-                                                                 &positionLabel, &keysButton, &quantizeBox })
+                                                                 &positionLabel, &tempoBox, &timeSigButton, &tapButton,
+                                                                 &keysButton, &quantizeBox })
         {
             c->setWantsKeyboardFocus (false);
             addAndMakeVisible (c);
@@ -93,9 +110,59 @@ namespace harmonia::ui
         place (countInButton, 82);
         place (modeButton, 54);
         area.removeFromLeft (theme::size::padding);
-        place (positionLabel, 110);
-        place (keysButton, 78);
-        place (quantizeBox, 190);
+        place (positionLabel, 104);
+        place (tempoBox, 78);
+        place (timeSigButton, 40);
+        place (tapButton, 40);
+        area.removeFromLeft (theme::size::padding);
+        place (keysButton, 70);
+        place (quantizeBox, juce::jlimit (0, 160, area.getWidth()));
+    }
+
+    void TransportBar::tap (double seconds)
+    {
+        if (const auto bpm = tapTempo.tap (seconds))
+        {
+            auto& project = arrangementModel.getProject();
+
+            if (std::abs (*bpm - project.getTempoBpm()) >= 0.05)
+            {
+                project.beginGesture ("Tap tempo");
+                project.setTempoBpm (*bpm);
+            }
+        }
+
+        refresh();
+    }
+
+    void TransportBar::setBeatsPerBar (int beats)
+    {
+        auto& project = arrangementModel.getProject();
+
+        if (beats != project.getBeatsPerBar())
+        {
+            project.beginGesture ("Time signature");
+            project.setBeatsPerBar (beats);
+        }
+
+        refresh();
+    }
+
+    void TransportBar::showTimeSigMenu()
+    {
+        const auto current = arrangementModel.getProject().getBeatsPerBar();
+        juce::Component::SafePointer<TransportBar> safe (this);
+        juce::PopupMenu menu;
+        menu.addSectionHeader ("Time signature");
+
+        for (const auto beats : core::tempo::getBeatsPerBarChoices())
+            menu.addItem (juce::String (beats) + "/4", true, beats == current, [safe, beats]
+            {
+                if (safe != nullptr)
+                    safe->setBeatsPerBar (beats);
+            });
+
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&timeSigButton));
     }
 
     void TransportBar::timerCallback()
@@ -182,5 +249,12 @@ namespace harmonia::ui
 
         if (positionLabel.getText() != text)
             positionLabel.setText (text, juce::dontSendNotification);
+
+        auto& project = arrangementModel.getProject();
+        tempoBox.setValue (project.getTempoBpm());
+        const auto timeSig = juce::String (project.getBeatsPerBar()) + "/4";
+
+        if (timeSigButton.getButtonText() != timeSig)
+            timeSigButton.setButtonText (timeSig);
     }
 }

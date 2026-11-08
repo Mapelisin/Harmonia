@@ -12,6 +12,7 @@ add_executable(harmonia_tests
     core/NoteOpsTests.cpp
     core/NoteRecorderTests.cpp
     core/ClipsTests.cpp
+    core/TempoTests.cpp
     audio/DeviceStatusTests.cpp
     audio/AudioTests.cpp
     audio/EffectsTests.cpp
@@ -26,7 +27,8 @@ add_executable(harmonia_tests
     ui/AudioClipTests.cpp
     ui/ClipEditTests.cpp
     ui/AutomationPanelTests.cpp
-    ui/ClipFadeTests.cpp)
+    ui/ClipFadeTests.cpp
+    ui/TempoUiTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)

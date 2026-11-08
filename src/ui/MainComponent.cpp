@@ -9,7 +9,7 @@ namespace harmonia::ui
     namespace
     {
         constexpr int trackRowHeight = 40;
-        constexpr int appNameWidth = 90, fileButtonWidth = 50, summaryWidth = 210, tabWidth = 96;
+        constexpr int appNameWidth = 90, fileButtonWidth = 50, summaryWidth = 150, tabWidth = 96;
         constexpr int lowerPanelTabs = 1001;
     }
 
@@ -234,8 +234,7 @@ namespace harmonia::ui
     {
         const auto tracks = project.getNumTracks();
         const auto name = fileCommands != nullptr ? fileCommands->getProjectName() : juce::String ("Untitled");
-        return name + juce::String::fromUTF8 ("  \xc2\xb7  ") + juce::String (tracks) + (tracks == 1 ? " track" : " tracks")
-             + juce::String::fromUTF8 ("  \xc2\xb7  ") + juce::String (project.getTempoBpm(), 0) + " BPM";
+        return name + juce::String::fromUTF8 ("  \xc2\xb7  ") + juce::String (tracks) + (tracks == 1 ? " track" : " tracks");
     }
 
     void MainComponent::paint (juce::Graphics& g)
@@ -274,7 +273,7 @@ namespace harmonia::ui
         header.removeFromLeft (appNameWidth);
         fileButton.setBounds (header.removeFromLeft (fileButtonWidth).withSizeKeepingCentre (fileButtonWidth, theme::size::buttonHeight));
         header.removeFromLeft (theme::size::padding + summaryWidth);
-        transportBar.setBounds (header.removeFromLeft (std::max (0, std::min (700, header.getWidth() - theme::size::padding))));
+        transportBar.setBounds (header.removeFromLeft (std::max (0, std::min (840, header.getWidth() - theme::size::padding))));
 
         auto trackRow = area.removeFromTop (trackRowHeight);
         trackNameLabel.setBounds (trackRow.removeFromLeft (arrangement::Arrangement::headerWidth).reduced (theme::size::padding / 2, 0));

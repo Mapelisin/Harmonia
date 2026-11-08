@@ -5,6 +5,8 @@ add_library(harmonia_ui STATIC
     RenderingPolicy.cpp
     StatusBar.h
     StatusBar.cpp
+    DragNumber.h
+    DragNumber.cpp
     ParameterPanel.h
     ParameterPanel.cpp
     PluginWindow.h

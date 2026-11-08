@@ -61,7 +61,15 @@ namespace harmonia::core
         bool canImport (const juce::File&) const;
 
         double getTempoBpm() const;
+
+        /** Clips, notes and automation stay on their beats (audio clips keep their speed: they
+            start on the same beat). Within core::tempo's limits. Undoable. */
         void setTempoBpm (double bpm);
+
+        /** The time signature is beats-per-bar over 4 (beats are quarter notes). Changing it
+            moves the bar lines, nothing else. Undoable. */
+        int getBeatsPerBar() const;
+        void setBeatsPerBar (int);
 
         //==============================================================================
         // Undo. One user gesture (a click, a drag, a menu command) = one transaction.
