@@ -89,7 +89,7 @@ TEST_SUITE ("audio::loudness")
         advice = loudness::advise ({ -18.0, -3.0f, 120.0 });
         CHECK (advice.gainDb == doctest::Approx (2.0f));
         CHECK (advice.peakLimited);
-        CHECK (advice.text.contains ("compressor"));
+        CHECK (advice.text.contains ("use the limiter"));
 
         // Too loud: down.
         advice = loudness::advise ({ -9.0, -1.5f, 120.0 });

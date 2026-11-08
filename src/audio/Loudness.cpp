@@ -1,6 +1,8 @@
 #include "audio/Loudness.h"
 
+#include "audio/Effects.h"
 #include "audio/Export.h"
+#include "audio/Limiter.h"
 
 #include <numeric>
 
@@ -268,17 +270,91 @@ namespace harmonia::audio::loudness
             text << "Streaming services play songs at about " << target << ", but raising this one by " << juce::String (wanted, 1)
                  << " dB would push its peaks to " << dbText (m.peakDb + wanted) << ": they would clip. Raising it by "
                  << juce::String (advice.gainDb, 1) << " dB brings the peaks to " << dbText (ceilingDb) << " (the song to "
-                 << juce::String (m.lufs + advice.gainDb, 1) << " LUFS). To make it louder than that, put a compressor or a "
-                 << "limiter on the master first (Mixer, + on the master strip), then check again.";
+                 << juce::String (m.lufs + advice.gainDb, 1) << " LUFS). To go all the way, use the limiter: Harmonia puts "
+                 << "it on the master and raises the song to " << target << ", the peaks held under " << dbText (ceilingDb) << ".";
         }
         else
         {
             text << "Its peaks go over " << dbText (ceilingDb) << " (up to " << dbText (m.peakDb) << "): converted to MP3 or for "
-                 << "streaming they may crackle. Lower the master by " << juce::String (-advice.gainDb, 1) << " dB.";
+                 << "streaming they may crackle. Lower the master by " << juce::String (-advice.gainDb, 1) << " dB, or use the "
+                 << "limiter: it holds the peaks under " << dbText (ceilingDb) << " and brings the song to " << target << ".";
         }
 
         advice.text = text;
         return advice;
+    }
+
+    std::optional<LimiterResult> raiseWithLimiter (te::Edit& edit, juce::String& error, double targetLufs,
+                                                   const std::function<void (const juce::String&)>& progress)
+    {
+        const auto say = [&progress] (const juce::String& step)
+        {
+            if (progress != nullptr)
+                progress (step);
+        };
+
+        say ("Measuring the song...");
+        const auto before = measureSong (edit, error);
+
+        if (! before.has_value())
+            return std::nullopt;
+
+        // Harmonia's limiter on the master (the last one, if there are several); added if there's none.
+        auto& chain = edit.getMasterPluginList();
+        limiter::Plugin* found = nullptr;
+
+        for (auto* plugin : effects::get (chain))
+            if (auto* l = dynamic_cast<limiter::Plugin*> (plugin))
+                found = l;
+
+        if (found == nullptr)
+        {
+            auto& undoManager = edit.getUndoManager();
+            const auto stepName = undoManager.getCurrentTransactionName();
+            found = dynamic_cast<limiter::Plugin*> (effects::add (chain, { "Limiter", limiter::Plugin::xmlTypeName, {} }, error));
+
+            if (found == nullptr)
+                return std::nullopt;
+
+            if (stepName.isNotEmpty())
+                undoManager.setCurrentTransactionName (stepName);      // adding began a step of its own: keep the caller's name
+        }
+
+        float faderChange = 0.0f;
+
+        if (auto master = edit.getMasterVolumePlugin())
+        {
+            faderChange = -master->getVolumeDb();
+            master->setVolumeDb (0.0f);
+        }
+
+        // Limiting takes some of each step up away again: measure, correct, measure.
+        constexpr int maxPasses = 4;
+        auto gain = juce::jlimit (0.0f, limiter::maxGainDb,
+                                  found->gain->getCurrentValue() + (float) (targetLufs - before->lufs) - faderChange);
+        auto now = *before;
+
+        for (int pass = 1;; ++pass)
+        {
+            found->gain->setParameter (gain, juce::sendNotificationSync);
+            say ("Limiter at " + dbText (gain) + ": measuring the song again...");
+
+            const auto measured = measureSong (edit, error);
+
+            if (! measured.has_value())
+                return std::nullopt;
+
+            now = *measured;
+            const auto miss = (float) (targetLufs - now.lufs);
+            const auto next = juce::jlimit (0.0f, limiter::maxGainDb, gain + miss);
+
+            if (std::abs (miss) < 0.25f || std::abs (next - gain) < 0.05f || pass == maxPasses)
+                break;
+
+            gain = next;
+        }
+
+        return LimiterResult { *before, now, gain };
     }
 
     float addToMasterVolume (te::Edit& edit, float gainDb)

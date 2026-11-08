@@ -58,6 +58,9 @@ namespace harmonia::ui
         /** Adds `gainDb` to the master volume (one undo step) and says what changed. */
         void applyLoudnessGain (float gainDb);
 
+        /** Brings the song to the streaming level with the limiter on the master (one undo step). */
+        void raiseWithLimiter();
+
         /** File -> Check the mix: renders the song and each track, then shows Mix Doctor's report
             (clipping, mono, bass and top, tracks lost under the others). */
         void checkMix();

@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "TestSession.h"
+#include "audio/Limiter.h"
 
 namespace harmonia::test
 {
@@ -52,6 +53,7 @@ int main (int argc, char** argv)
         options.settingsName = "HarmoniaTests";
 
         harmonia::core::Session session (std::move (options));
+        harmonia::audio::limiter::registerType (session.getEngine());
         harmonia::test::sharedSession = &session;
 
         doctest::Context context (argc, argv);

@@ -1,6 +1,7 @@
 #include "app/MainWindow.h"
 #include "app/SelfTest.h"
 #include "audio/DeviceSetup.h"
+#include "audio/Limiter.h"
 #include "ui/PluginWindow.h"
 #include "ui/Theme.h"
 
@@ -20,7 +21,9 @@ namespace harmonia::app
             options.openDevices = openDevices;
             options.uiBehaviour = std::make_unique<ui::HarmoniaUIBehaviour>();
             options.scanPluginsOutOfProcess = true;
-            return std::make_unique<core::Session> (std::move (options));
+            auto session = std::make_unique<core::Session> (std::move (options));
+            audio::limiter::registerType (session->getEngine());
+            return session;
         }
     }
 

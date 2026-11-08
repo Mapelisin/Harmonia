@@ -19,6 +19,8 @@ add_library(harmonia_audio STATIC
     Loudness.cpp
     MixCheck.h
     MixCheck.cpp
+    Limiter.h
+    Limiter.cpp
     Instruments.h
     Instruments.cpp
     MidiInputs.h

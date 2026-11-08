@@ -639,12 +639,20 @@ namespace harmonia::ui
             options = options.withButton ((advice.gainDb > 0.0f ? "Raise the master by " : "Lower the master by ")
                                               + juce::String (std::abs (advice.gainDb), 1) + " dB", 1);
 
+        if (advice.peakLimited)
+            options = options.withButton ("Use the limiter", 2);
+
         options = options.withButton ("Close", 0);
 
         juce::AlertWindow::showAsync (options, [safe = juce::Component::SafePointer<MainComponent> (this), gain = advice.gainDb] (int result)
         {
-            if (safe != nullptr && result == 1)
+            if (safe == nullptr)
+                return;
+
+            if (result == 1)
                 safe->applyLoudnessGain (gain);
+            else if (result == 2)
+                safe->raiseWithLimiter();
         });
     }
 
@@ -658,6 +666,36 @@ namespace harmonia::ui
             text << " (as far as its fader goes)";
 
         showMessage (text);
+    }
+
+    void MainComponent::raiseWithLimiter()
+    {
+        transport.stop();
+
+        // It renders the song a few times: say how far it got.
+        juce::MouseCursor::showWaitCursor();
+        project.beginGesture ("Limiter for streaming");
+        juce::String error;
+        const auto result = audio::loudness::raiseWithLimiter (project.getEdit(), error, audio::loudness::streamingLufs,
+                                                               [this] (const juce::String& step)
+        {
+            showMessage (step);
+
+            if (auto* peer = getPeer())
+                peer->performAnyPendingRepaintsNow();
+        });
+
+        juce::MouseCursor::hideWaitCursor();
+
+        if (! result.has_value())
+        {
+            showWarning (error);
+            return;
+        }
+
+        showMessage ("Limiter on the master at +" + juce::String (result->gainDb, 1) + " dB: the song is now "
+                     + juce::String (result->after.lufs, 1) + " LUFS (was " + juce::String (result->before.lufs, 1)
+                     + "), peaks at " + juce::String (result->after.peakDb, 1) + " dB");
     }
 
     void MainComponent::checkMix()

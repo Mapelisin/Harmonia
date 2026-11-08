@@ -62,4 +62,19 @@ namespace harmonia::audio::loudness
     /** Adds `gainDb` to the master volume (as far as its fader goes: +6 dB at most). Returns what
         was really added. */
     float addToMasterVolume (te::Edit&, float gainDb);
+
+    struct LimiterResult
+    {
+        Measurement before, after;
+        float gainDb = 0.0f;        ///< the limiter's gain now
+    };
+
+    /** Brings the song to `targetLufs` with Harmonia's limiter as the master's last effect (added if
+        there is none: its ceiling at -1 dB keeps the peaks under it). The master fader goes to 0 dB
+        (it comes after the effects: above 0 it would push the peaks over the ceiling, below it
+        would waste room). Measures the song a few times, each a render, so takes a few seconds a
+        minute of song; `progress` hears what it is doing. The changes go into the undo step
+        already begun. Nothing, with the reason in `error`, if there's nothing to hear. */
+    std::optional<LimiterResult> raiseWithLimiter (te::Edit&, juce::String& error, double targetLufs = streamingLufs,
+                                                   const std::function<void (const juce::String& step)>& progress = {});
 }

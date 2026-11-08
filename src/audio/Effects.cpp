@@ -1,5 +1,7 @@
 #include "audio/Effects.h"
 
+#include "audio/Limiter.h"
+
 namespace harmonia::audio::effects
 {
     namespace
@@ -55,6 +57,7 @@ namespace harmonia::audio::effects
 
         for (const auto& [name, type] : { std::pair<const char*, const char*> { "EQ", te::EqualiserPlugin::xmlTypeName },
                                           { "Compressor", te::CompressorPlugin::xmlTypeName },
+                                          { "Limiter",    limiter::Plugin::xmlTypeName },
                                           { "Reverb",     te::ReverbPlugin::xmlTypeName },
                                           { "Delay",      te::DelayPlugin::xmlTypeName },
                                           { "Chorus",     te::ChorusPlugin::xmlTypeName },

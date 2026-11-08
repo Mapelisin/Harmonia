@@ -28,6 +28,7 @@ add_executable(harmonia_tests
     audio/StemsTests.cpp
     audio/MidiRenderTests.cpp
     audio/LoudnessTests.cpp
+    audio/LimiterTests.cpp
     audio/MixCheckTests.cpp
     ui/PianoRollTests.cpp
     ui/PianoRollViewTests.cpp
