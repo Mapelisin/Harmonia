@@ -10,7 +10,7 @@ namespace harmonia::ui::pianoroll
     {
         constexpr float margin = 6.0f;
         constexpr float knobRadius = 3.0f;
-        constexpr float hitTolerancePixels = 4.0f;
+        constexpr float grabRadiusPixels = 20.0f;   // how far from a stem the mouse may be and still hold it
         constexpr float maxTailPixels = 160.0f;
     }
 
@@ -98,9 +98,7 @@ namespace harmonia::ui::pianoroll
     {
         const auto beat = view.xToBeat (e.position.x);
         const auto value = e.mods.isAltDown() ? property::getDefault (model.getLaneProperty()) : valueAt (e);
-        const auto tolerance = hitTolerancePixels / view.pixelsPerBeat;
-
-        model.setLaneValues (lastBeat, lastValue, beat, value, tolerance);
+        model.setLaneValues (lastBeat, lastValue, beat, value, grabRadiusPixels / view.pixelsPerBeat);
 
         lastBeat = beat;
         lastValue = value;
@@ -146,25 +144,12 @@ namespace harmonia::ui::pianoroll
 
     void ControlLane::updateHoverText (const juce::MouseEvent& e)
     {
-        // Show the value of the nearest editable note under the mouse.
-        const auto beat = view.xToBeat (e.position.x);
-        const auto tolerance = hitTolerancePixels / view.pixelsPerBeat;
-        const auto& notes = model.getNotes();
-        const auto [first, last] = model.getNotesInRange (beat - tolerance, beat + tolerance);
-
+        // Show the value of the note the mouse would grab.
         juce::String text;
 
-        for (auto i = first; i < last; ++i)
-        {
-            const auto& d = notes[i];
-
-            if (std::abs (d.values.startBeat - beat) <= tolerance && model.isLaneEditable (d))
-            {
-                text = juce::MidiMessage::getMidiNoteName (d.values.pitch, true, true, 4) + "  "
-                     + property::describe (d.values, model.getLaneProperty());
-                break;
-            }
-        }
+        if (const auto* d = model.findLaneNoteNear (view.xToBeat (e.position.x), grabRadiusPixels / view.pixelsPerBeat))
+            text = juce::MidiMessage::getMidiNoteName (d->values.pitch, true, true, 4) + "  "
+                 + property::describe (d->values, model.getLaneProperty());
 
         if (text != hoverText)
         {

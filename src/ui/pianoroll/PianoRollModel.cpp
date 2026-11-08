@@ -662,26 +662,60 @@ namespace harmonia::ui::pianoroll
         return d.selected || ! hasSelection();
     }
 
-    void PianoRollModel::setLaneValues (double beatA, float valueA, double beatB, float valueB, double toleranceBeats)
+    const DrawnNote* PianoRollModel::findLaneNoteNear (double beat, double radiusBeats)
     {
-        const auto from = std::min (beatA, beatB) - toleranceBeats;
-        const auto to = std::max (beatA, beatB) + toleranceBeats;
-        const auto onlySelected = hasSelection();
-        const auto [first, last] = getNotesInRange (from, to + epsilon);
+        const auto [first, last] = getNotesInRange (beat - radiusBeats, beat + radiusBeats + epsilon);
+        const DrawnNote* nearest = nullptr;
+        auto nearestDistance = radiusBeats + epsilon;
+
+        for (auto i = first; i < last; ++i)
+        {
+            const auto& d = drawn[i];
+            const auto distance = std::abs (d.values.startBeat - beat);
+
+            if (distance < nearestDistance && isLaneEditable (d))
+            {
+                nearest = &d;
+                nearestDistance = distance;
+            }
+        }
+
+        return nearest;
+    }
+
+    void PianoRollModel::setLaneValues (double beatA, float valueA, double beatB, float valueB, double grabBeats)
+    {
+        const auto* grabbed = findLaneNoteNear (beatB, grabBeats);
+        const auto grabbedStart = grabbed != nullptr ? grabbed->values.startBeat : 0.0;
+
+        const auto from = std::min (beatA, beatB);
+        const auto to = std::max (beatA, beatB);
+        const auto lookFrom = grabbed != nullptr ? std::min (from, grabbedStart) : from;
+        const auto lookTo = grabbed != nullptr ? std::max (to, grabbedStart) : to;
+        const auto [first, last] = getNotesInRange (lookFrom, lookTo + epsilon);
 
         std::vector<core::NoteEditor::Change> changes;
 
         for (auto i = first; i < last; ++i)
         {
             const auto& d = drawn[i];
+            const auto start = d.values.startBeat;
 
-            if (d.values.startBeat < from || d.values.startBeat > to || (onlySelected && ! d.selected))
+            if (! isLaneEditable (d))
                 continue;
 
-            const auto t = std::abs (beatB - beatA) < epsilon
-                               ? 0.0 : juce::jlimit (0.0, 1.0, (d.values.startBeat - beatA) / (beatB - beatA));
+            float value;
+
+            if (grabbed != nullptr && std::abs (start - grabbedStart) < epsilon)
+                value = valueB;
+            else if (start >= from && start <= to)
+                value = to - from < epsilon ? valueB
+                                            : valueA + (valueB - valueA) * (float) ((start - beatA) / (beatB - beatA));
+            else
+                continue;
+
             auto v = d.values;
-            core::note_property::set (v, laneProperty, valueA + (valueB - valueA) * (float) t);
+            core::note_property::set (v, laneProperty, value);
 
             if (! (v == d.values))
                 changes.push_back ({ d.note, v });

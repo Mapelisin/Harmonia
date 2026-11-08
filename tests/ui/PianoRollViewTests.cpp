@@ -93,6 +93,56 @@ TEST_SUITE ("piano roll: view")
 
 TEST_SUITE ("piano roll: component")
 {
+    TEST_CASE ("dragging a value in the lower panel keeps hold of the note when the hand drifts sideways")
+    {
+        test::ProjectWithClip p;
+        PianoRollModel model (*p.project);
+        model.setClip (p.clip);
+
+        View view;
+        view.width = 1000.0f;
+        view.pixelsPerBeat = 80.0;
+
+        ControlLane lane (model, view);
+        lane.setBounds (0, 0, 1000, 110);
+
+        core::Note n;
+        n.startBeat = 1.0;     // stem at x = 80
+        n.velocity = 100;
+        model.beginGesture ("note");
+        model.addNote (n);
+        n.startBeat = 1.5;     // a neighbour 40 px to the right stays untouched
+        model.addNote (n);
+
+        const auto yFor = [] (float value) { return 104.0f - value * 98.0f; };   // lane's top/bottom margins: 6 px
+        auto source = juce::Desktop::getInstance().getMainMouseSource();
+        const auto now = juce::Time::getCurrentTime();
+        const juce::Point<float> downAt { 82.0f, yFor (100.0f / 127.0f) };
+
+        const auto event = [&] (juce::Point<float> at, bool dragged)
+        {
+            return juce::MouseEvent (source, at, juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                     1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &lane, &lane, now, downAt, now, 1, dragged);
+        };
+
+        lane.mouseDown (event (downAt, false));
+        lane.mouseDrag (event ({ 85.0f, yFor (0.6f) }, true));
+        lane.mouseDrag (event ({ 89.0f, yFor (0.4f) }, true));
+        lane.mouseDrag (event ({ 93.0f, yFor (0.2f) }, true));
+        CHECK (model.getNotes()[0].values.velocity == juce::roundToInt (0.2f * 127.0f));
+
+        // Straight down, without any sideways movement, the note follows right away.
+        lane.mouseDrag (event ({ 93.0f, yFor (0.1f) }, true));
+        CHECK (model.getNotes()[0].values.velocity == juce::roundToInt (0.1f * 127.0f));
+        lane.mouseUp (event ({ 93.0f, yFor (0.1f) }, true));
+
+        CHECK (model.getNotes()[1].values.velocity == 100);
+
+        // The whole drag is one undo step.
+        p.project->undo();
+        CHECK (model.getNotes()[0].values.velocity == 100);
+    }
+
     TEST_CASE ("the whole piano roll lays out and paints, and its shortcuts reach the model")
     {
         test::ProjectWithClip p;

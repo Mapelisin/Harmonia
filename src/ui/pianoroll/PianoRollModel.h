@@ -173,10 +173,16 @@ namespace harmonia::ui::pianoroll
         /** Whether the lower panel edits this note: with a selection only selected notes are edited. */
         bool isLaneEditable (const DrawnNote&);
 
-        /** One step of a swipe in the lower panel: sets the panel's value of every editable note
-            starting between the two beats (plus `toleranceBeats`), interpolated along the swipe.
-            Goes into the current undo transaction. */
-        void setLaneValues (double beatA, float valueA, double beatB, float valueB, double toleranceBeats);
+        /** The editable note whose start is nearest to `beat`, if it is within `radiusBeats`
+            (the stem the mouse is on in the lower panel). */
+        const DrawnNote* findLaneNoteNear (double beat, double radiusBeats);
+
+        /** One step of a drag in the lower panel, from (beatA, valueA) to (beatB, valueB).
+            Editable notes starting between the two beats get values interpolated along the way
+            (swiping across notes draws a ramp), and the stem nearest to beatB within `grabBeats`
+            (with any chord notes on the same start) takes valueB, so a note keeps following the
+            mouse when the hand drifts a little sideways. Goes into the current undo transaction. */
+        void setLaneValues (double beatA, float valueA, double beatB, float valueB, double grabBeats);
 
         /** Alt+wheel over a note: changes the panel's value of the note (and of the rest of the
             selection if the note is selected) by `delta` on the 0..1 scale. Quick successive

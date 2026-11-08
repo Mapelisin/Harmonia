@@ -626,6 +626,29 @@ TEST_SUITE ("piano roll: lower panel")
             CHECK (d.values.velocity == (d.note == middle ? 32 : 100));
     }
 
+    TEST_CASE ("the stem nearest the mouse follows it even when the mouse is a little to the side")
+    {
+        PianoRollFixture f;
+        f.addNote (60, 0.0, 1.0);
+        f.addNote (64, 0.0, 1.0);     // a chord: both notes share the stem
+        f.addNote (60, 1.0, 1.0);
+
+        f.model.beginGesture ("drag");
+        f.model.setLaneValues (0.05, 0.5f, 0.1, 0.2f, 0.15);
+
+        const auto n = f.notes();
+        CHECK (n[0].velocity == 25);
+        CHECK (n[1].velocity == 25);
+        CHECK (n[2].velocity == 100);
+
+        // Too far from any stem: nothing changes.
+        f.model.setLaneValues (0.5, 0.9f, 0.5, 0.9f, 0.15);
+        CHECK (f.notes()[0].velocity == 25);
+        CHECK (f.notes()[2].velocity == 100);
+        CHECK (f.model.findLaneNoteNear (0.5, 0.15) == nullptr);
+        CHECK (f.model.findLaneNoteNear (0.9, 0.15) != nullptr);
+    }
+
     TEST_CASE ("Alt+wheel changes a value; quick turns are one undo step")
     {
         PianoRollFixture f;
