@@ -81,6 +81,8 @@ namespace harmonia::ui::arrangement
             g.drawRect (*rectangle, 1.0f);
         }
 
+        paintReadout (g);
+
         g.setColour (theme::colour::textSecondary);
         g.setFont (juce::FontOptions (theme::size::fontSize));
 
@@ -154,7 +156,10 @@ namespace harmonia::ui::arrangement
             if (auto* midi = dynamic_cast<te::MidiClip*> (d.clip))
                 paintNotes (g, *midi, r, body, colour);
             else if (auto* audio = dynamic_cast<te::AudioClipBase*> (d.clip))
+            {
                 paintWaveform (g, *audio, body, colour);
+                paintFadesAndGain (g, *audio, d, body);
+            }
 
             // Header: the menu mark, the link mark and the name.
             auto text = header.reduced (2.0f, 0.0f);
@@ -270,6 +275,97 @@ namespace harmonia::ui::arrangement
         g.setColour (colour.brighter (0.55f));
         thumbnail.drawChannels (g, visible, { fileTimeAt (visible.getX()), fileTimeAt (visible.getRight()) },
                                 clip.getGain());
+    }
+
+    void ClipArea::paintFadesAndGain (juce::Graphics& g, te::AudioClipBase& clip, const DrawnClip& d, juce::Rectangle<float> body)
+    {
+        // What a fade takes away: the part above its curve, darkened.
+        const auto paintFade = [&] (float fromX, float toX, bool fadeIn, te::AudioFadeCurve::Type type)
+        {
+            if (toX - fromX < 1.0f)
+                return;
+
+            constexpr int steps = 24;
+            juce::Path curve, shaded;
+            shaded.startNewSubPath (fromX, body.getY());
+
+            for (int i = 0; i <= steps; ++i)
+            {
+                const auto alpha = (float) i / (float) steps;
+                const auto gain = te::AudioFadeCurve::alphaToGainForType (type, fadeIn ? alpha : 1.0f - alpha);
+                const juce::Point<float> point { fromX + (toX - fromX) * alpha, body.getBottom() - gain * body.getHeight() };
+                shaded.lineTo (point);
+
+                if (i == 0)
+                    curve.startNewSubPath (point);
+                else
+                    curve.lineTo (point);
+            }
+
+            shaded.lineTo (toX, body.getY());
+            shaded.closeSubPath();
+
+            g.setColour (juce::Colours::black.withAlpha (0.38f));
+            g.fillPath (shaded);
+            g.setColour (colours::clipText.withAlpha (0.8f));
+            g.strokePath (curve, juce::PathStrokeType (1.0f));
+        };
+
+        const auto fadeInX = view.beatToX (d.startBeat + core::clips::getFadeInBeats (clip));
+        const auto fadeOutX = view.beatToX (d.endBeat - core::clips::getFadeOutBeats (clip));
+        paintFade (body.getX(), fadeInX, true, clip.getFadeInType());
+        paintFade (fadeOutX, body.getRight(), false, clip.getFadeOutType());
+
+        const auto handles = ArrangementGestures::getAudioHandles (d, view);
+
+        if (! handles.has_value())
+            return;
+
+        // The gain: a line across the clip once it isn't 0 dB, and its handle in the middle.
+        const auto gainDb = core::clips::getGainDb (clip);
+
+        if (std::abs (gainDb) > 0.05f)
+        {
+            g.setColour (colours::clipText.withAlpha (0.45f));
+            g.fillRect (body.getX(), std::round (handles->gain.y), body.getWidth(), 1.0f);
+        }
+
+        const auto square = [] (juce::Point<float> centre)
+        {
+            return juce::Rectangle<float> (ArrangementGestures::handleSize, ArrangementGestures::handleSize).withCentre (centre);
+        };
+
+        g.setColour (colours::clipOpen.withAlpha (0.85f));
+        g.fillRect (square (handles->fadeIn));
+        g.fillRect (square (handles->fadeOut));
+        g.fillEllipse (square (handles->gain));
+        g.setColour (theme::pianoroll::noteBorder);
+        g.drawRect (square (handles->fadeIn), 1.0f);
+        g.drawRect (square (handles->fadeOut), 1.0f);
+        g.drawEllipse (square (handles->gain), 1.0f);
+    }
+
+    void ClipArea::paintReadout (juce::Graphics& g)
+    {
+        const auto readout = gestures.getReadout();
+
+        if (! readout.has_value())
+            return;
+
+        const juce::Font font { juce::FontOptions (theme::size::smallFontSize) };
+        const auto width = juce::GlyphArrangement::getStringWidth (font, readout->first) + 10.0f;
+        auto box = juce::Rectangle<float> (width, 18.0f).withPosition (readout->second.x + 10.0f, readout->second.y - 22.0f);
+
+        if (box.getRight() > (float) getWidth())
+            box.setX (readout->second.x - 10.0f - width);
+
+        box.setY (std::max (0.0f, box.getY()));
+
+        g.setColour (theme::colour::surfaceRaised.withAlpha (0.95f));
+        g.fillRoundedRectangle (box, theme::size::cornerRadius);
+        g.setColour (theme::colour::textPrimary);
+        g.setFont (font);
+        g.drawText (readout->first, box, juce::Justification::centred, false);
     }
 
     te::SmartThumbnail& ClipArea::getWaveform (te::AudioClipBase& clip)

@@ -4,6 +4,31 @@
 
 namespace harmonia::core::clips
 {
+    namespace
+    {
+        te::TimePosition timeAt (const te::Edit& edit, double beat)
+        {
+            return edit.tempoSequence.toTime (te::BeatPosition::fromBeats (beat));
+        }
+
+        double beatAt (const te::Edit& edit, te::TimePosition time)
+        {
+            return edit.tempoSequence.toBeats (time).inBeats();
+        }
+
+        te::AudioFadeCurve::Type toEngine (FadeShape shape)
+        {
+            switch (shape)
+            {
+                case FadeShape::sCurve:     return te::AudioFadeCurve::sCurve;
+                case FadeShape::fast:       return te::AudioFadeCurve::convex;
+                case FadeShape::slow:       return te::AudioFadeCurve::concave;
+                case FadeShape::linear:
+                default:                    return te::AudioFadeCurve::linear;
+            }
+        }
+    }
+
     double getBeatsPerBar (const te::Edit& edit)
     {
         auto& timeSig = edit.tempoSequence.getTimeSigAt (te::BeatPosition());
@@ -233,5 +258,81 @@ namespace harmonia::core::clips
 
         clip->setStart (toTime (track.edit, std::max (0.0, startBeat)), false, true);
         return clip;
+    }
+
+    //==============================================================================
+    const std::vector<FadeShape>& getFadeShapes()
+    {
+        static const std::vector<FadeShape> shapes { FadeShape::linear, FadeShape::sCurve, FadeShape::fast, FadeShape::slow };
+        return shapes;
+    }
+
+    juce::String getFadeShapeName (FadeShape shape)
+    {
+        switch (shape)
+        {
+            case FadeShape::sCurve:     return "S-curve";
+            case FadeShape::fast:       return "Fast";
+            case FadeShape::slow:       return "Slow";
+            case FadeShape::linear:
+            default:                    return "Linear";
+        }
+    }
+
+    double getFadeInBeats (const te::AudioClipBase& clip)
+    {
+        const auto start = clip.getPosition().getStart();
+        return beatAt (clip.edit, start + clip.getFadeIn()) - beatAt (clip.edit, start);
+    }
+
+    double getFadeOutBeats (const te::AudioClipBase& clip)
+    {
+        const auto end = clip.getPosition().getEnd();
+        return beatAt (clip.edit, end) - beatAt (clip.edit, end - clip.getFadeOut());
+    }
+
+    void setFadeInBeats (te::AudioClipBase& clip, double beats)
+    {
+        const auto position = clip.getPosition();
+        const auto start = position.getStart();
+        const auto room = position.getLength() - clip.getFadeOut();
+        auto length = timeAt (clip.edit, beatAt (clip.edit, start) + std::max (0.0, beats)) - start;
+        length = juce::jlimit (te::TimeDuration(), std::max (te::TimeDuration(), room), length);
+        clip.setFadeIn (length);
+    }
+
+    void setFadeOutBeats (te::AudioClipBase& clip, double beats)
+    {
+        const auto position = clip.getPosition();
+        const auto end = position.getEnd();
+        const auto room = position.getLength() - clip.getFadeIn();
+        auto length = end - timeAt (clip.edit, beatAt (clip.edit, end) - std::max (0.0, beats));
+        length = juce::jlimit (te::TimeDuration(), std::max (te::TimeDuration(), room), length);
+        clip.setFadeOut (length);
+    }
+
+    FadeShape getFadeShape (const te::AudioClipBase& clip)
+    {
+        for (auto shape : getFadeShapes())
+            if (toEngine (shape) == clip.getFadeInType())
+                return shape;
+
+        return FadeShape::linear;
+    }
+
+    void setFadeShape (te::AudioClipBase& clip, FadeShape shape)
+    {
+        clip.setFadeInType (toEngine (shape));
+        clip.setFadeOutType (toEngine (shape));
+    }
+
+    float getGainDb (const te::AudioClipBase& clip)
+    {
+        return clip.getGainDB();
+    }
+
+    void setGainDb (te::AudioClipBase& clip, float db)
+    {
+        clip.setGainDB (juce::jlimit (silentGainDb, maxGainDb, db));
     }
 }

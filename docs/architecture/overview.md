@@ -116,6 +116,9 @@ Tracktion останавливает воспроизведение, когда 
   дорожкам и долям; `core::clips::insertCopy` даёт новые ID и отвязывает от группы связанных).
   Предотсчёт — `te::Edit::setCountInMode` (настройка движка) через `audio::Transport::setCountIn`; работает,
   когда Play записывает звук (`TransportControl::record`).
+- **Фейды и громкость аудиоклипов:** `core::clips::get/setFadeInBeats / FadeOutBeats / FadeShape / GainDb` поверх
+  `te::AudioClipBase` (фейды хранятся в секундах, снаружи — доли). Ручки на клипе — одна геометрия
+  `ArrangementGestures::getAudioHandles` для рисования (`ClipArea`) и мыши.
 - **Посылы:** `audio/Sends` — возвратные дорожки (`core::tracks::Kind::fxReturn`: в конце списка дорожек,
   `Project::getTracks` их не отдаёт — аранжировка их не видит; `getReturnTracks`) с `te::AuxReturnPlugin` на
   своей шине первым в списке и посылы — `te::AuxSendPlugin` на той же шине после громкости дорожки. Эффекты

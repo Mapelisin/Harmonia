@@ -50,6 +50,19 @@ namespace harmonia::ui::arrangement
         if (width >= menuMarkSize * 2.5f && position.x < left + menuMarkSize && position.y < top + menuMarkSize)
             return std::pair { *d, Zone::menu };
 
+        if (const auto handles = getAudioHandles (*d, view))
+        {
+            const auto near = [position] (juce::Point<float> centre)
+            {
+                const auto reach = handleSize / 2.0f + 2.0f;
+                return std::abs (position.x - centre.x) <= reach && std::abs (position.y - centre.y) <= reach;
+            };
+
+            if (near (handles->gain))       return std::pair { *d, Zone::gain };
+            if (near (handles->fadeIn))     return std::pair { *d, Zone::fadeIn };
+            if (near (handles->fadeOut))    return std::pair { *d, Zone::fadeOut };
+        }
+
         if (position.x < left + edge)
             return std::pair { *d, Zone::startEdge };
 
@@ -107,6 +120,37 @@ namespace harmonia::ui::arrangement
 
             model.focusClip (*clip);
 
+            if (zone == Zone::fadeIn || zone == Zone::fadeOut || zone == Zone::gain)
+            {
+                if (! model.isSelected (*clip))
+                    model.setSelection ({ clip });
+
+                auto* audioClip = dynamic_cast<te::AudioClipBase*> (clip);
+
+                if (audioClip == nullptr)
+                    return;
+
+                const auto name = zone == Zone::gain ? "Clip gain" : zone == Zone::fadeIn ? "Fade in" : "Fade out";
+                model.getProject().beginGesture (name);
+
+                // Double-click: back to none / 0 dB.
+                if (p.clicks >= 2)
+                {
+                    if (zone == Zone::gain)           clips::setGainDb (*audioClip, 0.0f);
+                    else if (zone == Zone::fadeIn)    clips::setFadeInBeats (*audioClip, 0.0);
+                    else                              clips::setFadeOutBeats (*audioClip, 0.0);
+                    return;
+                }
+
+                kind = zone == Zone::gain ? Kind::gain : zone == Zone::fadeIn ? Kind::fadeIn : Kind::fadeOut;
+                grabbed = clip;
+
+                if (const auto handles = getAudioHandles (hit->first, view))
+                    grabbedGainY = handles->gain.y;
+
+                return;
+            }
+
             if (zone == Zone::startEdge || zone == Zone::endEdge)
             {
                 if (! model.isSelected (*clip))
@@ -149,6 +193,9 @@ namespace harmonia::ui::arrangement
             case Kind::move:        dragMove (p); break;
             case Kind::resizeStart:
             case Kind::resizeEnd:   if (dragged) dragResize (p); break;
+            case Kind::fadeIn:
+            case Kind::fadeOut:
+            case Kind::gain:        if (dragged) dragHandle (p); break;
             case Kind::erase:       eraseAlong (lastPosition, p.position); break;
             case Kind::rectangle:   if (dragged) updateRectangleSelection (p); break;
 
@@ -192,8 +239,11 @@ namespace harmonia::ui::arrangement
 
     juce::MouseCursor ArrangementGestures::getCursorFor (const Pointer& p)
     {
-        if (kind == Kind::resizeStart || kind == Kind::resizeEnd)
+        if (kind == Kind::resizeStart || kind == Kind::resizeEnd || kind == Kind::fadeIn || kind == Kind::fadeOut)
             return juce::MouseCursor::LeftRightResizeCursor;
+
+        if (kind == Kind::gain)
+            return juce::MouseCursor::UpDownResizeCursor;
 
         if (kind != Kind::none)
             return juce::MouseCursor::NormalCursor;
@@ -203,7 +253,10 @@ namespace harmonia::ui::arrangement
             switch (hit->second)
             {
                 case Zone::startEdge:
-                case Zone::endEdge:     return juce::MouseCursor::LeftRightResizeCursor;
+                case Zone::endEdge:
+                case Zone::fadeIn:
+                case Zone::fadeOut:     return juce::MouseCursor::LeftRightResizeCursor;
+                case Zone::gain:        return juce::MouseCursor::UpDownResizeCursor;
                 case Zone::menu:        return juce::MouseCursor::PointingHandCursor;
                 case Zone::body:
                 default:                return juce::MouseCursor::NormalCursor;
@@ -360,6 +413,115 @@ namespace harmonia::ui::arrangement
             clips::setStart (*clip, beat, minLength);
         else
             clips::setEnd (*clip, beat, minLength);
+    }
+
+    void ArrangementGestures::dragHandle (const Pointer& p)
+    {
+        auto* clip = dynamic_cast<te::AudioClipBase*> (grabbed.get());
+
+        if (clip == nullptr || ! clips::isInEdit (*clip))
+            return;
+
+        if (kind == Kind::gain)
+        {
+            const auto top = view.trackToY (model.indexOf (clip->getClipTrack()));
+            const auto body = juce::Rectangle<float> (0.0f, top + 2.0f + clipHeaderHeight, 1.0f,
+                                                      view.trackHeight - 4.0f - clipHeaderHeight);
+            const auto db = yToGain (grabbedGainY + (p.position.y - downPointer.position.y), body);
+
+            // Fine steps: 0.1 dB, and a little catch at 0 dB.
+            clips::setGainDb (*clip, std::abs (db) < 0.3f ? 0.0f : std::round (db * 10.0f) / 10.0f);
+            return;
+        }
+
+        // Fades are free (no grid): they follow the sound, not the bars.
+        const auto beat = snap::roundToTicks (view.xToBeat (p.position.x));
+
+        if (kind == Kind::fadeIn)
+            clips::setFadeInBeats (*clip, beat - clips::getStartBeat (*clip));
+        else
+            clips::setFadeOutBeats (*clip, clips::getEndBeat (*clip) - beat);
+    }
+
+    std::optional<std::pair<juce::String, juce::Point<float>>> ArrangementGestures::getReadout()
+    {
+        auto* clip = dynamic_cast<te::AudioClipBase*> (grabbed.get());
+
+        if (clip == nullptr || ! clips::isInEdit (*clip) || (kind != Kind::fadeIn && kind != Kind::fadeOut && kind != Kind::gain))
+            return {};
+
+        const DrawnClip* drawn = nullptr;
+
+        for (const auto& d : model.getClips())
+            if (d.clip == clip)
+                drawn = &d;
+
+        if (drawn == nullptr)
+            return {};
+
+        const auto handles = getAudioHandles (*drawn, view);
+
+        if (! handles.has_value())
+            return {};
+
+        if (kind == Kind::gain)
+        {
+            const auto db = clips::getGainDb (*clip);
+            const auto text = db <= clips::silentGainDb + 0.5f ? juce::String ("Gain: silent")
+                                                               : "Gain " + juce::String (db > 0.0f ? "+" : "") + juce::String (db, 1) + " dB";
+            return std::pair { text, handles->gain };
+        }
+
+        const auto beats = kind == Kind::fadeIn ? clips::getFadeInBeats (*clip) : clips::getFadeOutBeats (*clip);
+        const auto seconds = kind == Kind::fadeIn ? clip->getFadeIn().inSeconds() : clip->getFadeOut().inSeconds();
+        const auto text = juce::String (kind == Kind::fadeIn ? "Fade in " : "Fade out ") + juce::String (beats, 2)
+                        + " beats (" + juce::String (seconds, 2) + " s)";
+        return std::pair { text, kind == Kind::fadeIn ? handles->fadeIn : handles->fadeOut };
+    }
+
+    std::optional<ArrangementGestures::AudioHandles> ArrangementGestures::getAudioHandles (const DrawnClip& d, const ArrangementView& view)
+    {
+        auto* clip = dynamic_cast<te::AudioClipBase*> (d.clip);
+
+        if (clip == nullptr)
+            return {};
+
+        const auto top = view.trackToY (d.trackIndex);
+        const auto r = juce::Rectangle<float>::leftTopRightBottom (view.beatToX (d.startBeat), top + 2.0f,
+                                                                   view.beatToX (d.endBeat), top + view.trackHeight - 2.0f);
+
+        if (r.getWidth() < minHandlesWidth)
+            return {};
+
+        AudioHandles h;
+        h.body = r.withTrimmedTop (clipHeaderHeight);
+        h.fadeInX = view.beatToX (d.startBeat + clips::getFadeInBeats (*clip));
+        h.fadeOutX = view.beatToX (d.endBeat - clips::getFadeOutBeats (*clip));
+
+        const auto half = handleSize / 2.0f;
+        const auto y = h.body.getY() + half + 1.0f;
+        h.fadeIn = { juce::jlimit (h.body.getX() + half + 1.0f, h.body.getRight() - half - 1.0f, h.fadeInX), y };
+        h.fadeOut = { juce::jlimit (h.body.getX() + half + 1.0f, h.body.getRight() - half - 1.0f, h.fadeOutX), y };
+        h.gain = { h.body.getCentreX(), gainToY (clips::getGainDb (*clip), h.body) };
+        return h;
+    }
+
+    float ArrangementGestures::gainToY (float db, juce::Rectangle<float> body)
+    {
+        const auto half = handleSize / 2.0f + 1.0f;
+        const auto position = juce::jlimit (0.0f, 1.0f, te::decibelsToVolumeFaderPosition (db));
+        return body.getBottom() - half - position * std::max (1.0f, body.getHeight() - 2.0f * half);
+    }
+
+    float ArrangementGestures::yToGain (float y, juce::Rectangle<float> body)
+    {
+        const auto half = handleSize / 2.0f + 1.0f;
+        const auto position = juce::jlimit (0.0f, 1.0f, (body.getBottom() - half - y) / std::max (1.0f, body.getHeight() - 2.0f * half));
+
+        if (position <= 0.0f)
+            return clips::silentGainDb;
+
+        return juce::jlimit (clips::silentGainDb, clips::maxGainDb, te::volumeFaderPositionToDB (position));
     }
 
     void ArrangementGestures::eraseAlong (juce::Point<float> from, juce::Point<float> to)

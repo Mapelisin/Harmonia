@@ -394,6 +394,39 @@ namespace harmonia::ui::arrangement
             const auto file = audio->getCurrentSourceFile();
             menu.addItem ("Show file in folder", file.exists(), false, [file] { file.revealToUser(); });
             menu.addSeparator();
+
+            // Fades and gain (also with the handles on the clip).
+            const auto withAudioClip = [this, target, isValid] (const juce::String& gesture, std::function<void (te::AudioClipBase&)> change)
+            {
+                return [this, target, isValid, gesture, change]
+                {
+                    if (auto* a = dynamic_cast<te::AudioClipBase*> (target.get()); a != nullptr && isValid())
+                    {
+                        model.getProject().beginGesture (gesture);
+                        change (*a);
+                    }
+                };
+            };
+
+            juce::PopupMenu shapes;
+            const auto currentShape = core::clips::getFadeShape (*audio);
+
+            for (auto shape : core::clips::getFadeShapes())
+                shapes.addItem (core::clips::getFadeShapeName (shape), true, shape == currentShape,
+                                withAudioClip ("Fade shape", [shape] (te::AudioClipBase& a) { core::clips::setFadeShape (a, shape); }));
+
+            const auto hasFades = core::clips::getFadeInBeats (*audio) > 0.0 || core::clips::getFadeOutBeats (*audio) > 0.0;
+            menu.addSubMenu ("Fade shape", shapes);
+            menu.addItem ("Remove fades", hasFades, false, withAudioClip ("Remove fades", [] (te::AudioClipBase& a)
+            {
+                core::clips::setFadeInBeats (a, 0.0);
+                core::clips::setFadeOutBeats (a, 0.0);
+            }));
+
+            const auto gain = core::clips::getGainDb (*audio);
+            menu.addItem ("Reset gain to 0 dB (now " + juce::String (gain, 1) + " dB)", std::abs (gain) > 0.05f, false,
+                          withAudioClip ("Reset clip gain", [] (te::AudioClipBase& a) { core::clips::setGainDb (a, 0.0f); }));
+            menu.addSeparator();
             menu.addItem ("Duplicate (Ctrl+B)", [this] { model.duplicateSelected (false); });
         }
 

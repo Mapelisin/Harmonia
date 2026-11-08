@@ -498,6 +498,16 @@ TEST_SUITE ("arrangement: audio")
         REQUIRE (vocalClip != nullptr);
         clips::setStart (*vocalClip, 9.0, 0.25);
 
+        // A smooth fade in and out on the vocal, the second drum loop 6 dB down.
+        auto* vocalAudio = dynamic_cast<te::AudioClipBase*> (vocalClip);
+        REQUIRE (vocalAudio != nullptr);
+        clips::setFadeShape (*vocalAudio, clips::FadeShape::sCurve);
+        clips::setFadeInBeats (*vocalAudio, 2.0);
+        clips::setFadeOutBeats (*vocalAudio, 3.0);
+        auto* secondDrums = dynamic_cast<te::AudioClipBase*> (clips::getClips (*model.getTrack (1)).getLast());
+        REQUIRE (secondDrums != nullptr);
+        clips::setGainDb (*secondDrums, -6.0f);
+
         model.setSelection ({ vocalClip });
         model.focusClip (*vocalClip);
         main->getTransport().setPositionSeconds (5.0);

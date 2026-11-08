@@ -84,6 +84,8 @@ namespace harmonia::ui::arrangement
         void paintClip (juce::Graphics&, const DrawnClip&);
         void paintNotes (juce::Graphics&, te::MidiClip&, juce::Rectangle<float> clip, juce::Rectangle<float> body, juce::Colour);
         void paintWaveform (juce::Graphics&, te::AudioClipBase&, juce::Rectangle<float> body, juce::Colour);
+        void paintFadesAndGain (juce::Graphics&, te::AudioClipBase&, const DrawnClip&, juce::Rectangle<float> body);
+        void paintReadout (juce::Graphics&);
         void paintDropMarker (juce::Graphics&);
         void paintRecording (juce::Graphics&);
         te::SmartThumbnail& getWaveform (te::AudioClipBase&);

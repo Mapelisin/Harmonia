@@ -72,4 +72,34 @@ namespace harmonia::core::clips
     /** Inserts a new clip from a copy (what Ctrl+C keeps) on `track` at `startBeat`. The new clip is
         independent: a copy of a linked MIDI clip doesn't join its group. nullptr if !canTake. */
     te::Clip* insertCopy (te::AudioTrack& track, const te::ClipCopy&, double startBeat);
+
+    //==============================================================================
+    // Audio clips: fades and gain (undoable; the caller starts the gesture). Fade lengths are
+    // given in beats; the engine keeps them in seconds, so they stay as long when the tempo changes.
+
+    /** How a fade goes: straight, smooth at both ends, fast at first, slow at first. */
+    enum class FadeShape { linear, sCurve, fast, slow };
+
+    /** Fade shapes in menu order, and their names ("Linear", "S-curve"...). */
+    const std::vector<FadeShape>& getFadeShapes();
+    juce::String getFadeShapeName (FadeShape);
+
+    double getFadeInBeats (const te::AudioClipBase&);
+    double getFadeOutBeats (const te::AudioClipBase&);
+
+    /** The fade at the clip's start: at least 0, never into the fade at the end. */
+    void setFadeInBeats (te::AudioClipBase&, double beats);
+
+    /** The fade at the clip's end: at least 0, never into the fade at the start. */
+    void setFadeOutBeats (te::AudioClipBase&, double beats);
+
+    /** The shape of the clip's fades (the one at the start; both are set together). */
+    FadeShape getFadeShape (const te::AudioClipBase&);
+    void setFadeShape (te::AudioClipBase&, FadeShape);
+
+    /** Gain of the clip before its track's effects and fader; at most +6 dB, -100 is silence. */
+    float getGainDb (const te::AudioClipBase&);
+    void setGainDb (te::AudioClipBase&, float db);
+
+    inline constexpr float maxGainDb = 6.0f, silentGainDb = -100.0f;
 }

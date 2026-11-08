@@ -15,7 +15,11 @@ namespace harmonia::ui::arrangement
         (drag over clips to delete several). Drag on empty space: select with a rectangle
         (Shift or Ctrl adds). Double-click on empty space: new clip (not on audio tracks; audio
         clips only move to audio tracks, MIDI clips to instrument tracks). The small mark at a clip's
-        top left opens its menu. Alt turns snap off. Middle button scrolls. */
+        top left opens its menu. Alt turns snap off. Middle button scrolls.
+
+        An audio clip has three handles at the top of its waveform: drag the left / right one
+        across for a fade in / out, the middle one up and down for the clip's gain; double-click
+        one to reset it. */
     class ArrangementGestures
     {
     public:
@@ -48,13 +52,37 @@ namespace harmonia::ui::arrangement
         /** Size of the menu mark at a clip's top left, and of the grab zones at its edges. */
         static constexpr float menuMarkSize = 14.0f, edgeGrabPixels = 6.0f;
 
-        enum class Zone { body, startEdge, endEdge, menu };
+        /** A clip's header (name, menu mark) is as tall as the menu mark; its body is below. */
+        static constexpr float clipHeaderHeight = menuMarkSize;
+
+        /** The fade and gain handles of audio clips at least `minHandlesWidth` pixels wide. */
+        static constexpr float handleSize = 7.0f, minHandlesWidth = 40.0f;
+
+        struct AudioHandles
+        {
+            juce::Rectangle<float> body;                // the waveform, below the header
+            juce::Point<float> fadeIn, fadeOut, gain;   // handle centres
+            float fadeInX = 0.0f, fadeOutX = 0.0f;      // where the fades end and start
+        };
+
+        /** Where an audio clip's handles are drawn (clip-area pixels); none for other clips and
+            clips too narrow for them. */
+        static std::optional<AudioHandles> getAudioHandles (const DrawnClip&, const ArrangementView&);
+
+        /** The clip's gain as a height in its body: the fader's curve, top +6 dB, bottom silence. */
+        static float gainToY (float db, juce::Rectangle<float> body);
+        static float yToGain (float y, juce::Rectangle<float> body);
+
+        /** While a fade or the gain is dragged: what to show by the handle ("Fade in 1.5 beats"). */
+        std::optional<std::pair<juce::String, juce::Point<float>>> getReadout();
+
+        enum class Zone { body, startEdge, endEdge, menu, fadeIn, fadeOut, gain };
 
         /** Clip and zone under a position, if any. */
         std::optional<std::pair<DrawnClip, Zone>> hitTest (juce::Point<float>);
 
     private:
-        enum class Kind { none, move, resizeStart, resizeEnd, erase, rectangle, pan };
+        enum class Kind { none, move, resizeStart, resizeEnd, erase, rectangle, pan, fadeIn, fadeOut, gain };
 
         ArrangementModel& model;
         ArrangementView& view;
@@ -90,6 +118,8 @@ namespace harmonia::ui::arrangement
         void dragMove (const Pointer&);
         void makeCopies();
         void dragResize (const Pointer&);
+        void dragHandle (const Pointer&);
+        float grabbedGainY = 0.0f;
         void eraseAlong (juce::Point<float> from, juce::Point<float> to);
         void updateRectangleSelection (const Pointer&);
     };
