@@ -37,6 +37,9 @@ namespace harmonia::ui::arrangement
         void pasteAtPlayhead();
         void splitAtPlayhead();
 
+        /** The view scrolled or zoomed (what lines up with it repaints). */
+        std::function<void()> onViewChanged;
+
         /** A position was clicked on the ruler. */
         std::function<void (double beat)> onPositionChosen;
 

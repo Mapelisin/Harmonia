@@ -46,11 +46,12 @@ namespace harmonia::ui
         audioSettingsButton.setEnabled (session.devicesEnabled());
         audioSettingsButton.onClick = [this] { showAudioSettings(); };
 
-        // The lower part shows the piano roll or the mixer, like FL Studio's F7 / F9.
+        // The lower part shows the piano roll, the automation or the mixer (F7 / F8 / F9).
         pianoRollTab.setTooltip ("Piano roll of the open clip (F7)");
+        automationTab.setTooltip ("Automation: lines that change volume, pan, sends or effects over the song (F8)");
         mixerTab.setTooltip ("Mixer: effects, volume, pan (F9)");
 
-        for (auto* tab : { &pianoRollTab, &mixerTab })
+        for (auto* tab : { &pianoRollTab, &automationTab, &mixerTab })
         {
             tab->setClickingTogglesState (true);
             tab->setRadioGroupId (lowerPanelTabs);
@@ -59,7 +60,12 @@ namespace harmonia::ui
 
         pianoRollTab.setToggleState (true, juce::dontSendNotification);
         pianoRollTab.onClick = [this] { showLowerPanel (LowerPanel::pianoRoll); };
+        automationTab.onClick = [this] { showLowerPanel (LowerPanel::automation); };
         mixerTab.onClick = [this] { showLowerPanel (LowerPanel::mixer); };
+
+        // The automation lane scrolls and zooms with the arrangement.
+        arrangement.onViewChanged = [this] { automationPanel.getLane().repaint(); };
+        automationPanel.setMargins (arrangement::Arrangement::headerWidth, arrangement::Arrangement::scrollBarSize);
 
         mixer.onMessage = [this] (const juce::String& text, bool isProblem)
         {
@@ -80,7 +86,7 @@ namespace harmonia::ui
                 statusBar.setMessage (text);
         };
 
-        for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &audioSettingsButton, &pianoRollTab, &mixerTab })
+        for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &audioSettingsButton, &pianoRollTab, &automationTab, &mixerTab })
             c->setWantsKeyboardFocus (false);
 
         // Arrangement above, piano roll below; the bar between them can be dragged.
@@ -89,11 +95,12 @@ namespace harmonia::ui
         splitLayout.setItemLayout (2, 200.0, -1.0, -0.62);
 
         for (auto* c : std::initializer_list<juce::Component*> { &transportBar, &fileButton, &audioSettingsButton, &trackNameLabel,
-                                                                 &pianoRollTab, &mixerTab, &arrangement, &splitter, &pianoRoll,
+                                                                 &pianoRollTab, &automationTab, &mixerTab, &arrangement, &splitter, &pianoRoll,
                                                                  &statusBar })
             addAndMakeVisible (c);
 
         addChildComponent (mixer);
+        addChildComponent (automationPanel);
 
         currentChanged();
         setSize (1280, 800);
@@ -109,6 +116,7 @@ namespace harmonia::ui
     MainComponent::~MainComponent()
     {
         arrangementModel.onCurrentChanged = nullptr;
+        arrangement.onViewChanged = nullptr;
         arrangementModel.removeListener (this);
         pianoRollModel.removeListener (this);
         pianoRollModel.setAuditioner (nullptr);
@@ -164,6 +172,7 @@ namespace harmonia::ui
             pianoRoll.showClip();
         }
 
+        automationPanel.refresh();
         updateLoop();
     }
 
@@ -270,8 +279,9 @@ namespace harmonia::ui
         auto trackRow = area.removeFromTop (trackRowHeight);
         trackNameLabel.setBounds (trackRow.removeFromLeft (arrangement::Arrangement::headerWidth).reduced (theme::size::padding / 2, 0));
 
-        auto tabs = trackRow.removeFromRight (2 * tabWidth + theme::size::padding).withTrimmedRight (theme::size::padding);
+        auto tabs = trackRow.removeFromRight (3 * tabWidth + theme::size::padding).withTrimmedRight (theme::size::padding);
         mixerTab.setBounds (tabs.removeFromRight (tabWidth).withSizeKeepingCentre (tabWidth, theme::size::buttonHeight));
+        automationTab.setBounds (tabs.removeFromRight (tabWidth).withSizeKeepingCentre (tabWidth, theme::size::buttonHeight));
         pianoRollTab.setBounds (tabs.removeFromRight (tabWidth).withSizeKeepingCentre (tabWidth, theme::size::buttonHeight));
 
         if (instrumentPanel != nullptr)
@@ -280,22 +290,29 @@ namespace harmonia::ui
         juce::Component* parts[] = { &arrangement, &splitter, &pianoRoll };
         splitLayout.layOutComponents (parts, 3, area.getX(), area.getY(), area.getWidth(), area.getHeight(), true, true);
         mixer.setBounds (pianoRoll.getBounds());
+        automationPanel.setBounds (pianoRoll.getBounds());
     }
 
     void MainComponent::showLowerPanel (LowerPanel panel)
     {
-        const auto hadFocus = pianoRoll.hasKeyboardFocus (true) || mixer.hasKeyboardFocus (true);
+        const auto hadFocus = pianoRoll.hasKeyboardFocus (true) || mixer.hasKeyboardFocus (true)
+                           || automationPanel.hasKeyboardFocus (true);
 
         lowerPanel = panel;
         pianoRollTab.setToggleState (panel == LowerPanel::pianoRoll, juce::dontSendNotification);
+        automationTab.setToggleState (panel == LowerPanel::automation, juce::dontSendNotification);
         mixerTab.setToggleState (panel == LowerPanel::mixer, juce::dontSendNotification);
         pianoRoll.setVisible (panel == LowerPanel::pianoRoll);
+        automationPanel.setVisible (panel == LowerPanel::automation);
         mixer.setVisible (panel == LowerPanel::mixer);
+
+        if (panel == LowerPanel::automation)
+            automationPanel.refresh();
 
         // Keys keep working: the piano roll takes them back, or this component does.
         if (panel == LowerPanel::pianoRoll && (hadFocus || ! hasKeyboardFocus (true)) && pianoRoll.isShowing())
             pianoRoll.grabKeyboardFocus();
-        else if (panel == LowerPanel::mixer && hadFocus && isShowing())
+        else if (panel != LowerPanel::pianoRoll && hadFocus && isShowing())
             grabKeyboardFocus();
     }
 
@@ -312,9 +329,12 @@ namespace harmonia::ui
         const auto letter = keys::getLetter (key);
         const auto code = key.getKeyCode();
 
-        if (! mods.isAnyModifierKeyDown() && (code == juce::KeyPress::F7Key || code == juce::KeyPress::F9Key))
+        if (! mods.isAnyModifierKeyDown()
+            && (code == juce::KeyPress::F7Key || code == juce::KeyPress::F8Key || code == juce::KeyPress::F9Key))
         {
-            showLowerPanel (code == juce::KeyPress::F7Key ? LowerPanel::pianoRoll : LowerPanel::mixer);
+            showLowerPanel (code == juce::KeyPress::F7Key ? LowerPanel::pianoRoll
+                            : code == juce::KeyPress::F8Key ? LowerPanel::automation
+                                                            : LowerPanel::mixer);
             return true;
         }
 
@@ -373,7 +393,7 @@ namespace harmonia::ui
             return pianoRoll.keyPressed (key);
 
         // The arrangement had its go already (it's focused): its keys don't edit notes.
-        // Nor do they while the piano roll is hidden behind the mixer.
+        // Nor do they while the piano roll is hidden behind the mixer or the automation.
         if (arrangement.hasKeyboardFocus (true) || lowerPanel != LowerPanel::pianoRoll)
             return false;
 

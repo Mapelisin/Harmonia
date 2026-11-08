@@ -231,6 +231,9 @@ namespace harmonia::ui::arrangement
         headers.resized();
         clipArea.repaint();
         ruler.repaint();
+
+        if (onViewChanged != nullptr)
+            onViewChanged();
     }
 
     void Arrangement::viewChanged()
@@ -242,6 +245,9 @@ namespace harmonia::ui::arrangement
         headers.resized();
         clipArea.repaint();
         ruler.repaint();
+
+        if (onViewChanged != nullptr)
+            onViewChanged();
     }
 
     void Arrangement::updateContentSize()

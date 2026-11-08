@@ -57,6 +57,12 @@ add_library(harmonia_ui STATIC
     mixer/ChannelStrip.cpp
     mixer/Mixer.h
     mixer/Mixer.cpp
+    automation/AutomationGestures.h
+    automation/AutomationGestures.cpp
+    automation/AutomationLane.h
+    automation/AutomationLane.cpp
+    automation/AutomationPanel.h
+    automation/AutomationPanel.cpp
     MainComponent.h
     MainComponent.cpp)
 

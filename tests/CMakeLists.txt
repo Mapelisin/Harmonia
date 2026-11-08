@@ -17,13 +17,15 @@ add_executable(harmonia_tests
     audio/EffectsTests.cpp
     audio/RecordingTests.cpp
     audio/SendsTests.cpp
+    audio/AutomationTests.cpp
     ui/PianoRollTests.cpp
     ui/PianoRollViewTests.cpp
     ui/NoteInputTests.cpp
     ui/ArrangementTests.cpp
     ui/MixerTests.cpp
     ui/AudioClipTests.cpp
-    ui/ClipEditTests.cpp)
+    ui/ClipEditTests.cpp
+    ui/AutomationPanelTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)

@@ -1,5 +1,6 @@
 #include "app/SelfTest.h"
 #include "audio/AudioInputs.h"
+#include "audio/Automation.h"
 #include "audio/Sends.h"
 #include "audio/DeviceSetup.h"
 #include "audio/DeviceStatus.h"
@@ -257,6 +258,7 @@ namespace harmonia::app
                     checkPlayAfterDeviceRestart (transport, level);
                     checkEffects (*project, track, transport, level);
                     checkSends (*project, track, transport, level);
+                    checkAutomation (*project, track, transport, level);
                 }
 
                 checkAudioClip (*project, transport);
@@ -659,6 +661,42 @@ namespace harmonia::app
                 report.check (project.getReturnTracks().isEmpty() && audio::sends::getBus (track) < 0
                                   && transport.isPlaying() && level.takePeakDb() > -60.0f,
                               "Deleted the return track while playing, still audible");
+
+                transport.stop();
+                pump (300, level, transport, report);
+            }
+
+            /** A volume line drawn on track 1 while it plays: silent where the line is at the
+                bottom; the song comes back once the line is cleared. */
+            void checkAutomation (core::Project& project, te::AudioTrack& track, audio::Transport& transport, TrackLevel& level)
+            {
+                transport.setPositionSeconds (0.0);
+                transport.play();
+                pump (300, level, transport, report);
+                level.takePeakDb();
+                pump (600, level, transport, report);
+                const auto before = level.takePeakDb();
+
+                auto& volume = *track.getVolumePlugin()->volParam;
+                project.beginGesture ("Draw a volume line");
+                audio::automation::addPoint (volume, 0.0, 0.0f);
+                audio::automation::addPoint (volume, songBeats, 0.0f);
+                pump (300, level, transport, report);
+                level.takePeakDb();
+                pump (800, level, transport, report);
+                const auto silenced = level.takePeakDb();
+
+                project.beginGesture ("Clear the volume line");
+                audio::automation::clear (volume);
+                pump (300, level, transport, report);
+                level.takePeakDb();
+                pump (800, level, transport, report);
+                const auto after = level.takePeakDb();
+
+                report.check (before > -60.0f && silenced < -90.0f && after > -60.0f,
+                              "A volume line silences track 1 while playing; clearing it brings it back (peak "
+                                  + juce::String (before, 1) + " / " + juce::String (silenced, 1) + " / "
+                                  + juce::String (after, 1) + " dBFS)");
 
                 transport.stop();
                 pump (300, level, transport, report);

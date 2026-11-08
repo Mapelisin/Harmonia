@@ -1,6 +1,8 @@
 add_library(harmonia_audio STATIC
     AudioInputs.h
     AudioInputs.cpp
+    Automation.h
+    Automation.cpp
     DeviceStatus.h
     DeviceStatus.cpp
     DeviceSetup.h

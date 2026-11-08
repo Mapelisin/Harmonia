@@ -121,6 +121,13 @@ Tracktion останавливает воспроизведение, когда 
   своей шине первым в списке и посылы — `te::AuxSendPlugin` на той же шине после громкости дорожки. Эффекты
   (`audio::effects`) их не считают эффектами и ставят новые после aux return. Заглушённая дорожка не шлёт
   (`HarmoniaEngineBehaviour::shouldProcessAuxSendWhenTrackIsMuted`), возвратные — solo isolate.
+- **Автоматизация:** `audio/Automation` (`audio::automation`) — линии ручек поверх `te::AutomationCurve`
+  параметра (`AutomatableParameter::getCurve`): точки снаружи в долях песни и 0..1 диапазона ручки, внутри —
+  как хранит кривая (время или доли). Ручки дорожки — громкость/пан (`VolumeAndPanPlugin`), уровень посылов
+  (`AuxSendPlugin::gain`), параметры эффектов и инструмента. Воспроизведение и экспорт идут по кривым сами;
+  при смене темпа точки переносит движок (`EditTimecodeRemapperSnapshot`). UI — `ui/automation`: жесты
+  (`AutomationGestures`, без окна), полоса (`AutomationLane`), панель с выбором ручки (`AutomationPanel`,
+  F8), горизонталь — общий `ArrangementView` аранжировки.
 - **Ввод нот:** `ui/NoteInput` собирает ноты с клавиатуры компьютера (`ui/ComputerKeyboard`) и MIDI-клавиатур
   (`audio/MidiInputs`), даёт их услышать и во время записи пишет в клип через `core/NoteRecorder` (чистая логика:
   нажатия → ноты, круги, педаль; квантование). Место ноты — то, что человек слышал: `audio/PlaybackClock` сводит

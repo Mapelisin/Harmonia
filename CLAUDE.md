@@ -49,8 +49,8 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   их тесты гоняют синтетические события без окна. Компоненты только рисуют и передают ввод. Время в piano roll —
   доли от начала песни; в клипе ноты хранятся от начала его содержимого (`PianoRollModel` переводит).
 - Проверка интерфейса без окна: тесты «the main window paints…» рисуют главное окно в картинку; с переменной
-  `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png`, `main-arrangement.png`, `main-mixer.png`
-  `main-audio.png` и `main-audio-recording.png`
+  `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png`, `main-arrangement.png`, `main-mixer.png`,
+  `main-automation.png`, `main-audio.png` и `main-audio-recording.png`
   (`harmonia_tests.exe -tc="*paints*"`). Живая проверка мышью (скрипт
   кликает по окну) захватывает настоящий курсор — только если пользователь не за компьютером или разрешил.
 - Самопроверка без звука в динамиках: `--selftest --quiet` (громкость мастера в ноль, уровни меряются на дорожке).
@@ -67,6 +67,8 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Запись звука: готовность/вход — только через `audio::AudioInputs`; запись — `audio::Transport` (`recordsAudio`).
   Тесты записи и живого звука — `test::AudioRig` (`tests/TestAudioRig.h`: свой `core::Session` с
   `HostedAudioDeviceInterface`, тест сам гонит звук и меряет выход), общий тестовый движок без устройств не трогать.
+- Автоматизация — только через `audio::automation` (доли и 0..1; правки в текущую транзакцию undo — жест
+  начинает вызывающий). Мышь панели — `ui/automation/AutomationGestures` (тесты без окна).
 - Посылы и возвратные дорожки — только через `audio::sends`. `Project::getTracks` — дорожки песни (без
   возвратных), `getReturnTracks` — возвратные.
 - Эффекты — через `audio::effects` (порядок в списке плагинов: инструмент, эффекты, громкость, индикатор).
