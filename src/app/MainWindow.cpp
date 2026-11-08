@@ -17,6 +17,9 @@ namespace harmonia::app
         : juce::DocumentWindow ("Harmonia", ui::theme::colour::background, juce::DocumentWindow::allButtons),
           session (s)
     {
+        // Before anything is autosaved over it.
+        leftover = autosave.findLeftover();
+
         setUsingNativeTitleBar (true);
         setResizable (true, false);
         setResizeLimits (800, 500, 16384, 16384);
@@ -30,6 +33,12 @@ namespace harmonia::app
     MainWindow::~MainWindow()
     {
         stopTimer();
+
+        // Closing normally: the work was saved or the user chose not to. Unanswered leftover
+        // work stays for next time.
+        if (! leftover.has_value())
+            autosave.clear();
+
         chooser.reset();
         clearContentComponent();   // before the project it shows
         project.reset();
@@ -70,6 +79,7 @@ namespace harmonia::app
         clearContentComponent();
         project = std::move (newProject);
         file = newFile;
+        autosave.projectReplaced();
 
         auto* content = new ui::MainComponent (session, *project);
         content->setFileCommands (this);
@@ -188,6 +198,67 @@ namespace harmonia::app
         return true;
     }
 
+    void MainWindow::offerToRestore (std::function<void()> otherwise)
+    {
+        if (! leftover.has_value())
+        {
+            if (otherwise != nullptr)
+                otherwise();
+
+            return;
+        }
+
+        const auto when = leftover->savedAt.toString (true, true, false, true);
+        juce::Component::SafePointer<MainWindow> safe (this);
+
+        juce::AlertWindow::showAsync (juce::MessageBoxOptions()
+                                          .withIconType (juce::MessageBoxIconType::QuestionIcon)
+                                          .withTitle ("Restore unsaved work?")
+                                          .withMessage ("Harmonia didn't close properly last time. Unsaved changes to \""
+                                                        + leftover->getName() + "\" were kept (" + when + ").\n\n"
+                                                        + "Restore them?")
+                                          .withButton ("Restore", 1)
+                                          .withButton ("Don't restore", 0)
+                                          .withAssociatedComponent (this),
+                                      [safe, otherwise = std::move (otherwise)] (int result)
+        {
+            if (safe == nullptr || ! safe->leftover.has_value())
+                return;
+
+            const auto found = *std::exchange (safe->leftover, std::nullopt);
+
+            if (result == 1 && safe->restore (found))
+                return;
+
+            if (result != 1)
+                safe->autosave.discard();
+
+            if (otherwise != nullptr)
+                otherwise();
+        });
+    }
+
+    bool MainWindow::restore (const core::Autosave::Leftover& found)
+    {
+        juce::String error;
+        auto restored = core::Autosave::restore (session, found, error);
+
+        if (restored == nullptr)
+        {
+            autosave.discard();
+            showError ("Cannot restore the unsaved work",
+                       error + "\n\nThe copy is kept as " + autosave.getDiscardedFile().getFullPathName());
+            return false;
+        }
+
+        setProject (std::move (restored), found.original);
+
+        if (auto* content = getMainComponent())
+            content->showMessage ("Restored the unsaved work on " + found.getName() + ". Save it with Ctrl+S");
+
+        return true;
+    }
+
     void MainWindow::saveProject()
     {
         if (file == juce::File())
@@ -297,5 +368,17 @@ namespace harmonia::app
     void MainWindow::timerCallback()
     {
         updateTitle();
+
+        if (leftover.has_value())
+            return;
+
+        // A problem is shown once, not twice a second; again if it changes.
+        if (const auto problem = autosave.update (*project, file); problem != autosaveProblem)
+        {
+            autosaveProblem = problem;
+
+            if (problem.isNotEmpty())
+                showWarning ("Autosave: " + problem);
+        }
     }
 }

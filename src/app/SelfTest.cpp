@@ -855,6 +855,7 @@ namespace harmonia::app
 
                 checkPluginWindow (track);
                 checkRender (project, juce::File::createLegalFileName (instrument->name) + ".wav");
+                checkSavingPlugin (project, track);
 
                 // And back again, still playing.
                 if (options.useDevice)
@@ -877,6 +878,46 @@ namespace harmonia::app
                     report.line ("       xruns during the switch back: " + juce::String (xrunCount() - xrunsBeforeSwitchBack));
                     report.check (level.takePeakDb() > -60.0f, "Built-in synth is audible again");
                 }
+            }
+
+            /** The plugin's own settings go into the project file (written into the copy that is
+                saved, not as undo steps), and come back when it's opened. */
+            void checkSavingPlugin (core::Project& project, te::AudioTrack& track)
+            {
+                auto* plugin = audio::instruments::get (track);
+
+                if (plugin == nullptr)
+                    return;
+
+                const auto undoable = project.canUndo();
+                const auto changes = project.getChangeCount();
+                const juce::TemporaryFile file (".harmonia");
+                const auto error = project.saveCopy (file.getFile());
+                report.check (error.isEmpty() && project.getChangeCount() == changes && project.canUndo() == undoable,
+                              "Saved with '" + plugin->getName() + "': nothing changed in the open project " + error);
+
+                juce::String state;
+
+                std::function<void (const juce::XmlElement&)> find = [&] (const juce::XmlElement& e)
+                {
+                    if (e.hasTagName ("PLUGIN") && e.getStringAttribute ("type") == te::ExternalPlugin::xmlTypeName)
+                        state = e.getStringAttribute ("state");
+
+                    for (auto* child : e.getChildIterator())
+                        find (*child);
+                };
+
+                if (const auto xml = juce::parseXML (file.getFile()))
+                    find (*xml);
+
+                report.check (state.length() > 16, "The plugin's own settings are in the file ("
+                                                      + juce::String (state.length()) + " characters)");
+
+                juce::String loadError;
+                auto loaded = core::Project::load (session, file.getFile(), loadError);
+                auto* reopened = loaded != nullptr ? audio::instruments::get (*loaded->getTracks()[project.getTracks().indexOf (&track)]) : nullptr;
+                report.check (reopened != nullptr && reopened->getName() == plugin->getName(),
+                              "Reopened with '" + plugin->getName() + "' " + loadError);
             }
 
             void checkPluginWindow (te::AudioTrack& track)

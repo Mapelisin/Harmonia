@@ -61,11 +61,15 @@ namespace harmonia::app
 
             mainWindow = std::make_unique<MainWindow> (*session, MainWindow::createNewProject (*session));
 
-            // A project file given on the command line (double-clicked in Explorer).
-            if (const juce::File file (commandLine.unquoted().trim()); commandLine.isNotEmpty()
-                    && juce::File::isAbsolutePath (file.getFullPathName()) && file.existsAsFile()
-                    && file.hasFileExtension (MainWindow::fileExtension))
-                mainWindow->open (file);
+            // Work a crash left behind comes first; else a project file given on the command line
+            // (double-clicked in Explorer).
+            mainWindow->offerToRestore ([this, commandLine]
+            {
+                if (const juce::File file (commandLine.unquoted().trim()); commandLine.isNotEmpty()
+                        && juce::File::isAbsolutePath (file.getFullPathName()) && file.existsAsFile()
+                        && file.hasFileExtension (MainWindow::fileExtension))
+                    mainWindow->open (file);
+            });
 
             if (deviceProblem.isNotEmpty())
                 mainWindow->showWarning (deviceProblem);

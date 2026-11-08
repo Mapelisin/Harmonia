@@ -8,6 +8,78 @@ namespace harmonia::core
     {
         const juce::Identifier formatVersionId ("hFormatVersion");
         const juce::Identifier editTag ("EDIT");
+
+        /** Calls `fn` for every node referring to a sound file: audio clips and their recorded takes. */
+        void forEachSoundReference (juce::ValueTree tree, const std::function<void (juce::ValueTree&)>& fn)
+        {
+            if ((tree.hasType (te::IDs::AUDIOCLIP) || tree.hasType (te::IDs::TAKE))
+                    && tree[te::IDs::source].toString().isNotEmpty())
+                fn (tree);
+
+            for (auto child : tree)
+                forEachSoundReference (child, fn);
+        }
+
+        /** The node in `copy` at the place `node` has in `root`. */
+        juce::ValueTree findCopyOf (const juce::ValueTree& node, const juce::ValueTree& root, const juce::ValueTree& copy)
+        {
+            if (node == root)
+                return copy;
+
+            const auto parent = node.getParent();
+
+            if (! parent.isValid())
+                return {};
+
+            const auto copiedParent = findCopyOf (parent, root, copy);
+            return copiedParent.isValid() ? copiedParent.getChild (parent.indexOf (node)) : juce::ValueTree();
+        }
+
+        /** What Tracktion's Plugin::flushPluginStateToValueTree writes, written into a copy of the
+            plugin's node instead: the plugin's own state (VST settings, changed in its window
+            without going through undo), and the values set by hand of parameters the automation
+            is moving. Tracktion writes them into the open edit as undoable steps (the built-in
+            synth even replaces a node each time), which made Ctrl+Z after saving undo nothing
+            visible and dropped the redo steps. */
+        void writePluginSettings (te::Plugin& plugin, juce::ValueTree& node)
+        {
+            juce::MemoryOutputStream stream;
+
+            for (auto* parameter : plugin.getAutomatableParameters())
+            {
+                if (parameter->getCurrentValue() != parameter->getCurrentExplicitValue())
+                {
+                    stream.writeString (parameter->paramID);
+                    stream.writeFloat (parameter->getCurrentExplicitValue());
+                }
+            }
+
+            stream.flush();
+
+            if (stream.getDataSize() > 0)
+                node.setProperty (te::IDs::parameters, stream.getMemoryBlock(), nullptr);
+            else
+                node.removeProperty (te::IDs::parameters, nullptr);
+
+            auto* external = dynamic_cast<te::ExternalPlugin*> (&plugin);
+            auto* instance = external != nullptr ? external->getAudioPluginInstance() : nullptr;
+
+            if (instance == nullptr)
+                return;
+
+            if (instance->getNumPrograms() > 0)
+                node.setProperty (te::IDs::programNum, instance->getCurrentProgram(), nullptr);
+
+            juce::MemoryBlock chunk;
+            instance->suspendProcessing (true);
+            instance->getStateInformation (chunk);
+            instance->suspendProcessing (false);
+
+            if (chunk.getSize() > 0)
+                node.setProperty (te::IDs::state, chunk.toBase64Encoding(), nullptr);
+            else
+                node.removeProperty (te::IDs::state, nullptr);
+        }
     }
 
     Project::Project (std::unique_ptr<te::Edit> e)
@@ -35,6 +107,7 @@ namespace harmonia::core
     void Project::changeListenerCallback (juce::ChangeBroadcaster*)
     {
         changedSinceSave = true;
+        ++changeCount;
     }
 
     void Project::markAsSaved()
@@ -89,26 +162,116 @@ namespace harmonia::core
         return std::unique_ptr<Project> (new Project (std::move (edit)));
     }
 
-    juce::String Project::save (const juce::File& file)
+    std::unique_ptr<Project> Project::loadRecovered (Session& session, const juce::File& copy, const juce::File& original,
+                                                     juce::String& error)
+    {
+        auto project = load (session, copy, error);
+
+        if (project == nullptr)
+            return {};
+
+        // The copy names its sounds by full path: they are found wherever it was opened from.
+        project->edit->editFileRetriever = [original] { return original; };
+        project->changedSinceSave = true;
+        return project;
+    }
+
+    void Project::makeSoundPathsAbsolute()
+    {
+        // Tracktion stores a sound relative to the project file when it's near it, found from where
+        // the project file is now. Before the project moves to another file, give each its full path.
+        forEachSoundReference (edit->state, [this] (juce::ValueTree& node)
+        {
+            const auto source = node[te::IDs::source].toString();
+
+            if (juce::File::isAbsolutePath (source))
+                return;
+
+            if (const auto sound = te::SourceFileReference::findFileFromString (*edit, source); sound != juce::File())
+                node.setProperty (te::IDs::source, sound.getFullPathName(), nullptr);
+        });
+    }
+
+    juce::String Project::write (const juce::File& file, const juce::File& relativeTo)
     {
         edit->state.setProperty (formatVersionId, currentFormatVersion, nullptr);
 
         if (! file.getParentDirectory().createDirectory())
             return "Cannot create folder: " + file.getParentDirectory().getFullPathName();
 
-        if (! te::EditFileOperations (*edit).writeToFile (file, false))
+        // The open project stays as it is: what's written is a copy with the plugins' settings
+        // and the sounds' paths for where it goes.
+        auto state = edit->state.createCopy();
+        state.setProperty (te::IDs::appVersion, edit->engine.getPropertyStorage().getApplicationVersion(), nullptr);
+        state.setProperty (te::IDs::projectID, edit->getProjectItemRef().toString(), nullptr);
+
+        for (auto* plugin : te::getAllPlugins (*edit, true))
+            if (auto node = findCopyOf (plugin->state, edit->state, state); node.isValid())
+                writePluginSettings (*plugin, node);
+
+        const auto folder = relativeTo != juce::File() ? relativeTo.getParentDirectory() : juce::File();
+
+        forEachSoundReference (state, [this, &folder] (juce::ValueTree& node)
+        {
+            const auto sound = te::SourceFileReference::findFileFromString (*edit, node[te::IDs::source].toString());
+
+            if (sound == juce::File())
+                return;
+
+            const auto inFolder = folder != juce::File() && sound.isAChildOf (folder);
+            node.setProperty (te::IDs::source, inFolder ? sound.getRelativePathFrom (folder).replaceCharacter ('\\', '/')
+                                                        : sound.getFullPathName(), nullptr);
+        });
+
+        const auto xml = state.createXml();
+        juce::TemporaryFile temp (file);
+
+        if (xml == nullptr || ! xml->writeTo (temp.getFile()) || ! temp.overwriteTargetFileWithTemporary())
             return "Cannot write project file: " + file.getFullPathName();
 
-        // Recordings from now on go next to the project (see Session::getFileForNewRecording).
+        return {};
+    }
+
+    juce::String Project::save (const juce::File& file)
+    {
+        makeSoundPathsAbsolute();
+
+        if (const auto error = write (file, file); error.isNotEmpty())
+            return error;
+
+        // Relative paths and recordings from now on go from here (see Session::getFileForNewRecording).
         edit->editFileRetriever = [file] { return file; };
         markAsSaved();
         return {};
     }
 
-    bool Project::hasUnsavedChanges() const
+    juce::String Project::saveCopy (const juce::File& file)
+    {
+        return write (file, {});
+    }
+
+    void Project::takeInChanges() const
     {
         edit->getUndoManager().dispatchPendingMessages();
+
+        if (edit->hasChangedSinceSaved())
+        {
+            edit->resetChangedStatus();
+            changedSinceSave = true;
+            ++changeCount;
+        }
+    }
+
+    bool Project::hasUnsavedChanges() const
+    {
+        takeInChanges();
         return changedSinceSave;
+    }
+
+    juce::uint64 Project::getChangeCount() const
+    {
+        takeInChanges();
+        return changeCount;
     }
 
     int Project::getFormatVersion() const

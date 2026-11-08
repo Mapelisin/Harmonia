@@ -17,14 +17,30 @@ namespace harmonia::core
         /** Loads a project file. Returns nullptr and fills `error` on failure. */
         static std::unique_ptr<Project> load (Session&, const juce::File&, juce::String& error);
 
+        /** Opens a copy written by saveCopy() as the project at `original` (its own file; none if
+            it was never saved): Ctrl+S saves there and recordings go next to it. It counts as
+            having unsaved changes. For restoring work after a crash (see core::Autosave). */
+        static std::unique_ptr<Project> loadRecovered (Session&, const juce::File& copy, const juce::File& original,
+                                                       juce::String& error);
+
         ~Project() override;
 
         /** Writes the project to `file`. Returns an error message, empty on success.
-            On success the project counts as saved (no unsaved changes). */
+            On success the project counts as saved (no unsaved changes), and `file` is where it
+            lives from then on. Sound files in the project file's folder (or below) are stored
+            relative to it, so the folder can be moved or copied whole; others by their full path.
+            A half-written file never replaces the old one. */
         juce::String save (const juce::File& file);
+
+        /** Writes a copy to `file` (sound files by their full paths) and changes nothing else: the
+            project keeps its unsaved changes and its own file. For autosaving. */
+        juce::String saveCopy (const juce::File& file);
 
         /** Something changed since the project was created, opened or saved. */
         bool hasUnsavedChanges() const;
+
+        /** Goes up with every change (an undo or redo counts too): for noticing new changes. */
+        juce::uint64 getChangeCount() const;
 
         te::Edit& getEdit() noexcept                { return *edit; }
         const te::Edit& getEdit() const noexcept    { return *edit; }
@@ -92,12 +108,17 @@ namespace harmonia::core
         std::unique_ptr<te::Edit> edit;
 
         // Every undoable change counts (Tracktion's own flag only starts listening a moment after
-        // the edit is created).
-        bool changedSinceSave = false;
+        // the edit is created). Tracktion's flag is taken in too: it also catches settings changed
+        // in a plugin's own window, which don't go through undo.
+        mutable bool changedSinceSave = false;
+        mutable juce::uint64 changeCount = 0;
 
         void changeListenerCallback (juce::ChangeBroadcaster*) override;
         void markAsSaved();
+        void takeInChanges() const;
         void syncPluginParameters();
+        void makeSoundPathsAbsolute();
+        juce::String write (const juce::File&, const juce::File& relativeTo);
 
         JUCE_DECLARE_NON_COPYABLE (Project)
     };

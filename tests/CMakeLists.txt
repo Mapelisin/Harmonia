@@ -14,6 +14,7 @@ add_executable(harmonia_tests
     core/ClipsTests.cpp
     core/TempoTests.cpp
     core/MidiFilesTests.cpp
+    core/AutosaveTests.cpp
     audio/DeviceStatusTests.cpp
     audio/AudioTests.cpp
     audio/EffectsTests.cpp

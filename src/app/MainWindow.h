@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Autosave.h"
 #include "core/Project.h"
 #include "ui/FileCommands.h"
 
@@ -8,7 +9,8 @@ namespace harmonia::ui { class MainComponent; }
 namespace harmonia::app
 {
     /** The main window. Owns the open project and replaces it on New / Open; saves, exports
-        and asks about unsaved changes. The title shows the project name and * when changed. */
+        and asks about unsaved changes. The title shows the project name and * when changed.
+        Unsaved work is copied every half minute (core::Autosave) and offered back after a crash. */
     class MainWindow final : public juce::DocumentWindow,
                              public ui::FileCommands,
                              private juce::Timer
@@ -47,6 +49,10 @@ namespace harmonia::app
         /** Opens a project file (also used for a file given on the command line). */
         bool open (const juce::File&);
 
+        /** If Harmonia didn't close normally last time and left unsaved work, asks whether to
+            restore it. Calls `otherwise` when there was none or it wasn't restored. */
+        void offerToRestore (std::function<void()> otherwise);
+
     private:
         core::Session& session;
         std::unique_ptr<core::Project> project;
@@ -54,12 +60,17 @@ namespace harmonia::app
         std::unique_ptr<juce::FileChooser> chooser;
         bool askingToSave = false;
 
+        core::Autosave autosave;
+        std::optional<core::Autosave::Leftover> leftover;   // until the user says what to do with it
+        juce::String autosaveProblem;
+
         ui::MainComponent* getMainComponent() const;
         void setProject (std::unique_ptr<core::Project>, const juce::File&);
         void saveAs (std::function<void()> then);
         bool writeTo (const juce::File&);
         void showError (const juce::String& title, const juce::String& message);
         void updateTitle();
+        bool restore (const core::Autosave::Leftover&);
         void timerCallback() override;
 
         JUCE_DECLARE_NON_COPYABLE (MainWindow)

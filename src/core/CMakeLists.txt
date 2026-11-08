@@ -20,6 +20,8 @@ add_library(harmonia_core STATIC
     Tempo.cpp
     MidiFiles.h
     MidiFiles.cpp
+    Autosave.h
+    Autosave.cpp
     NoteOps.h
     NoteOps.cpp
     NoteRecorder.h
