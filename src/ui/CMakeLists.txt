@@ -38,6 +38,10 @@ add_library(harmonia_ui STATIC
     pianoroll/ControlLane.cpp
     pianoroll/NotePropertiesPanel.h
     pianoroll/NotePropertiesPanel.cpp
+    pianoroll/NoteToolWindow.h
+    pianoroll/NoteToolWindow.cpp
+    pianoroll/ToolPreview.h
+    pianoroll/ToolPreview.cpp
     pianoroll/PianoRoll.h
     pianoroll/PianoRoll.cpp
     arrangement/ArrangementView.h

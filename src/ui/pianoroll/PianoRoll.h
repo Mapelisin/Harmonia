@@ -3,6 +3,7 @@
 #include "audio/Transport.h"
 #include "ui/pianoroll/ControlLane.h"
 #include "ui/pianoroll/NoteGrid.h"
+#include "ui/pianoroll/NoteToolWindow.h"
 #include "ui/pianoroll/PianoKeys.h"
 #include "ui/pianoroll/TimeRuler.h"
 
@@ -28,6 +29,22 @@ namespace harmonia::ui::pianoroll
         /** Scrolls so that the clip's start and the notes (or middle C) are in view. */
         void showClip();
 
+        /** The Tools button's menu: the note commands with their shortcuts. */
+        juce::PopupMenu createToolsMenu();
+
+        /** The Scale button's menu: root, scale, snapping to it. */
+        juce::PopupMenu createScaleMenu();
+
+        /** The Chord button's menu: what a click in Draw puts down. */
+        juce::PopupMenu createChordMenu();
+
+        /** Opens a tool's window on the selected notes (or all); nothing if there are no notes. */
+        void openNoteTool (NoteTool);
+
+        /** Where a tool's window goes; by default a call-out box at the Tools button. (Tests
+            take it here: a call-out box needs the piano roll on the screen.) */
+        std::function<void (std::unique_ptr<NoteToolWindow>)> onShowNoteTool;
+
         /** Off while the computer keyboard plays notes: letters, digits and punctuation are left
             to it (keyPressed returns false for them). */
         void setLetterShortcutsEnabled (bool shouldBeEnabled) noexcept   { letterShortcutsEnabled = shouldBeEnabled; }
@@ -44,6 +61,7 @@ namespace harmonia::ui::pianoroll
 
         juce::OwnedArray<juce::TextButton> toolButtons;
         juce::ComboBox snapBox, laneBox;
+        juce::TextButton toolsButton { "Tools" }, scaleButton, chordButton;
         juce::ToggleButton ghostsButton { "Ghost notes" };
         juce::Label snapLabel, infoLabel;
         juce::ScrollBar horizontalScroll { false }, verticalScroll { true };
@@ -63,5 +81,6 @@ namespace harmonia::ui::pianoroll
         void updatePlayhead();
         void repaintAll();
         void zoomAroundMouse (double factor);
+        void showToolsMenu();
     };
 }

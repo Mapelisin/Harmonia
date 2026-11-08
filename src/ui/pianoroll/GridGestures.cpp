@@ -46,6 +46,7 @@ namespace harmonia::ui::pianoroll
     void GridGestures::down (const Pointer& p)
     {
         kind = Kind::none;
+        auditionWholeChord = false;
         downPointer = p;
         lastPosition = p.position;
         dragged = false;
@@ -274,21 +275,39 @@ namespace harmonia::ui::pianoroll
                          ? 0.0 : target - grabbed.startBeat;
         delta = note_ops::limitMove (originals, delta, model.getMinBeat());
 
-        const auto pitchDelta = note_ops::limitTransposition (
-            originals, view.yToPitchUnclamped (p.position.y) - view.yToPitchUnclamped (downPointer.position.y));
+        const auto moved = model.moveVertically (originals, grabbed.pitch,
+                                                 view.yToPitchUnclamped (p.position.y) - view.yToPitchUnclamped (downPointer.position.y));
 
         std::vector<core::NoteEditor::Change> changes;
 
         for (int i = 0; i < targets.size(); ++i)
         {
-            auto v = originals[(size_t) i];
+            auto v = moved[(size_t) i];
             v.startBeat = snap::roundToTicks (v.startBeat + delta);
-            v.pitch += pitchDelta;
             changes.push_back ({ targets[i], v });
         }
 
         model.updateNotes (changes);
-        audition (grabbed.pitch + pitchDelta, grabbed.velocity);
+
+        const auto grabbedPitch = moved[(size_t) grabbedIndex].pitch;
+
+        if (auditionWholeChord)
+        {
+            if (grabbedPitch != auditionedPitch)
+            {
+                std::vector<int> pitches;
+
+                for (const auto& n : moved)
+                    pitches.push_back (n.pitch);
+
+                auditionedPitch = grabbedPitch;
+                model.auditionStart (pitches, grabbed.velocity);
+            }
+        }
+        else
+        {
+            audition (grabbedPitch, grabbed.velocity);
+        }
     }
 
     void GridGestures::dragResize (const Pointer& p)
@@ -320,28 +339,54 @@ namespace harmonia::ui::pianoroll
         model.updateNotes (changes);
     }
 
-    void GridGestures::addNoteAndMove (const Pointer& p)
+    std::vector<core::Note> GridGestures::makeNewNotes (const Pointer& p, double length) const
     {
         core::Note n;
-        n.pitch = view.yToPitch (p.position.y);
         n.startBeat = std::max (model.getMinBeat(),
                                 snap::snapFloor (view.xToBeat (p.position.x), getSnapMode (p), getSnapContext()));
-        n.lengthBeats = model.getNewNoteLength();
+        n.lengthBeats = length;
         n.velocity = newNoteVelocity;
 
-        model.beginGesture ("Add note");
-        auto* added = model.addNote (n);
+        std::vector<core::Note> notes;
 
-        if (added == nullptr)
+        for (auto pitch : model.getStampPitches (view.yToPitch (p.position.y)))
+        {
+            n.pitch = pitch;
+            notes.push_back (n);
+        }
+
+        return notes;
+    }
+
+    void GridGestures::addNoteAndMove (const Pointer& p)
+    {
+        const auto notes = makeNewNotes (p, model.getNewNoteLength());
+
+        model.beginGesture (notes.size() > 1 ? "Add chord" : "Add note");
+        const auto added = model.addNotes (notes);
+
+        if (added.isEmpty())
             return;
 
-        // Keep dragging the new note, in the same undo step.
+        // Keep dragging the new note (or chord, by its lowest note), in the same undo step.
         kind = Kind::move;
         copyOnDrag = false;
-        targets = { added };
+        targets = added;
         grabbedIndex = 0;
-        originals = { model.read (*added) };
-        audition (n.pitch, n.velocity);
+        originals = model.readAll (added);
+        auditionWholeChord = added.size() > 1;
+        startAudition (notes);
+    }
+
+    void GridGestures::startAudition (const std::vector<core::Note>& notes)
+    {
+        std::vector<int> pitches;
+
+        for (const auto& n : notes)
+            pitches.push_back (n.pitch);
+
+        auditionedPitch = pitches.front();
+        model.auditionStart (pitches, notes.front().velocity);
     }
 
     void GridGestures::beginStretchNew (const Pointer& p)
@@ -349,20 +394,17 @@ namespace harmonia::ui::pianoroll
         const auto mode = getSnapMode (p);
         const auto context = getSnapContext();
 
-        core::Note n;
-        n.pitch = view.yToPitch (p.position.y);
-        n.startBeat = std::max (model.getMinBeat(), snap::snapFloor (view.xToBeat (p.position.x), mode, context));
-        n.lengthBeats = snap::getStepBeats (mode, context);
-        n.velocity = newNoteVelocity;
+        const auto notes = makeNewNotes (p, snap::getStepBeats (mode, context));
 
-        model.beginGesture ("Add note");
+        model.beginGesture (notes.size() > 1 ? "Add chord" : "Add note");
+        const auto added = model.addNotes (notes);
 
-        if (auto* added = model.addNote (n))
+        if (! added.isEmpty())
         {
             kind = Kind::stretchNew;
-            targets = { added };
-            originals = { model.read (*added) };
-            audition (n.pitch, n.velocity);
+            targets = added;
+            originals = model.readAll (added);
+            startAudition (notes);
         }
     }
 
@@ -375,10 +417,17 @@ namespace harmonia::ui::pianoroll
         const auto context = getSnapContext();
         const auto minLength = snap::getStepBeats (mode, context);
 
-        auto v = originals.front();
         const auto end = snap::snapNearest (view.xToBeat (p.position.x), mode, context);
-        v.lengthBeats = snap::roundToTicks (std::max (minLength, end - v.startBeat));
-        model.updateNotes ({ { targets.getFirst(), v } });
+        std::vector<core::NoteEditor::Change> changes;
+
+        for (int i = 0; i < targets.size(); ++i)
+        {
+            auto v = originals[(size_t) i];
+            v.lengthBeats = snap::roundToTicks (std::max (minLength, end - v.startBeat));
+            changes.push_back ({ targets[i], v });
+        }
+
+        model.updateNotes (changes);
     }
 
     void GridGestures::beginPaint (const Pointer& p)
@@ -420,12 +469,12 @@ namespace harmonia::ui::pianoroll
         paintedCells.insert (cell);
 
         core::Note n;
-        n.pitch = pitch;
+        n.pitch = model.fitPitch (pitch);
         n.startBeat = start;
         n.lengthBeats = paintLength;
         n.velocity = newNoteVelocity;
         model.addNote (n);
-        audition (pitch, n.velocity);
+        audition (n.pitch, n.velocity);
     }
 
     void GridGestures::touchAlong (juce::Point<float> from, juce::Point<float> to)

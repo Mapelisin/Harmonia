@@ -3,6 +3,7 @@
 #include "core/NoteEditor.h"
 #include "core/NoteOps.h"
 #include "core/Project.h"
+#include "core/Scales.h"
 #include "core/Snap.h"
 
 namespace harmonia::ui::pianoroll
@@ -100,6 +101,7 @@ namespace harmonia::ui::pianoroll
 
         /** Reads a note with its start in song beats. */
         core::Note read (const te::MidiNote&) const;
+        std::vector<core::Note> readAll (const juce::Array<te::MidiNote*>&) const;
 
         //==============================================================================
         // Settings
@@ -125,6 +127,33 @@ namespace harmonia::ui::pianoroll
         /** Length of the next drawn note: the last note clicked or drawn. */
         double getNewNoteLength() const noexcept        { return newNoteLength; }
         void setNewNoteLength (double);
+
+        //==============================================================================
+        // Scale and chords
+
+        /** The song's scale (saved with the project): its rows are lit, and notes can snap to it.
+            Setting it is an undo step. */
+        core::scales::Scale getScale() const;
+        void setScale (const core::scales::Scale&);
+
+        /** While on (and a scale is set), drawn and moved notes land on the scale's notes, and
+            Shift+Up/Down moves by scale degrees. */
+        bool isSnappingToScale() const noexcept         { return snapToScale; }
+        void setSnapToScale (bool);
+
+        /** The chord a click in Draw puts down, or none for single notes. */
+        std::optional<core::chords::ChordType> getChordStamp() const noexcept   { return chordStamp; }
+        void setChordStamp (std::optional<core::chords::ChordType>);
+
+        /** The pitch a new note clicked at `pitch` gets: on the scale if snapping to it. */
+        int fitPitch (int pitch) const;
+
+        /** The pitches a click at `pitch` puts down: the stamp's chord, or one (fitted) note. */
+        std::vector<int> getStampPitches (int pitch) const;
+
+        /** Moves notes `rows` rows up or down, as a mouse drag does: by scale degrees while
+            snapping to the scale (`grabbedPitch` sets how many), otherwise by semitones. */
+        std::vector<core::Note> moveVertically (std::vector<core::Note>, int grabbedPitch, int rows) const;
 
         //==============================================================================
         // Selection
@@ -154,7 +183,42 @@ namespace harmonia::ui::pianoroll
         void deleteSelectedOrAll();
         void transpose (int semitones);
         void nudge (int gridSteps);
+
+        /** Alt+Left/Right: moves by a couple of pixels at the current zoom, off the grid. */
+        void nudgeFine (int direction);
+
         void quantize (bool startsOnly);
+
+        /** Fit to scale: every note's pitch moved to the nearest note of the scale. */
+        void fitToScale();
+
+        /** Quick legato (Ctrl+L): each note lasts until the next one starts. */
+        void legato();
+
+        /** Quick chop (Ctrl+U): notes cut into pieces one snap step long. */
+        void chop();
+
+        /** Glue (Ctrl+G): touching or overlapping notes of the same pitch become one. */
+        void glue();
+
+        /** Discard lengths (Shift+D): every note one snap step long. */
+        void discardLengths();
+
+        /** Rotate (Ctrl+Shift+Left/Right): moves by snap steps, wrapping around inside the time
+            selection (the notes starting in it), or else inside the whole bars the notes are in. */
+        void rotate (int gridSteps);
+
+        /** Alt+M / Alt+Shift+M. */
+        void setMuted (bool shouldBeMuted);
+
+        /** Shift+I: selects the notes that weren't and deselects the ones that were. */
+        void invertSelection();
+
+        /** Insert space / Delete space (Ctrl+Insert / Ctrl+Delete): puts in, or cuts out, as much
+            empty time as the time selection, at it. Every note moves, not just the selection.
+            Nothing without a time selection. */
+        void insertSpace();
+        void deleteSpace();
         void duplicate();
         void copy();
         void cut();
@@ -224,6 +288,7 @@ namespace harmonia::ui::pianoroll
 
         void setAuditioner (Auditioner* a) noexcept     { auditioner = a; }
         void auditionStart (int pitch, int velocity);
+        void auditionStart (const std::vector<int>& pitches, int velocity);
         void auditionStop();
 
     private:
@@ -261,7 +326,9 @@ namespace harmonia::ui::pianoroll
         juce::uint32 lastNudgeTime = 0;
 
         Auditioner* auditioner = nullptr;
-        int auditionPitch = -1;
+        std::vector<int> auditionPitches;
+        bool snapToScale = false;
+        std::optional<core::chords::ChordType> chordStamp;
 
         std::vector<core::Note> liveNotes;
         std::array<bool, 128> heldPitches {};
@@ -276,7 +343,11 @@ namespace harmonia::ui::pianoroll
         void selectionChanged();
 
         core::Note toContent (const core::Note&) const;
-        std::vector<core::Note> readAll (const juce::Array<te::MidiNote*>&) const;
+        juce::Array<te::MidiNote*> getAll();
+        void moveBy (double deltaBeats);
+        void applyChanges (const juce::String& gestureName, const juce::Array<te::MidiNote*>&,
+                           const std::vector<core::Note>& before, const std::vector<core::Note>& after);
+        std::optional<core::note_ops::BeatRange> getSpaceRange() const;
         void growClipToFit (const std::vector<core::Note>& songValues);
 
         void handleAsyncUpdate() override;

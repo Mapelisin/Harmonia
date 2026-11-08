@@ -483,6 +483,20 @@ namespace harmonia::ui::pianoroll
     {
         const auto targets = getSelectedOrAll();
         auto values = readAll (targets);
+        const auto scale = getScale();
+
+        // A step up or down goes by scale degrees while snapping to the scale.
+        if (std::abs (semitones) == 1 && snapToScale && ! scale.isChromatic())
+        {
+            auto moved = values;
+
+            for (auto& n : moved)
+                n.pitch = scale.step (n.pitch, semitones);
+
+            applyChanges ("Transpose", targets, values, moved);
+            return;
+        }
+
         const auto delta = note_ops::limitTransposition (values, semitones);
 
         if (delta == 0)
@@ -502,10 +516,21 @@ namespace harmonia::ui::pianoroll
 
     void PianoRollModel::nudge (int gridSteps)
     {
+        moveBy (gridSteps * snap::getStepBeats (snapMode, getSnapContext()));
+    }
+
+    void PianoRollModel::nudgeFine (int direction)
+    {
+        constexpr double pixels = 2.0;
+        const auto step = std::max (1.0 / snap::ticksPerBeat, snap::roundToTicks (pixels / pixelsPerBeat));
+        moveBy (direction * step);
+    }
+
+    void PianoRollModel::moveBy (double deltaBeats)
+    {
         const auto targets = getSelectedOrAll();
         auto values = readAll (targets);
-        const auto step = snap::getStepBeats (snapMode, getSnapContext());
-        const auto delta = note_ops::limitMove (values, gridSteps * step, getMinBeat());
+        const auto delta = note_ops::limitMove (values, deltaBeats, getMinBeat());
 
         if (std::abs (delta) <= epsilon)
             return;
@@ -548,6 +573,215 @@ namespace harmonia::ui::pianoroll
 
         beginGesture (startsOnly ? "Quantize start times" : "Quantize");
         updateNotes (changes);
+    }
+
+    void PianoRollModel::applyChanges (const juce::String& gestureName, const juce::Array<te::MidiNote*>& targets,
+                                       const std::vector<core::Note>& before, const std::vector<core::Note>& after)
+    {
+        std::vector<core::NoteEditor::Change> changes;
+
+        for (int i = 0; i < targets.size(); ++i)
+            if (! (after[(size_t) i] == before[(size_t) i]))
+                changes.push_back ({ targets[i], after[(size_t) i] });
+
+        if (changes.empty())
+            return;
+
+        beginGesture (gestureName);
+        updateNotes (changes);
+    }
+
+    void PianoRollModel::legato()
+    {
+        const auto targets = getSelectedOrAll();
+        const auto values = readAll (targets);
+        applyChanges ("Legato", targets, values, note_ops::legato (values));
+    }
+
+    void PianoRollModel::chop()
+    {
+        const auto targets = getSelectedOrAll();
+        const auto values = readAll (targets);
+        const auto step = snap::getStepBeats (snapMode, getSnapContext());
+        const auto keepSelected = hasSelection();
+
+        std::vector<core::NoteEditor::Change> changes;
+        std::vector<core::Note> pieces;
+
+        for (int i = 0; i < targets.size(); ++i)
+        {
+            const auto chopped = note_ops::chop (values[(size_t) i], step);
+
+            if (chopped.size() < 2)
+                continue;
+
+            changes.push_back ({ targets[i], chopped.front() });
+            pieces.insert (pieces.end(), chopped.begin() + 1, chopped.end());
+        }
+
+        if (changes.empty())
+            return;
+
+        beginGesture ("Chop");
+        updateNotes (changes);
+        const auto added = addNotes (pieces);
+
+        if (keepSelected)
+            addToSelection (added);
+    }
+
+    void PianoRollModel::glue()
+    {
+        const auto targets = getSelectedOrAll();
+        const auto values = readAll (targets);
+        const auto glued = note_ops::glue (values);
+
+        if (glued.removed.empty())
+            return;
+
+        juce::Array<te::MidiNote*> absorbed;
+
+        for (auto i : glued.removed)
+            absorbed.add (targets[(int) i]);
+
+        std::vector<core::NoteEditor::Change> changes;
+
+        for (int i = 0; i < targets.size(); ++i)
+            if (! absorbed.contains (targets[i]) && ! (glued.notes[(size_t) i] == values[(size_t) i]))
+                changes.push_back ({ targets[i], glued.notes[(size_t) i] });
+
+        beginGesture ("Glue");
+        updateNotes (changes);
+        removeNotes (absorbed);
+    }
+
+    void PianoRollModel::discardLengths()
+    {
+        const auto targets = getSelectedOrAll();
+        const auto values = readAll (targets);
+        const auto step = snap::getStepBeats (snapMode, getSnapContext());
+        auto shortened = values;
+
+        for (auto& n : shortened)
+            n.lengthBeats = step;
+
+        applyChanges ("Discard lengths", targets, values, shortened);
+    }
+
+    void PianoRollModel::rotate (int gridSteps)
+    {
+        juce::Array<te::MidiNote*> targets;
+        note_ops::BeatRange range;
+
+        if (timeSelection.has_value())
+        {
+            range = *timeSelection;
+
+            for (const auto& d : getNotes())
+                if (d.values.startBeat >= range.start - epsilon && d.values.startBeat < range.end - epsilon)
+                    targets.add (d.note);
+        }
+        else
+        {
+            targets = getSelectedOrAll();
+            range = note_ops::getWholeBars (readAll (targets), getBeatsPerBar());
+        }
+
+        range.start = std::max (range.start, getMinBeat());
+
+        if (targets.isEmpty() || range.getLength() <= 0.0)
+            return;
+
+        const auto values = readAll (targets);
+        const auto delta = gridSteps * snap::getStepBeats (snapMode, getSnapContext());
+        applyChanges ("Rotate", targets, values, note_ops::rotate (values, range, delta));
+    }
+
+    void PianoRollModel::setMuted (bool shouldBeMuted)
+    {
+        const auto targets = getSelectedOrAll();
+        const auto values = readAll (targets);
+        auto changed = values;
+
+        for (auto& n : changed)
+            n.muted = shouldBeMuted;
+
+        applyChanges (shouldBeMuted ? "Mute notes" : "Unmute notes", targets, values, changed);
+    }
+
+    void PianoRollModel::invertSelection()
+    {
+        juce::Array<te::MidiNote*> others;
+
+        for (const auto& d : getNotes())
+            if (! d.selected)
+                others.add (d.note);
+
+        setSelection (others);
+    }
+
+    juce::Array<te::MidiNote*> PianoRollModel::getAll()
+    {
+        juce::Array<te::MidiNote*> all;
+
+        for (const auto& d : getNotes())
+            all.add (d.note);
+
+        return all;
+    }
+
+    std::optional<note_ops::BeatRange> PianoRollModel::getSpaceRange() const
+    {
+        if (! timeSelection.has_value())
+            return std::nullopt;
+
+        auto range = *timeSelection;
+        range.start = std::max (range.start, getMinBeat());
+
+        if (range.getLength() <= epsilon)
+            return std::nullopt;
+
+        return range;
+    }
+
+    void PianoRollModel::insertSpace()
+    {
+        if (const auto range = getSpaceRange())
+        {
+            const auto targets = getAll();
+            const auto values = readAll (targets);
+            applyChanges ("Insert space", targets, values, note_ops::insertSpace (values, *range));
+        }
+    }
+
+    void PianoRollModel::deleteSpace()
+    {
+        const auto range = getSpaceRange();
+
+        if (! range.has_value())
+            return;
+
+        const auto targets = getAll();
+        const auto values = readAll (targets);
+        const auto result = note_ops::deleteSpace (values, *range);
+
+        juce::Array<te::MidiNote*> removed;
+
+        for (auto i : result.removed)
+            removed.add (targets[(int) i]);
+
+        std::vector<core::NoteEditor::Change> changes;
+
+        for (int i = 0; i < targets.size(); ++i)
+            if (! removed.contains (targets[i]) && ! (result.notes[(size_t) i] == values[(size_t) i]))
+                changes.push_back ({ targets[i], result.notes[(size_t) i] });
+
+        if (changes.empty() && removed.isEmpty())
+            return;
+
+        beginGesture ("Delete space");
+        updateNotes (changes);
+        removeNotes (removed);
     }
 
     void PianoRollModel::duplicate()
@@ -884,20 +1118,123 @@ namespace harmonia::ui::pianoroll
     //==============================================================================
     void PianoRollModel::auditionStart (int pitch, int velocity)
     {
-        if (auditioner == nullptr || pitch == auditionPitch)
+        auditionStart (std::vector<int> { pitch }, velocity);
+    }
+
+    void PianoRollModel::auditionStart (const std::vector<int>& pitches, int velocity)
+    {
+        if (auditioner == nullptr || pitches == auditionPitches)
             return;
 
         auditionStop();
-        auditioner->noteOn (pitch, velocity);
-        auditionPitch = pitch;
+
+        for (auto pitch : pitches)
+            auditioner->noteOn (pitch, velocity);
+
+        auditionPitches = pitches;
     }
 
     void PianoRollModel::auditionStop()
     {
-        if (auditioner != nullptr && auditionPitch >= 0)
-            auditioner->noteOff (auditionPitch);
+        if (auditioner != nullptr)
+            for (auto pitch : auditionPitches)
+                auditioner->noteOff (pitch);
 
-        auditionPitch = -1;
+        auditionPitches.clear();
+    }
+
+    //==============================================================================
+    core::scales::Scale PianoRollModel::getScale() const
+    {
+        return core::scales::read (project.getEdit());
+    }
+
+    void PianoRollModel::setScale (const core::scales::Scale& scale)
+    {
+        if (scale == getScale())
+            return;
+
+        beginGesture ("Set scale");
+        core::scales::write (project.getEdit(), scale, &getEdit().getUndoManager());
+        notifyChanged();
+    }
+
+    void PianoRollModel::setSnapToScale (bool shouldSnap)
+    {
+        if (snapToScale != shouldSnap)
+        {
+            snapToScale = shouldSnap;
+            notifyChanged();
+        }
+    }
+
+    void PianoRollModel::setChordStamp (std::optional<core::chords::ChordType> type)
+    {
+        if (chordStamp != type)
+        {
+            chordStamp = type;
+            notifyChanged();
+        }
+    }
+
+    int PianoRollModel::fitPitch (int pitch) const
+    {
+        pitch = juce::jlimit (0, 127, pitch);
+        const auto scale = getScale();
+        return snapToScale && ! scale.isChromatic() ? scale.snap (pitch) : pitch;
+    }
+
+    std::vector<int> PianoRollModel::getStampPitches (int pitch) const
+    {
+        if (! chordStamp.has_value())
+            return { fitPitch (pitch) };
+
+        const auto chord = core::chords::build (fitPitch (pitch), *chordStamp, getScale());
+        return chord.empty() ? std::vector<int> { fitPitch (pitch) } : chord;
+    }
+
+    std::vector<core::Note> PianoRollModel::moveVertically (std::vector<core::Note> notes, int grabbedPitch, int rows) const
+    {
+        if (rows == 0 || notes.empty())
+            return notes;
+
+        const auto scale = getScale();
+
+        if (snapToScale && ! scale.isChromatic())
+        {
+            // The grabbed note goes to the scale note nearest the mouse; the others move as many
+            // scale degrees, so a chord stays a chord of the scale.
+            const auto degrees = scale.countSteps (grabbedPitch, scale.snap (grabbedPitch + rows));
+
+            for (auto& n : notes)
+                n.pitch = scale.step (n.pitch, degrees);
+
+            return notes;
+        }
+
+        const auto delta = note_ops::limitTransposition (notes, rows);
+
+        for (auto& n : notes)
+            n.pitch += delta;
+
+        return notes;
+    }
+
+    void PianoRollModel::fitToScale()
+    {
+        const auto scale = getScale();
+
+        if (scale.isChromatic())
+            return;
+
+        const auto targets = getSelectedOrAll();
+        const auto values = readAll (targets);
+        auto fitted = values;
+
+        for (auto& n : fitted)
+            n.pitch = scale.snap (n.pitch);
+
+        applyChanges ("Fit to scale", targets, values, fitted);
     }
 
     //==============================================================================
@@ -942,7 +1279,7 @@ namespace harmonia::ui::pianoroll
         {
             ghostsDirty = true;
         }
-        else
+        else if (tree != getEdit().state)     // the edit's own properties: the scale (undo too)
         {
             return;
         }

@@ -15,6 +15,8 @@ add_executable(harmonia_tests
     core/TempoTests.cpp
     core/MidiFilesTests.cpp
     core/AutosaveTests.cpp
+    core/NoteToolsTests.cpp
+    core/ScalesTests.cpp
     audio/DeviceStatusTests.cpp
     audio/AudioTests.cpp
     audio/EffectsTests.cpp
@@ -33,7 +35,10 @@ add_executable(harmonia_tests
     ui/ClipFadeTests.cpp
     ui/TempoUiTests.cpp
     ui/MidiImportTests.cpp
-    ui/TrackOpsTests.cpp)
+    ui/TrackOpsTests.cpp
+    ui/NoteCommandsTests.cpp
+    ui/NoteToolWindowTests.cpp
+    ui/ScaleChordTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)
@@ -43,4 +48,6 @@ target_include_directories(harmonia_tests SYSTEM PRIVATE "${HARMONIA_TE_DIR}/mod
 # doctest forward-declares std types by default, which new MSVC versions warn about.
 target_compile_definitions(harmonia_tests PRIVATE DOCTEST_CONFIG_USE_STD_HEADERS)
 
-add_test(NAME harmonia_tests COMMAND harmonia_tests)
+# Each test's time is printed, so if the run ever hangs the output (shown on the timeout) says where.
+add_test(NAME harmonia_tests COMMAND harmonia_tests --duration=true)
+set_tests_properties(harmonia_tests PROPERTIES TIMEOUT 900)

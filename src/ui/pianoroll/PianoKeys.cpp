@@ -62,6 +62,19 @@ namespace harmonia::ui::pianoroll
             }
         }
 
+        // The scale's notes get a mark at the edge, the root a strong one.
+        if (const auto scale = model.getScale(); ! scale.isChromatic())
+        {
+            for (int pitch = bottomPitch; pitch <= topPitch; ++pitch)
+            {
+                if (scale.contains (pitch))
+                {
+                    g.setColour (theme::colour::accent.withAlpha (scale.isRoot (pitch) ? 0.95f : 0.45f));
+                    g.fillRect (width - 5.0f, view.pitchToY (pitch) + 1.0f, 4.0f, std::max (1.0f, view.rowHeight - 2.0f));
+                }
+            }
+        }
+
         g.setColour (theme::colour::border);
         g.fillRect ((float) getWidth() - 1.0f, (float) area.getY(), 1.0f, (float) area.getHeight());
     }

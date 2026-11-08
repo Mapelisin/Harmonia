@@ -24,6 +24,10 @@ add_library(harmonia_core STATIC
     Autosave.cpp
     NoteOps.h
     NoteOps.cpp
+    NoteTools.h
+    NoteTools.cpp
+    Scales.h
+    Scales.cpp
     NoteRecorder.h
     NoteRecorder.cpp)
 

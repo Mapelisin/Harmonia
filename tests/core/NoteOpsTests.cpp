@@ -141,3 +141,98 @@ TEST_SUITE ("core::clips")
         CHECK (core::clips::getContentStartBeat (*clip) == doctest::Approx (0.0));
     }
 }
+
+TEST_SUITE ("core::note_ops: commands")
+{
+    TEST_CASE ("legato stretches each note to the next start; a chord all reaches it; the last keep their length")
+    {
+        const auto out = note_ops::legato ({ makeNote (60, 0.0, 0.25), makeNote (64, 0.0, 2.0),
+                                             makeNote (62, 1.0, 0.5), makeNote (65, 3.0, 0.5) });
+        CHECK (out[0].lengthBeats == doctest::Approx (1.0));
+        CHECK (out[1].lengthBeats == doctest::Approx (1.0));     // the overlap is cut too
+        CHECK (out[2].lengthBeats == doctest::Approx (2.0));
+        CHECK (out[3].lengthBeats == doctest::Approx (0.5));
+        CHECK (out[3].startBeat == doctest::Approx (3.0));
+    }
+
+    TEST_CASE ("chop cuts a long note into step pieces with the same values")
+    {
+        auto n = makeNote (60, 1.0, 1.1);
+        n.velocity = 77;
+        const auto pieces = note_ops::chop (n, 0.25);
+        REQUIRE (pieces.size() == 5);
+
+        for (size_t i = 0; i < 4; ++i)
+        {
+            CHECK (pieces[i].startBeat == doctest::Approx (1.0 + 0.25 * (double) i));
+            CHECK (pieces[i].lengthBeats == doctest::Approx (0.25));
+        }
+
+        CHECK (pieces[4].lengthBeats == doctest::Approx (0.1));
+
+        for (const auto& p : pieces)
+            CHECK (p.velocity == 77);
+
+        CHECK (note_ops::chop (makeNote (60, 0.0, 0.25), 0.25).size() == 1);
+        CHECK (note_ops::chop (n, 0.0).size() == 1);
+    }
+
+    TEST_CASE ("glue joins touching and overlapping notes of the same pitch and colour")
+    {
+        std::vector<Note> notes { makeNote (60, 1.0, 1.0), makeNote (60, 0.0, 1.0), makeNote (60, 1.5, 1.0),
+                                  makeNote (60, 3.0, 1.0), makeNote (62, 1.0, 1.0), makeNote (60, 2.5, 1.0) };
+        notes[1].velocity = 90;
+        notes[5].colour = 3;
+
+        const auto glued = note_ops::glue (notes);
+        CHECK (glued.removed == std::vector<size_t> { 0, 2 });
+        CHECK (glued.notes[1].startBeat == doctest::Approx (0.0));
+        CHECK (glued.notes[1].lengthBeats == doctest::Approx (2.5));
+        CHECK (glued.notes[1].velocity == 90);
+        CHECK (glued.notes[3] == notes[3]);     // half a beat away
+        CHECK (glued.notes[4] == notes[4]);     // another pitch
+        CHECK (glued.notes[5] == notes[5]);     // another colour
+    }
+
+    TEST_CASE ("rotate wraps the notes around inside the whole bars they start in")
+    {
+        const std::vector<Note> notes { makeNote (60, 4.0, 0.25), makeNote (62, 7.75, 0.5) };
+        const auto bars = note_ops::getWholeBars (notes, 4.0);
+        CHECK (bars.start == doctest::Approx (4.0));
+        CHECK (bars.end == doctest::Approx (8.0));
+
+        const auto right = note_ops::rotate (notes, bars, 0.25);
+        CHECK (right[0].startBeat == doctest::Approx (4.25));
+        CHECK (right[1].startBeat == doctest::Approx (4.0));
+        CHECK (right[1].lengthBeats == doctest::Approx (0.5));
+
+        const auto left = note_ops::rotate (notes, bars, -0.25);
+        CHECK (left[0].startBeat == doctest::Approx (7.75));
+        CHECK (left[1].startBeat == doctest::Approx (7.5));
+
+        CHECK (note_ops::rotate (notes, bars, 4.0)[1].startBeat == doctest::Approx (7.75));
+        CHECK (note_ops::rotate (notes, bars, -12.0)[0].startBeat == doctest::Approx (4.0));
+    }
+
+    TEST_CASE ("insert space moves later notes; delete space cuts the time out")
+    {
+        const std::vector<Note> notes { makeNote (60, 0.0, 1.0), makeNote (62, 1.0, 2.0), makeNote (64, 2.0, 0.5),
+                                        makeNote (65, 4.0, 1.0), makeNote (67, 0.5, 3.0) };
+        const note_ops::BeatRange range { 2.0, 3.0 };
+
+        const auto inserted = note_ops::insertSpace (notes, range);
+        CHECK (inserted[0] == notes[0]);
+        CHECK (inserted[1] == notes[1]);      // starts before: stays
+        CHECK (inserted[2].startBeat == doctest::Approx (3.0));
+        CHECK (inserted[3].startBeat == doctest::Approx (5.0));
+        CHECK (inserted[4] == notes[4]);
+
+        const auto deleted = note_ops::deleteSpace (notes, range);
+        CHECK (deleted.removed == std::vector<size_t> { 2 });
+        CHECK (deleted.notes[0] == notes[0]);
+        CHECK (deleted.notes[1].lengthBeats == doctest::Approx (1.0));   // ended inside: cut at the start
+        CHECK (deleted.notes[3].startBeat == doctest::Approx (3.0));
+        CHECK (deleted.notes[4].startBeat == doctest::Approx (0.5));
+        CHECK (deleted.notes[4].lengthBeats == doctest::Approx (2.0));   // across it: lost one beat
+    }
+}

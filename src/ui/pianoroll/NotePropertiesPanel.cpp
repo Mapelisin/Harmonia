@@ -8,20 +8,27 @@ namespace harmonia::ui::pianoroll
         constexpr int rowHeight = 24;
         constexpr int labelWidth = 80;
         constexpr int panelWidth = 320;
+
+        juce::Array<te::MidiNote*> chooseTargets (PianoRollModel& model, te::MidiNote& note)
+        {
+            return model.isSelected (note) ? model.getSelectedNotes() : juce::Array<te::MidiNote*> { &note };
+        }
+
+        // Controls that aren't rows.
+        constexpr int muteControl = 6, slideControl = 7, portaControl = 8, colourControl = 9;
     }
 
     NotePropertiesPanel::NotePropertiesPanel (PianoRollModel& m, te::MidiNote& note)
-        : model (m)
+        : model (m), preview (m, "Note properties", chooseTargets (m, note))
     {
-        targets = model.isSelected (note) ? model.getSelectedNotes() : juce::Array<te::MidiNote*> { &note };
+        setWantsKeyboardFocus (true);
         shown = model.read (note);
 
-        model.beginGesture ("Note properties");
-
         auto title = juce::MidiMessage::getMidiNoteName (shown.pitch, true, true, 4);
+        const auto count = (int) preview.getOriginals().size();
 
-        if (targets.size() > 1)
-            title << "  (and " << (targets.size() - 1) << " more selected)";
+        if (count > 1)
+            title << "  (and " << (count - 1) << " more selected)";
 
         titleLabel.setText (title, juce::dontSendNotification);
         titleLabel.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
@@ -44,20 +51,21 @@ namespace harmonia::ui::pianoroll
         rows[4].slider.setTextValueSuffix ("%");
         rows[5].slider.setTextValueSuffix (" ct");
 
-        const auto setUpToggle = [this] (juce::ToggleButton& button, bool value, std::function<void (core::Note&, bool)> set)
+        const auto setUpToggle = [this] (juce::ToggleButton& button, int control, bool value, std::function<void (core::Note&, bool)> set)
         {
             button.setToggleState (value, juce::dontSendNotification);
-            button.onClick = [this, &button, set]
+            button.setWantsKeyboardFocus (false);
+            button.onClick = [this, &button, control, set]
             {
                 const auto on = button.getToggleState();
-                apply ([&] (core::Note& n) { set (n, on); });
+                apply (control, [set, on] (core::Note& n) { set (n, on); });
             };
             addAndMakeVisible (button);
         };
 
-        setUpToggle (muteButton, shown.muted, [] (core::Note& n, bool on) { n.muted = on; });
-        setUpToggle (slideButton, shown.slide, [] (core::Note& n, bool on) { n.slide = on; });
-        setUpToggle (portaButton, shown.porta, [] (core::Note& n, bool on) { n.porta = on; });
+        setUpToggle (muteButton, muteControl, shown.muted, [] (core::Note& n, bool on) { n.muted = on; });
+        setUpToggle (slideButton, slideControl, shown.slide, [] (core::Note& n, bool on) { n.slide = on; });
+        setUpToggle (portaButton, portaControl, shown.porta, [] (core::Note& n, bool on) { n.porta = on; });
 
         colourLabel.setText ("Colour", juce::dontSendNotification);
         addAndMakeVisible (colourLabel);
@@ -69,7 +77,7 @@ namespace harmonia::ui::pianoroll
         colourBox.onChange = [this]
         {
             const auto colour = colourBox.getSelectedId() - 1;
-            apply ([colour] (core::Note& n) { n.colour = colour; });
+            apply (colourControl, [colour] (core::Note& n) { n.colour = colour; });
         };
         addAndMakeVisible (colourBox);
 
@@ -85,28 +93,46 @@ namespace harmonia::ui::pianoroll
         row.slider.setRange (min, max, interval);
         row.slider.setValue (value, juce::dontSendNotification);
         row.slider.setDoubleClickReturnValue (true, value);
-        row.slider.onValueChange = [this, &row, applyValue]
+        const auto control = (int) (&row - rows.data());
+        row.slider.onValueChange = [this, &row, control, applyValue]
         {
             const auto v = row.slider.getValue();
-            apply ([&] (core::Note& n) { applyValue (n, v); });
+            apply (control, [applyValue, v] (core::Note& n) { applyValue (n, v); });
         };
 
         addAndMakeVisible (row.label);
         addAndMakeVisible (row.slider);
     }
 
-    void NotePropertiesPanel::apply (const std::function<void (core::Note&)>& change)
+    void NotePropertiesPanel::apply (int control, std::function<void (core::Note&)> change)
     {
-        std::vector<core::NoteEditor::Change> changes;
+        // Every control used so far, on the notes as they were: the preview replaces the last result.
+        edits[control] = std::move (change);
+        auto values = preview.getOriginals();
 
-        for (auto* n : targets)
-        {
-            auto v = model.read (*n);
-            change (v);
-            changes.push_back ({ n, v });
-        }
+        for (auto& v : values)
+            for (const auto& [_, set] : edits)
+                set (v);
 
-        model.updateNotes (changes);
+        preview.show (values);
+    }
+
+    void NotePropertiesPanel::setRowValue (int row, double value)
+    {
+        rows[(size_t) row].slider.setValue (value, juce::sendNotificationSync);
+    }
+
+    bool NotePropertiesPanel::keyPressed (const juce::KeyPress& key)
+    {
+        // Space goes on to play or stop; nothing else may edit while the panel is open.
+        if (key == juce::KeyPress::spaceKey)
+            return false;
+
+        if (key == juce::KeyPress::returnKey || key == juce::KeyPress::escapeKey)
+            if (auto* box = findParentComponentOfClass<juce::CallOutBox>())
+                box->dismiss();
+
+        return true;
     }
 
     void NotePropertiesPanel::paint (juce::Graphics& g)
@@ -140,6 +166,11 @@ namespace harmonia::ui::pianoroll
     void NotePropertiesPanel::show (PianoRollModel& model, te::MidiNote& note, juce::Component& parent,
                                     juce::Rectangle<int> area)
     {
-        juce::CallOutBox::launchAsynchronously (std::make_unique<NotePropertiesPanel> (model, note), area, &parent);
+        auto panel = std::make_unique<NotePropertiesPanel> (model, note);
+        juce::Component::SafePointer<NotePropertiesPanel> shown (panel.get());
+        juce::CallOutBox::launchAsynchronously (std::move (panel), area, &parent);
+
+        if (shown != nullptr && shown->isShowing())
+            shown->grabKeyboardFocus();
     }
 }

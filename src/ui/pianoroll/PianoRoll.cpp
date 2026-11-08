@@ -1,5 +1,6 @@
 #include "ui/pianoroll/PianoRoll.h"
 #include "ui/pianoroll/NotePropertiesPanel.h"
+#include "ui/pianoroll/NoteToolWindow.h"
 #include "ui/ComputerKeyboard.h"
 #include "ui/Theme.h"
 
@@ -68,6 +69,29 @@ namespace harmonia::ui::pianoroll
                 model.setLaneProperty (laneProperties[(size_t) index]);
         };
         addAndMakeVisible (laneBox);
+
+        toolsButton.setWantsKeyboardFocus (false);
+        toolsButton.setTooltip ("Commands for the selected notes (or all of them)");
+        toolsButton.onClick = [this] { showToolsMenu(); };
+        addAndMakeVisible (toolsButton);
+
+        scaleButton.setWantsKeyboardFocus (false);
+        scaleButton.setTooltip ("The song's scale: its notes are lit, and new or moved notes can snap to it");
+        scaleButton.setColour (juce::TextButton::buttonOnColourId, theme::colour::accent.withAlpha (0.35f));
+        scaleButton.onClick = [this]
+        {
+            createScaleMenu().showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&scaleButton));
+        };
+        addAndMakeVisible (scaleButton);
+
+        chordButton.setWantsKeyboardFocus (false);
+        chordButton.setTooltip ("A click with Draw puts down this chord (Chord stamp)");
+        chordButton.setColour (juce::TextButton::buttonOnColourId, theme::colour::accent.withAlpha (0.35f));
+        chordButton.onClick = [this]
+        {
+            createChordMenu().showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&chordButton));
+        };
+        addAndMakeVisible (chordButton);
 
         ghostsButton.setWantsKeyboardFocus (false);
         ghostsButton.setTooltip ("Show notes of the other tracks (Alt+V)");
@@ -141,8 +165,14 @@ namespace harmonia::ui::pianoroll
 
         toolbar.removeFromLeft (theme::size::padding * 2);
         snapLabel.setBounds (toolbar.removeFromLeft (40));
-        snapBox.setBounds (toolbar.removeFromLeft (160));
+        snapBox.setBounds (toolbar.removeFromLeft (130));
         toolbar.removeFromLeft (theme::size::padding * 2);
+        toolsButton.setBounds (toolbar.removeFromLeft (64));
+        toolbar.removeFromLeft (theme::size::padding);
+        scaleButton.setBounds (toolbar.removeFromLeft (150));
+        toolbar.removeFromLeft (theme::size::padding);
+        chordButton.setBounds (toolbar.removeFromLeft (140));
+        toolbar.removeFromLeft (theme::size::padding);
         ghostsButton.setBounds (toolbar.removeFromLeft (110));
         infoLabel.setBounds (toolbar);
 
@@ -225,9 +255,15 @@ namespace harmonia::ui::pianoroll
             if (mods.isAltDown())                        return false;
 
             if (isUp || isDown)                          { model.transpose (isUp ? 12 : -12); return true; }
+            if (isLeft || isRight)                       { if (mods.isShiftDown()) model.rotate (isRight ? 1 : -1); return mods.isShiftDown(); }
+            if (code == juce::KeyPress::insertKey)       { model.insertSpace(); return true; }
+            if (code == juce::KeyPress::deleteKey)       { model.deleteSpace(); return true; }
 
             switch (letter)
             {
+                case 'L': model.legato(); return true;
+                case 'U': model.chop(); return true;
+                case 'G': model.glue(); return true;
                 case 'A': model.selectAll(); return true;
                 case 'D': model.deselectAll(); return true;
                 case 'C': model.copy(); return true;
@@ -249,6 +285,18 @@ namespace harmonia::ui::pianoroll
                 return true;
             }
 
+            if (letter == 'M')                           { model.setMuted (! mods.isShiftDown()); return true; }
+
+            for (auto tool : getAllNoteTools())
+            {
+                if (! mods.isShiftDown() && getShortcutDescription (tool) == juce::String ("Alt+") + juce::String::charToString (letter))
+                {
+                    openNoteTool (tool);
+                    return true;
+                }
+            }
+
+            if (isLeft || isRight)                       { model.nudgeFine (isRight ? 1 : -1); return true; }
             return false;
         }
 
@@ -258,6 +306,8 @@ namespace harmonia::ui::pianoroll
             if (isUp || isDown)                          { model.transpose (isUp ? 1 : -1); return true; }
             if (letter == 'Q')                           { model.quantize (true); return true; }
             if (letter == 'F')                           { model.cycleLaneProperty (-1); return true; }
+            if (letter == 'I')                           { model.invertSelection(); return true; }
+            if (letter == 'D')                           { model.discardLengths(); return true; }
             return false;
         }
 
@@ -277,6 +327,114 @@ namespace harmonia::ui::pianoroll
         }
 
         return false;
+    }
+
+    juce::PopupMenu PianoRoll::createToolsMenu()
+    {
+        juce::PopupMenu menu;
+
+        const auto add = [&menu] (const juce::String& name, const juce::String& keys, std::function<void()> action, bool enabled = true)
+        {
+            juce::PopupMenu::Item item (name);
+            item.shortcutKeyDescription = keys;
+            item.action = std::move (action);
+            item.isEnabled = enabled;
+            menu.addItem (std::move (item));
+        };
+
+        const auto hasTimeSelection = model.getTimeSelection().has_value();
+
+        menu.addSectionHeader (model.hasSelection() ? "Selected notes" : "All notes (nothing selected)");
+        add ("Quantize", "Ctrl+Q", [this] { model.quantize (false); });
+        add ("Quantize start times", "Shift+Q", [this] { model.quantize (true); });
+        add ("Quick legato", "Ctrl+L", [this] { model.legato(); });
+        add ("Quick chop", "Ctrl+U", [this] { model.chop(); });
+        add ("Glue", "Ctrl+G", [this] { model.glue(); });
+        add ("Discard lengths", "Shift+D", [this] { model.discardLengths(); });
+        menu.addSeparator();
+        menu.addSeparator();
+
+        for (auto tool : getAllNoteTools())
+            add (pianoroll::getName (tool) + "...", getShortcutDescription (tool), [this, tool] { openNoteTool (tool); });
+
+        menu.addSeparator();
+        add ("Duplicate", "Ctrl+B", [this] { model.duplicate(); });
+        add ("Rotate left", "Ctrl+Shift+Left", [this] { model.rotate (-1); });
+        add ("Rotate right", "Ctrl+Shift+Right", [this] { model.rotate (1); });
+        add ("Move a little left", "Alt+Left", [this] { model.nudgeFine (-1); });
+        add ("Move a little right", "Alt+Right", [this] { model.nudgeFine (1); });
+        menu.addSeparator();
+        add ("Mute", "Alt+M", [this] { model.setMuted (true); });
+        add ("Unmute", "Alt+Shift+M", [this] { model.setMuted (false); });
+        add ("Invert selection", "Shift+I", [this] { model.invertSelection(); });
+        add ("Fit to scale", {}, [this] { model.fitToScale(); }, ! model.getScale().isChromatic());
+        menu.addSeparator();
+        menu.addSectionHeader ("Time selection (Ctrl+drag on the ruler)");
+        add ("Insert space", "Ctrl+Insert", [this] { model.insertSpace(); }, hasTimeSelection);
+        add ("Delete space", "Ctrl+Delete", [this] { model.deleteSpace(); }, hasTimeSelection);
+        return menu;
+    }
+
+    juce::PopupMenu PianoRoll::createScaleMenu()
+    {
+        namespace scales = core::scales;
+        const auto scale = model.getScale();
+        juce::PopupMenu menu, roots;
+
+        for (int root = 0; root < 12; ++root)
+            roots.addItem (scales::getRootName (root), true, root == scale.root,
+                           [this, root] { auto s = model.getScale(); s.root = root; model.setScale (s); });
+
+        menu.addSubMenu ("Root: " + scales::getRootName (scale.root), roots, ! scale.isChromatic());
+        menu.addSeparator();
+
+        for (auto type : scales::getAllTypes())
+            menu.addItem (scales::getName (type), true, type == scale.type,
+                          [this, type] { auto s = model.getScale(); s.type = type; model.setScale (s); });
+
+        menu.addSeparator();
+        menu.addItem ("Snap notes to the scale", ! scale.isChromatic(), model.isSnappingToScale(),
+                      [this] { model.setSnapToScale (! model.isSnappingToScale()); });
+        menu.addItem ("Fit notes to the scale", ! scale.isChromatic(), false, [this] { model.fitToScale(); });
+        return menu;
+    }
+
+    juce::PopupMenu PianoRoll::createChordMenu()
+    {
+        namespace chords = core::chords;
+        const auto stamp = model.getChordStamp();
+        juce::PopupMenu menu;
+
+        menu.addItem ("Off (single notes)", true, ! stamp.has_value(), [this] { model.setChordStamp (std::nullopt); });
+        menu.addSeparator();
+        menu.addSectionHeader (model.getScale().isChromatic() ? "Chords (set a scale for scale chords)" : "Chords");
+
+        for (auto type : chords::getAllTypes())
+            menu.addItem (chords::getName (type), true, stamp == type, [this, type]
+            {
+                model.setChordStamp (type);
+
+                if (model.getTool() != Tool::draw)
+                    model.setTool (Tool::draw);
+            });
+
+        return menu;
+    }
+
+    void PianoRoll::openNoteTool (NoteTool tool)
+    {
+        if (auto window = NoteToolWindow::create (model, tool))
+        {
+            if (onShowNoteTool != nullptr)
+                onShowNoteTool (std::move (window));
+            else
+                NoteToolWindow::show (std::move (window), *this, toolsButton.getBounds());
+        }
+    }
+
+    void PianoRoll::showToolsMenu()
+    {
+        createToolsMenu().showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&toolsButton));
     }
 
     void PianoRoll::zoomAroundMouse (double factor)
@@ -354,6 +512,15 @@ namespace harmonia::ui::pianoroll
         laneBox.setSelectedId ((int) propertyIndex + 1, juce::dontSendNotification);
 
         ghostsButton.setToggleState (model.areGhostsVisible(), juce::dontSendNotification);
+
+        const auto scale = model.getScale();
+        scaleButton.setButtonText ("Scale: " + (scale.isChromatic() ? juce::String ("off") : scale.getName())
+                                   + (model.isSnappingToScale() && ! scale.isChromatic() ? " (snap)" : ""));
+        scaleButton.setToggleState (! scale.isChromatic(), juce::dontSendNotification);
+
+        const auto stamp = model.getChordStamp();
+        chordButton.setButtonText ("Chord: " + (stamp.has_value() ? core::chords::getName (*stamp) : juce::String ("off")));
+        chordButton.setToggleState (stamp.has_value(), juce::dontSendNotification);
 
         juce::String info;
 

@@ -1,6 +1,8 @@
 #include "core/NoteOps.h"
 #include "core/Snap.h"
 
+#include <numeric>
+
 namespace harmonia::core
 {
     namespace note_property
@@ -182,6 +184,174 @@ namespace harmonia::core
             const auto span = getSpan (notes);
             const auto from = std::floor (span.start + 1.0e-9);
             return std::max (1.0, std::ceil (span.end - from - 1.0e-9));
+        }
+
+        namespace
+        {
+            // Notes are stored in whole ticks: half a tick tells "the same time" apart.
+            constexpr double sameTime = 0.5 / snap::ticksPerBeat;
+        }
+
+        std::vector<Note> legato (std::vector<Note> notes)
+        {
+            std::vector<double> starts;
+
+            for (const auto& n : notes)
+                starts.push_back (n.startBeat);
+
+            std::sort (starts.begin(), starts.end());
+
+            for (auto& n : notes)
+            {
+                const auto next = std::upper_bound (starts.begin(), starts.end(), n.startBeat + sameTime);
+
+                if (next != starts.end())
+                    n.lengthBeats = snap::roundToTicks (*next - n.startBeat);
+            }
+
+            return notes;
+        }
+
+        std::vector<Note> chop (const Note& note, double step)
+        {
+            if (step <= 0.0 || note.lengthBeats <= step + sameTime)
+                return { note };
+
+            std::vector<Note> pieces;
+            const auto end = note.getEndBeat();
+
+            for (auto start = note.startBeat; start < end - sameTime; start += step)
+            {
+                auto piece = note;
+                piece.startBeat = snap::roundToTicks (start);
+                piece.lengthBeats = snap::roundToTicks (std::min (start + step, end) - start);
+
+                if (piece.lengthBeats > 0.0)
+                    pieces.push_back (piece);
+            }
+
+            return pieces;
+        }
+
+        Edited glue (const std::vector<Note>& notes)
+        {
+            Edited result { notes, {} };
+
+            std::vector<size_t> order (notes.size());
+            std::iota (order.begin(), order.end(), size_t (0));
+            std::stable_sort (order.begin(), order.end(), [&] (size_t a, size_t b)
+            {
+                const auto& x = notes[a];
+                const auto& y = notes[b];
+                return std::tie (x.pitch, x.colour, x.startBeat) < std::tie (y.pitch, y.colour, y.startBeat);
+            });
+
+            std::optional<size_t> kept;
+
+            for (const auto i : order)
+            {
+                const auto& n = notes[i];
+
+                if (kept.has_value())
+                {
+                    auto& k = result.notes[*kept];
+
+                    if (k.pitch == n.pitch && k.colour == n.colour && n.startBeat <= k.getEndBeat() + sameTime)
+                    {
+                        k.lengthBeats = snap::roundToTicks (std::max (k.getEndBeat(), n.getEndBeat()) - k.startBeat);
+                        result.removed.push_back (i);
+                        continue;
+                    }
+                }
+
+                kept = i;
+            }
+
+            std::sort (result.removed.begin(), result.removed.end());
+            return result;
+        }
+
+        BeatRange getWholeBars (const std::vector<Note>& notes, double beatsPerBar)
+        {
+            if (notes.empty() || beatsPerBar <= 0.0)
+                return {};
+
+            auto first = notes.front().startBeat, last = first;
+
+            for (const auto& n : notes)
+            {
+                first = std::min (first, n.startBeat);
+                last = std::max (last, n.startBeat);
+            }
+
+            return { std::floor (first / beatsPerBar + sameTime) * beatsPerBar,
+                     (std::floor (last / beatsPerBar + sameTime) + 1.0) * beatsPerBar };
+        }
+
+        std::vector<Note> rotate (std::vector<Note> notes, BeatRange range, double delta)
+        {
+            const auto length = range.getLength();
+
+            if (length <= 0.0)
+                return notes;
+
+            for (auto& n : notes)
+            {
+                auto offset = std::fmod (n.startBeat - range.start + delta, length);
+
+                if (offset < 0.0)
+                    offset += length;
+
+                if (offset > length - sameTime)
+                    offset = 0.0;
+
+                n.startBeat = snap::roundToTicks (range.start + offset);
+            }
+
+            return notes;
+        }
+
+        std::vector<Note> insertSpace (std::vector<Note> notes, BeatRange range)
+        {
+            if (range.getLength() <= 0.0)
+                return notes;
+
+            for (auto& n : notes)
+                if (n.startBeat >= range.start - sameTime)
+                    n.startBeat = snap::roundToTicks (n.startBeat + range.getLength());
+
+            return notes;
+        }
+
+        Edited deleteSpace (const std::vector<Note>& notes, BeatRange range)
+        {
+            Edited result { notes, {} };
+            const auto length = range.getLength();
+
+            if (length <= 0.0)
+                return result;
+
+            for (size_t i = 0; i < notes.size(); ++i)
+            {
+                auto& n = result.notes[i];
+
+                if (n.startBeat >= range.end - sameTime)
+                {
+                    n.startBeat = snap::roundToTicks (n.startBeat - length);
+                }
+                else if (n.startBeat >= range.start - sameTime)
+                {
+                    result.removed.push_back (i);
+                }
+                else if (n.getEndBeat() > range.start + sameTime)
+                {
+                    // Reaches into the deleted time: loses the part inside it.
+                    const auto cut = std::min (n.getEndBeat(), range.end) - range.start;
+                    n.lengthBeats = snap::roundToTicks (n.lengthBeats - cut);
+                }
+            }
+
+            return result;
         }
     }
 }

@@ -8,7 +8,8 @@ namespace harmonia::ui::pianoroll
     /** Mouse behaviour of the note grid (FL-style tools), separate from drawing so it can be
         tested with synthetic pointer events. Positions are in grid pixels.
 
-        Draw / Paint: click empty space to add a note (Paint: drag to add a row of notes),
+        Draw / Paint: click empty space to add a note (Paint: drag to add a row of notes; with a
+        chord stamp, Draw adds the chord; while snapping to the scale, notes land on it),
         drag a note to move it, drag its right edge to change its length, Shift+drag copies,
         Shift+drag on empty space (Draw) sets the new note's length, right button deletes.
         Ctrl+drag selects with a rectangle in any tool (Ctrl+Shift adds). Alt turns snap off.
@@ -61,6 +62,7 @@ namespace harmonia::ui::pianoroll
         int grabbedIndex = 0;
         bool copyOnDrag = false, copied = false, selectOnlyOnClick = false;
         int auditionedPitch = -1;
+        bool auditionWholeChord = false;
 
         // paint
         double paintOrigin = 0.0, paintLength = 0.25;
@@ -84,6 +86,8 @@ namespace harmonia::ui::pianoroll
         void beginMoveOrResize (te::MidiNote& grabbed, Kind, bool copy);
         void dragMove (const Pointer&);
         void dragResize (const Pointer&);
+        std::vector<core::Note> makeNewNotes (const Pointer&, double length) const;
+        void startAudition (const std::vector<core::Note>&);
         void addNoteAndMove (const Pointer&);
         void beginStretchNew (const Pointer&);
         void dragStretchNew (const Pointer&);

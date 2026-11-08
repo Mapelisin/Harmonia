@@ -64,5 +64,41 @@ namespace harmonia::core
         /** How far Duplicate moves the copy: the span from the beat the notes start in,
             rounded up to whole beats. */
         double getDuplicateOffset (const std::vector<Note>&);
+
+        /** The result of a command that may also remove notes: new values in the order given
+            and the indices of the notes to remove. */
+        struct Edited
+        {
+            std::vector<Note> notes;
+            std::vector<size_t> removed;
+        };
+
+        /** Quick legato: each note lasts until the next of these notes starts (notes starting
+            together, a chord, all reach the next start; overlaps are cut there too). The last
+            ones keep their length. */
+        std::vector<Note> legato (std::vector<Note>);
+
+        /** Quick chop: a note longer than `step` cut into `step`-long pieces from its start,
+            the last piece being what's left. A shorter note comes back as it is. */
+        std::vector<Note> chop (const Note&, double step);
+
+        /** Glue: notes of the same pitch and colour that touch or overlap become one, with the
+            values of the earliest. The others are removed. */
+        Edited glue (const std::vector<Note>&);
+
+        /** The whole bars these notes start in: from the start of the first one's bar to the end
+            of the last one's. */
+        BeatRange getWholeBars (const std::vector<Note>&, double beatsPerBar);
+
+        /** Rotate: every note moved by `delta`, wrapping around inside `range` (a start pushed
+            past the end comes back at the beginning, and the other way round). */
+        std::vector<Note> rotate (std::vector<Note>, BeatRange, double delta);
+
+        /** Insert space: notes starting at or after the range's start move later by its length. */
+        std::vector<Note> insertSpace (std::vector<Note>, BeatRange);
+
+        /** Delete space: the time in the range is cut out. Notes starting in it are removed,
+            later ones move earlier by its length and notes reaching into it get shorter. */
+        Edited deleteSpace (const std::vector<Note>&, BeatRange);
     }
 }

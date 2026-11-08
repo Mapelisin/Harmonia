@@ -44,6 +44,8 @@ namespace harmonia::ui::theme
         inline const juce::Colour blackKey        { 0xff23262b };
         inline const juce::Colour clipRange       { 0xff3f6f99 };
         inline const juce::Colour recordingNote   { 0xffe0605a };
+        inline const juce::Colour outOfScaleRow   { 0xff141518 };
+        inline const juce::Colour rootRow         { 0x244f9fe0 };
 
         /** Fill colour of a note in colour group 0..15. */
         juce::Colour getNoteColour (int colourGroup);

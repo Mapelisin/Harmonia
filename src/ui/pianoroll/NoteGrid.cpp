@@ -92,21 +92,29 @@ namespace harmonia::ui::pianoroll
         const auto bottomPitch = view.yToPitch ((float) area.getBottom());
         const auto x = (float) area.getX(), w = (float) area.getWidth();
 
-        juce::RectangleList<float> blackRows, octaveLines;
+        // With a scale, the rows outside it are dark and the root's rows lit; otherwise the
+        // black keys' rows are dark.
+        const auto scale = model.getScale();
+        juce::RectangleList<float> darkRows, rootRows, octaveLines;
 
         for (int pitch = bottomPitch; pitch <= topPitch; ++pitch)
         {
             const auto y = view.pitchToY (pitch);
 
-            if (isBlackKey (pitch))
-                blackRows.addWithoutMerging ({ x, y, w, view.rowHeight });
+            if (scale.isChromatic() ? isBlackKey (pitch) : ! scale.contains (pitch))
+                darkRows.addWithoutMerging ({ x, y, w, view.rowHeight });
+
+            if (! scale.isChromatic() && scale.isRoot (pitch))
+                rootRows.addWithoutMerging ({ x, y, w, view.rowHeight });
 
             if (pitch % 12 == 0)    // line under every C
                 octaveLines.addWithoutMerging ({ x, y + view.rowHeight - 1.0f, w, 1.0f });
         }
 
-        g.setColour (colours::blackRow);
-        g.fillRectList (blackRows);
+        g.setColour (scale.isChromatic() ? colours::blackRow : colours::outOfScaleRow);
+        g.fillRectList (darkRows);
+        g.setColour (colours::rootRow);
+        g.fillRectList (rootRows);
         g.setColour (colours::octaveLine);
         g.fillRectList (octaveLines);
     }
