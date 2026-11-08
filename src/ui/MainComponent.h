@@ -5,20 +5,22 @@
 #include "audio/PlaybackClock.h"
 #include "audio/Transport.h"
 #include "core/Project.h"
+#include "ui/FileCommands.h"
 #include "ui/InstrumentPanel.h"
 #include "ui/NoteInput.h"
 #include "ui/StatusBar.h"
 #include "ui/TransportBar.h"
+#include "ui/arrangement/Arrangement.h"
 #include "ui/pianoroll/PianoRoll.h"
 
 namespace harmonia::ui
 {
-    /** Root of the main window: header (project, transport, audio settings), the track row
-        (which track the piano roll edits, its instrument), the piano roll and the status bar. */
+    /** Root of the main window: header (file menu, transport, audio settings), the current
+        track's instrument, the arrangement, the piano roll of the open clip (with a draggable
+        divider between them) and the status bar. */
     class MainComponent final : public juce::Component,
                                 private pianoroll::PianoRollModel::Listener,
-                                private juce::ValueTree::Listener,
-                                private juce::AsyncUpdater
+                                private arrangement::ArrangementModel::Listener
     {
     public:
         MainComponent (core::Session&, core::Project&);
@@ -32,8 +34,18 @@ namespace harmonia::ui
         /** Shows a problem in the status bar (e.g. the chosen audio interface didn't start). */
         void showWarning (const juce::String&);
 
-        pianoroll::PianoRollModel& getPianoRollModel() noexcept     { return pianoRollModel; }
-        NoteInput& getNoteInput() noexcept                          { return noteInput; }
+        /** Shows for a few seconds in the status bar that something worked (e.g. "Saved"). */
+        void showMessage (const juce::String&);
+
+        /** New / Open / Save / Export, provided by the window (none: those shortcuts do nothing). */
+        void setFileCommands (FileCommands*);
+
+        pianoroll::PianoRollModel& getPianoRollModel() noexcept         { return pianoRollModel; }
+        arrangement::ArrangementModel& getArrangementModel() noexcept   { return arrangementModel; }
+        arrangement::Arrangement& getArrangement() noexcept             { return arrangement; }
+        pianoroll::PianoRoll& getPianoRoll() noexcept                   { return pianoRoll; }
+        NoteInput& getNoteInput() noexcept                              { return noteInput; }
+        audio::Transport& getTransport() noexcept                       { return transport; }
 
     private:
         /** Plays edited notes on the current track's instrument, but not over the playing song. */
@@ -60,35 +72,41 @@ namespace harmonia::ui
         audio::NotePreview notePreview;
         PreviewAuditioner auditioner { notePreview, transport };
         pianoroll::PianoRollModel pianoRollModel { project };
+        arrangement::ArrangementModel arrangementModel { project };
         audio::PlaybackClock playbackClock { project.getEdit() };
         audio::MidiInputs midiInputs { project.getEdit() };
         NoteInput noteInput { pianoRollModel, notePreview, playbackClock };
+        FileCommands* fileCommands = nullptr;
 
         juce::ReferenceCountedObjectPtr<te::AudioTrack> currentTrack;
+        core::note_ops::BeatRange playedLoop { -1.0, -1.0 };
 
-        TransportBar transportBar { transport, project.getEdit(), noteInput };
+        TransportBar transportBar { transport, project.getEdit(), noteInput, arrangementModel };
+        juce::TextButton fileButton { "File" };
         juce::TextButton audioSettingsButton { "Audio settings" };
-        juce::Label trackLabel;
-        juce::ComboBox trackBox;
-        juce::TextButton addTrackButton { "Add track" };
+        juce::Label trackNameLabel;
         std::unique_ptr<InstrumentPanel> instrumentPanel;
+        arrangement::Arrangement arrangement { arrangementModel, transport };
+        juce::StretchableLayoutManager splitLayout;
+        juce::StretchableLayoutResizerBar splitter { &splitLayout, 1, false };
         pianoroll::PianoRoll pianoRoll { pianoRollModel, transport };
         StatusBar statusBar { session };
 
-        void selectTrack (te::AudioTrack*);
-        void addTrack();
-        void refreshTrackList();
+        /** The arrangement's current track or open clip changed: the piano roll, the keyboards
+            and the instrument row follow. */
+        void currentChanged();
         void updateLoop();
         void updateMidiStatus();
         void toggleMetronome();
+        void togglePlayMode();
+        void playFrom (double beat);
 
+        void showFileMenu();
         void showAudioSettings();
         juce::String getProjectSummary() const;
 
         void pianoRollChanged() override;
-        void handleAsyncUpdate() override;
-        void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
-        void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
+        void arrangementChanged() override;
 
         JUCE_DECLARE_NON_COPYABLE (MainComponent)
     };

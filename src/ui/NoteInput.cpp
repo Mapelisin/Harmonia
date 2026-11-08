@@ -112,7 +112,7 @@ namespace harmonia::ui
             if (const auto beat = clock.getHeardBeat (now()))
                 lastHeardBeat = *beat;
 
-            model.setLiveNotes (recorder.getSoundingNotes (lastHeardBeat));
+            model.setLiveNotes (keepInsideClip (recorder.getSoundingNotes (lastHeardBeat)));
         }
     }
 
@@ -121,7 +121,11 @@ namespace harmonia::ui
         model.beginGesture ("Record notes");
         keepOneUndoStep.emplace (model.getEdit());
 
-        takeLoop = { model.getClipStartBeat(), model.getClipEndBeat() };
+        // Clip mode loops the clip; song mode the loop region or the whole song.
+        const auto loop = clock.getLoopBeats();
+        takeLoop = { loop.getStart(), loop.getEnd() };
+        takeClip = model.getClip();
+        takeClipRange = { model.getClipStartBeat(), model.getClipEndBeat() };
         recorder.start (takeLoop);
         lastHeardBeat = clock.getHeardBeat (now()).value_or (takeLoop.start);
 
@@ -138,6 +142,7 @@ namespace harmonia::ui
         commit (recorder.stop (lastHeardBeat));
         model.setLiveNotes ({});
         keepOneUndoStep.reset();
+        takeClip = nullptr;
         stateChanged();
     }
 
@@ -155,7 +160,8 @@ namespace harmonia::ui
 
     void NoteInput::commit (const std::vector<core::Note>& notes)
     {
-        if (notes.empty())
+        // The clip was switched without finishing the take (shouldn't happen): don't write into another one.
+        if (notes.empty() || model.getClip() == nullptr || model.getClip() != takeClip.get())
             return;
 
         auto grid = model.getGridBeats();
@@ -168,7 +174,23 @@ namespace harmonia::ui
         for (const auto& n : notes)
             placed.push_back (core::quantizeRecorded (n, quantize, grid, takeLoop));
 
-        model.addRecordedNotes (placed);
+        placed = keepInsideClip (std::move (placed));
+
+        if (! placed.empty())
+            model.addRecordedNotes (placed);
+    }
+
+    std::vector<core::Note> NoteInput::keepInsideClip (std::vector<core::Note> notes) const
+    {
+        // In song mode the song plays past the clip: notes outside it aren't the clip's, and a
+        // note held past its end stops there.
+        std::erase_if (notes, [this] (const core::Note& n)
+                       { return n.startBeat < takeClipRange.start - 1.0e-9 || n.startBeat >= takeClipRange.end - 1.0e-9; });
+
+        for (auto& n : notes)
+            n.lengthBeats = std::min (n.lengthBeats, takeClipRange.end - n.startBeat);
+
+        return notes;
     }
 
     void NoteInput::showHeld()

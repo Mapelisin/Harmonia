@@ -68,4 +68,88 @@ namespace harmonia::core::clips
             member->setEnd (tempo.toTime (te::BeatPosition::fromBeats (newEnd)), false);
         }
     }
+
+    //==============================================================================
+    namespace
+    {
+        te::TimePosition toTime (const te::Edit& edit, double beat)
+        {
+            return edit.tempoSequence.toTime (te::BeatPosition::fromBeats (beat));
+        }
+    }
+
+    juce::Array<te::MidiClip*> getMidiClips (te::AudioTrack& track)
+    {
+        juce::Array<te::MidiClip*> clips;
+
+        for (auto* clip : track.getClips())
+            if (auto* midi = dynamic_cast<te::MidiClip*> (clip))
+                clips.add (midi);
+
+        std::stable_sort (clips.begin(), clips.end(), [] (te::MidiClip* a, te::MidiClip* b)
+                          { return getStartBeat (*a) < getStartBeat (*b); });
+        return clips;
+    }
+
+    bool isInEdit (const te::Clip& clip)
+    {
+        return clip.state.isAChildOf (clip.edit.state);
+    }
+
+    double getSongEndBeat (const te::Edit& edit)
+    {
+        auto end = 0.0;
+
+        for (auto* track : te::getClipTracks (edit))
+            for (auto* clip : track->getClips())
+                end = std::max (end, getEndBeat (*clip));
+
+        return end;
+    }
+
+    void move (te::MidiClip& clip, double startBeat, te::AudioTrack& track)
+    {
+        clip.setStart (toTime (clip.edit, std::max (0.0, startBeat)), false, true);
+
+        if (clip.getClipTrack() != &track)
+            clip.moveTo (track);
+    }
+
+    void setStart (te::MidiClip& clip, double startBeat, double minLengthBeats)
+    {
+        const auto limited = juce::jlimit (getContentStartBeat (clip), std::max (getContentStartBeat (clip), getEndBeat (clip) - minLengthBeats),
+                                           startBeat);
+        clip.setStart (toTime (clip.edit, limited), true, false);
+    }
+
+    void setEnd (te::MidiClip& clip, double endBeat, double minLengthBeats)
+    {
+        clip.setEnd (toTime (clip.edit, std::max (endBeat, getStartBeat (clip) + minLengthBeats)), true);
+    }
+
+    void remove (const juce::Array<te::MidiClip*>& clips)
+    {
+        // Who is left in each group once these are gone.
+        juce::Array<te::MidiClip*> survivors;
+
+        for (auto* clip : clips)
+        {
+            if (! clip_links::isLinked (*clip))
+                continue;
+
+            for (auto* member : clip_links::getGroup (*clip))
+                if (! clips.contains (member))
+                    survivors.addIfNotAlreadyThere (member);
+        }
+
+        for (auto* clip : clips)
+        {
+            te::Clip::Ptr keepAlive (clip);
+            clip->removeFromParent();
+        }
+
+        for (auto* survivor : survivors)
+            if (clip_links::getGroup (*survivor).size() == 1)
+                clip_links::unlink (*survivor);
+    }
 }

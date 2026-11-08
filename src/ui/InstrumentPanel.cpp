@@ -47,18 +47,18 @@ namespace harmonia::ui
 
     void InstrumentPanel::resized()
     {
-        auto area = getLocalBounds().reduced (theme::size::padding);
-        auto row = area.removeFromTop (theme::size::buttonHeight);
+        // One row: title, instrument, buttons, then the message in the remaining width.
+        auto row = getLocalBounds().reduced (theme::size::padding, 0);
+        row = row.withSizeKeepingCentre (row.getWidth(), theme::size::buttonHeight);
 
         titleLabel.setBounds (row.removeFromLeft (90));
-        instrumentBox.setBounds (row.removeFromLeft (320));
+        instrumentBox.setBounds (row.removeFromLeft (300));
         row.removeFromLeft (theme::size::padding);
         editorButton.setBounds (row.removeFromLeft (110));
         row.removeFromLeft (theme::size::padding);
         scanButton.setBounds (row.removeFromLeft (110));
-
-        area.removeFromTop (theme::size::padding / 2);
-        messageLabel.setBounds (area.removeFromTop (theme::size::buttonHeight));
+        row.removeFromLeft (theme::size::padding);
+        messageLabel.setBounds (row);
     }
 
     void InstrumentPanel::refreshList()

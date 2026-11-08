@@ -1,7 +1,5 @@
 #include "ui/MainComponent.h"
 #include "audio/DeviceStatus.h"
-#include "audio/Instruments.h"
-#include "core/Clips.h"
 #include "ui/ComputerKeyboard.h"
 #include "ui/Theme.h"
 
@@ -9,8 +7,8 @@ namespace harmonia::ui
 {
     namespace
     {
-        constexpr int trackRowHeight = 72;
-        constexpr int newClipBars = 4;
+        constexpr int trackRowHeight = 40;
+        constexpr int appNameWidth = 90, fileButtonWidth = 50, summaryWidth = 210;
     }
 
     MainComponent::MainComponent (core::Session& s, core::Project& p)
@@ -22,7 +20,8 @@ namespace harmonia::ui
 
         pianoRollModel.setAuditioner (&auditioner);
         pianoRollModel.addListener (this);
-        project.getEdit().state.addListener (this);
+        arrangementModel.addListener (this);
+        arrangementModel.onCurrentChanged = [this] { currentChanged(); };
 
         midiInputs.onMessage = [this] (const juce::MidiMessage& m, double wallMs) { noteInput.handleMidiMessage (m, wallMs); };
         midiInputs.onDevicesChanged = [this] { updateMidiStatus(); };
@@ -33,31 +32,31 @@ namespace harmonia::ui
         };
         updateMidiStatus();
 
-        trackLabel.setText ("Track", juce::dontSendNotification);
-        trackLabel.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
+        transportBar.onPlayModeToggled = [this] { togglePlayMode(); };
+        arrangement.onPositionChosen = [this] (double beat) { playFrom (beat); };
 
-        trackBox.setWantsKeyboardFocus (false);
-        trackBox.onChange = [this]
-        {
-            const auto tracks = project.getTracks();
-            const auto index = trackBox.getSelectedId() - 1;
+        trackNameLabel.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
+        trackNameLabel.setColour (juce::Label::textColourId, theme::colour::textPrimary);
 
-            if (index >= 0 && index < tracks.size() && tracks[index] != currentTrack.get())
-                selectTrack (tracks[index]);
-        };
+        fileButton.setTooltip ("New, open, save, export WAV");
+        fileButton.onClick = [this] { showFileMenu(); };
 
-        addTrackButton.setWantsKeyboardFocus (false);
-        addTrackButton.onClick = [this] { addTrack(); };
-
-        audioSettingsButton.setWantsKeyboardFocus (false);
         audioSettingsButton.setEnabled (session.devicesEnabled());
         audioSettingsButton.onClick = [this] { showAudioSettings(); };
 
-        for (auto* c : std::initializer_list<juce::Component*> { &transportBar, &audioSettingsButton, &trackLabel,
-                                                                 &trackBox, &addTrackButton, &pianoRoll, &statusBar })
+        for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &audioSettingsButton })
+            c->setWantsKeyboardFocus (false);
+
+        // Arrangement above, piano roll below; the bar between them can be dragged.
+        splitLayout.setItemLayout (0, 110.0, -1.0, 250.0);
+        splitLayout.setItemLayout (1, 6.0, 6.0, 6.0);
+        splitLayout.setItemLayout (2, 200.0, -1.0, -0.62);
+
+        for (auto* c : std::initializer_list<juce::Component*> { &transportBar, &fileButton, &audioSettingsButton, &trackNameLabel,
+                                                                 &arrangement, &splitter, &pianoRoll, &statusBar })
             addAndMakeVisible (c);
 
-        selectTrack (project.getTracks().getFirst());
+        currentChanged();
         setSize (1280, 800);
 
         // Keyboard focus to the piano roll once the window is on screen.
@@ -70,10 +69,11 @@ namespace harmonia::ui
 
     MainComponent::~MainComponent()
     {
-        cancelPendingUpdate();
-        project.getEdit().state.removeListener (this);
+        arrangementModel.onCurrentChanged = nullptr;
+        arrangementModel.removeListener (this);
         pianoRollModel.removeListener (this);
         pianoRollModel.setAuditioner (nullptr);
+        transportBar.onPlayModeToggled = nullptr;
         noteInput.onStateChanged = nullptr;
         midiInputs.onMessage = nullptr;
         midiInputs.onDevicesChanged = nullptr;
@@ -82,76 +82,76 @@ namespace harmonia::ui
         notePreview.setTrack (nullptr);
     }
 
+    void MainComponent::setFileCommands (FileCommands* commands)
+    {
+        fileCommands = commands;
+        repaint();
+    }
+
     //==============================================================================
-    void MainComponent::selectTrack (te::AudioTrack* track)
+    void MainComponent::currentChanged()
     {
         // A take belongs to the clip it was recorded into.
         noteInput.finishTake();
 
-        currentTrack = track;
-        notePreview.setTrack (track);
-        midiInputs.setTrack (track);
-        instrumentPanel.reset();
+        auto* track = arrangementModel.getCurrentTrack();
+        auto* clip = arrangementModel.getOpenClip();
 
-        te::MidiClip* clip = nullptr;
-
-        if (track != nullptr)
+        if (track != currentTrack.get())
         {
-            instrumentPanel = std::make_unique<InstrumentPanel> (session, *track);
-            addAndMakeVisible (*instrumentPanel);
+            currentTrack = track;
+            notePreview.setTrack (track);
+            midiInputs.setTrack (track);
+            instrumentPanel.reset();
 
-            clip = core::clips::getMainClip (*track);
-
-            if (clip == nullptr)
+            if (track != nullptr)
             {
-                project.beginGesture ("Add clip");
-                clip = core::clips::getOrAddMainClip (project, *track, newClipBars * core::clips::getBeatsPerBar (project.getEdit()));
+                instrumentPanel = std::make_unique<InstrumentPanel> (session, *track);
+                addAndMakeVisible (*instrumentPanel);
             }
+
+            resized();
         }
 
-        pianoRollModel.setClip (clip);
-        pianoRoll.showClip();
-        refreshTrackList();
+        trackNameLabel.setText (track != nullptr ? track->getName() : juce::String ("No track"), juce::dontSendNotification);
+
+        if (clip != pianoRollModel.getClip())
+        {
+            pianoRollModel.setClip (clip);
+            pianoRoll.showClip();
+        }
+
         updateLoop();
-        resized();
-    }
-
-    void MainComponent::addTrack()
-    {
-        // The new track's clip is as long as the current one, so loops line up.
-        const auto length = std::max (newClipBars * core::clips::getBeatsPerBar (project.getEdit()),
-                                      pianoRollModel.getClip() != nullptr ? pianoRollModel.getClipEndBeat() : 0.0);
-
-        project.beginGesture ("Add track");
-        auto* track = project.addTrack ("Track " + juce::String (project.getNumTracks() + 1));
-
-        if (track == nullptr)
-            return;
-
-        audio::instruments::useBuiltInSynth (*track);
-        core::clips::getOrAddMainClip (project, *track, length);
-        selectTrack (track);
-    }
-
-    void MainComponent::refreshTrackList()
-    {
-        const auto tracks = project.getTracks();
-        trackBox.clear (juce::dontSendNotification);
-
-        for (int i = 0; i < tracks.size(); ++i)
-            trackBox.addItem (tracks[i]->getName(), i + 1);
-
-        trackBox.setSelectedId (tracks.indexOf (currentTrack.get()) + 1, juce::dontSendNotification);
-        repaint();
     }
 
     void MainComponent::updateLoop()
     {
-        // Play loops the edited clip, like a pattern.
-        if (pianoRollModel.getClip() != nullptr)
-            transport.setLoopBeats (pianoRollModel.getClipStartBeat(), pianoRollModel.getClipEndBeat());
-        else
-            transport.setLoopBeats (0.0, 0.0);
+        // Clip mode loops the open clip like a pattern; song mode the loop region or the song.
+        const auto range = arrangementModel.getPlayRange();
+
+        if (std::abs (range.start - playedLoop.start) > 1.0e-9 || std::abs (range.end - playedLoop.end) > 1.0e-9)
+        {
+            playedLoop = range;
+            transport.setLoopBeats (range.start, range.end);
+        }
+    }
+
+    void MainComponent::togglePlayMode()
+    {
+        using arrangement::PlayMode;
+        arrangementModel.setPlayMode (arrangementModel.getPlayMode() == PlayMode::clip ? PlayMode::song : PlayMode::clip);
+        updateLoop();
+        transportBar.refresh();
+        arrangement.repaint();
+    }
+
+    void MainComponent::playFrom (double beat)
+    {
+        // Clicking the arrangement's ruler means the song, as in FL Studio.
+        arrangementModel.setPlayMode (arrangement::PlayMode::song);
+        updateLoop();
+        transport.setPositionSeconds (project.getEdit().tempoSequence.toTime (te::BeatPosition::fromBeats (beat)).inSeconds());
+        transportBar.refresh();
     }
 
     void MainComponent::updateMidiStatus()
@@ -163,44 +163,27 @@ namespace harmonia::ui
 
     void MainComponent::pianoRollChanged()
     {
-        if (pianoRollModel.getClip() == nullptr && currentTrack != nullptr)
-            triggerAsyncUpdate();
-        else
-            updateLoop();
+        // Notes drawn past the end make the clip longer.
+        updateLoop();
     }
 
-    void MainComponent::handleAsyncUpdate()
+    void MainComponent::arrangementChanged()
     {
-        // Tracks were added or removed (e.g. by undo/redo): keep the track list and the piano roll valid.
-        const auto tracks = project.getTracks();
+        if (auto* track = arrangementModel.getCurrentTrack())
+            trackNameLabel.setText (track->getName(), juce::dontSendNotification);
 
-        if (currentTrack == nullptr || ! tracks.contains (currentTrack.get()))
-            selectTrack (tracks.getFirst());
-        else if (pianoRollModel.getClip() == nullptr)
-            selectTrack (currentTrack.get());
-        else
-            refreshTrackList();
-    }
-
-    void MainComponent::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree& child)
-    {
-        if (child.hasType (te::IDs::TRACK))
-            triggerAsyncUpdate();
-    }
-
-    void MainComponent::valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree& child, int)
-    {
-        if (child.hasType (te::IDs::TRACK))
-            triggerAsyncUpdate();
+        updateLoop();
+        transportBar.refresh();
+        repaint (getLocalBounds().removeFromTop (theme::size::headerHeight));
     }
 
     //==============================================================================
     juce::String MainComponent::getProjectSummary() const
     {
         const auto tracks = project.getNumTracks();
-        return "Untitled" + juce::String::fromUTF8 ("  \xc2\xb7  ")
-             + juce::String (tracks) + (tracks == 1 ? " track" : " tracks") + juce::String::fromUTF8 ("  \xc2\xb7  ")
-             + juce::String (project.getTempoBpm(), 0) + " BPM";
+        const auto name = fileCommands != nullptr ? fileCommands->getProjectName() : juce::String ("Untitled");
+        return name + juce::String::fromUTF8 ("  \xc2\xb7  ") + juce::String (tracks) + (tracks == 1 ? " track" : " tracks")
+             + juce::String::fromUTF8 ("  \xc2\xb7  ") + juce::String (project.getTempoBpm(), 0) + " BPM";
     }
 
     void MainComponent::paint (juce::Graphics& g)
@@ -216,11 +199,17 @@ namespace harmonia::ui
         auto text = header.reduced (theme::size::padding, 0);
         g.setColour (theme::colour::textPrimary);
         g.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
-        g.drawText ("Harmonia", text.removeFromLeft (90), juce::Justification::centredLeft);
+        g.drawText ("Harmonia", text.removeFromLeft (appNameWidth), juce::Justification::centredLeft);
 
+        text.removeFromLeft (fileButtonWidth + theme::size::padding);
         g.setColour (theme::colour::textSecondary);
         g.setFont (juce::FontOptions (theme::size::fontSize));
-        g.drawText (getProjectSummary(), text.removeFromLeft (260), juce::Justification::centredLeft);
+        g.drawText (getProjectSummary(), text.removeFromLeft (summaryWidth), juce::Justification::centredLeft, true);
+
+        // The track row: the current track's name over the headers, its instrument to the right.
+        auto trackRow = getLocalBounds().withTrimmedTop (theme::size::headerHeight).removeFromTop (trackRowHeight);
+        g.setColour (theme::colour::border);
+        g.fillRect (trackRow.removeFromBottom (1));
     }
 
     void MainComponent::resized()
@@ -230,23 +219,19 @@ namespace harmonia::ui
         statusBar.setBounds (area.removeFromBottom (theme::size::statusBarHeight));
 
         audioSettingsButton.setBounds (header.removeFromRight (120).withSizeKeepingCentre (120, theme::size::buttonHeight));
-        header.removeFromLeft (90 + 260);
-        transportBar.setBounds (header.removeFromLeft (std::min (600, header.getWidth() - theme::size::padding)));
+        header.removeFromLeft (appNameWidth);
+        fileButton.setBounds (header.removeFromLeft (fileButtonWidth).withSizeKeepingCentre (fileButtonWidth, theme::size::buttonHeight));
+        header.removeFromLeft (theme::size::padding + summaryWidth);
+        transportBar.setBounds (header.removeFromLeft (std::max (0, std::min (700, header.getWidth() - theme::size::padding))));
 
         auto trackRow = area.removeFromTop (trackRowHeight);
-
-        // Lined up with the first row of the instrument panel.
-        auto trackControls = trackRow.removeFromLeft (320).withTrimmedLeft (theme::size::padding)
-                                     .withTrimmedTop (4 + theme::size::padding).removeFromTop (theme::size::buttonHeight);
-        trackLabel.setBounds (trackControls.removeFromLeft (50));
-        trackBox.setBounds (trackControls.removeFromLeft (160));
-        trackControls.removeFromLeft (theme::size::padding);
-        addTrackButton.setBounds (trackControls.removeFromLeft (90));
+        trackNameLabel.setBounds (trackRow.removeFromLeft (arrangement::Arrangement::headerWidth).reduced (theme::size::padding / 2, 0));
 
         if (instrumentPanel != nullptr)
-            instrumentPanel->setBounds (trackRow.reduced (theme::size::padding, 4));
+            instrumentPanel->setBounds (trackRow.reduced (theme::size::padding / 2, 4));
 
-        pianoRoll.setBounds (area);
+        juce::Component* parts[] = { &arrangement, &splitter, &pianoRoll };
+        splitLayout.layOutComponents (parts, 3, area.getX(), area.getY(), area.getWidth(), area.getHeight(), true, true);
     }
 
     bool MainComponent::keyPressed (const juce::KeyPress& key)
@@ -262,13 +247,24 @@ namespace harmonia::ui
         const auto letter = keys::getLetter (key);
         const auto code = key.getKeyCode();
 
-        if (mods.isCommandDown() && ! mods.isAltDown() && ! mods.isShiftDown())
+        if (mods.isCommandDown() && ! mods.isAltDown())
         {
+            const auto shift = mods.isShiftDown();
+
             switch (letter)
             {
-                case 'T': keyboard.setEnabled (! keyboard.isEnabled()); return true;
-                case 'R': noteInput.setRecordArmed (! noteInput.isRecordArmed()); return true;
-                case 'M': toggleMetronome(); return true;
+                case 'N': if (fileCommands != nullptr && ! shift) fileCommands->newProject(); return ! shift;
+                case 'O': if (fileCommands != nullptr && ! shift) fileCommands->openProject(); return ! shift;
+                case 'S':
+                    if (fileCommands != nullptr)
+                    {
+                        if (shift) fileCommands->saveProjectAs();
+                        else       fileCommands->saveProject();
+                    }
+                    return true;
+                case 'R': if (fileCommands != nullptr && ! shift) fileCommands->exportWav(); return ! shift;
+                case 'T': if (! shift) keyboard.setEnabled (! keyboard.isEnabled()); return ! shift;
+                case 'M': if (! shift) toggleMetronome(); return ! shift;
                 default:  break;
             }
         }
@@ -286,11 +282,28 @@ namespace harmonia::ui
             if (keys::isTypingKey (key))
                 return true;
         }
-        else if (! mods.isAnyModifierKeyDown() && letter == 'R')
+        else if (! mods.isAnyModifierKeyDown())
         {
-            noteInput.setRecordArmed (! noteInput.isRecordArmed());
-            return true;
+            if (letter == 'R')
+            {
+                noteInput.setRecordArmed (! noteInput.isRecordArmed());
+                return true;
+            }
+
+            if (letter == 'L')
+            {
+                togglePlayMode();
+                return true;
+            }
         }
+
+        // Undo and redo work wherever the focus is.
+        if (mods.isCommandDown() && (letter == 'Z' || letter == 'Y'))
+            return pianoRoll.keyPressed (key);
+
+        // The arrangement had its go already (it's focused): its keys don't edit notes.
+        if (arrangement.hasKeyboardFocus (true))
+            return false;
 
         // Editing shortcuts work even when the piano roll itself doesn't have focus.
         return pianoRoll.keyPressed (key);
@@ -319,6 +332,37 @@ namespace harmonia::ui
     void MainComponent::showWarning (const juce::String& text)
     {
         statusBar.setWarning (text);
+    }
+
+    void MainComponent::showMessage (const juce::String& text)
+    {
+        statusBar.setMessage (text);
+    }
+
+    //==============================================================================
+    void MainComponent::showFileMenu()
+    {
+        const auto hasCommands = fileCommands != nullptr;
+        juce::Component::SafePointer<MainComponent> safe (this);
+
+        const auto run = [safe] (void (FileCommands::* command)())
+        {
+            return [safe, command]
+            {
+                if (safe != nullptr && safe->fileCommands != nullptr)
+                    (safe->fileCommands->*command)();
+            };
+        };
+
+        juce::PopupMenu menu;
+        menu.addItem ("New project  (Ctrl+N)", hasCommands, false, run (&FileCommands::newProject));
+        menu.addItem ("Open...  (Ctrl+O)", hasCommands, false, run (&FileCommands::openProject));
+        menu.addSeparator();
+        menu.addItem ("Save  (Ctrl+S)", hasCommands, false, run (&FileCommands::saveProject));
+        menu.addItem ("Save as...  (Ctrl+Shift+S)", hasCommands, false, run (&FileCommands::saveProjectAs));
+        menu.addSeparator();
+        menu.addItem ("Export WAV...  (Ctrl+R)", hasCommands, false, run (&FileCommands::exportWav));
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fileButton));
     }
 
     void MainComponent::showAudioSettings()

@@ -15,9 +15,11 @@ namespace
     {
         bool isPlaying() const override                             { return playing; }
         std::optional<double> getHeardBeat (double) const override  { return playing ? std::optional<double> (beat) : std::nullopt; }
+        juce::Range<double> getLoopBeats() const override           { return loop; }
 
         bool playing = false;
         double beat = 0.0;
+        juce::Range<double> loop { 0.0, 16.0 };     // clip mode: the fixture's clip
     };
 
     /** Keys held down on a pretend keyboard, by what they type on a US layout. */
@@ -308,6 +310,33 @@ TEST_SUITE ("note input: recording")
         CHECK (f.notes().size() == 1);
         CHECK (f.notes()[0].getEndBeat() == doctest::Approx (2.0));
     }
+
+    TEST_CASE ("in song mode only what is played inside the open clip goes in, cut at its end")
+    {
+        NoteInputFixture f;
+        f.clock.loop = { 0.0, 32.0 };     // the song loops, the clip is beats 0..16
+        f.input->setRecordArmed (true);
+        f.clock.playing = true;
+
+        f.play (60, 2.0, 3.0);
+        f.play (62, 20.0, 21.0);
+        f.play (64, 15.0, 18.0);
+
+        // A key held on into the song's next pass shows as being recorded only inside the clip.
+        f.clock.beat = 30.0;
+        f.input->noteOn (65, 100, NoteInput::Source::midiKeyboard);
+        f.input->update();
+        CHECK (f.model.getLiveNotes().empty());
+
+        f.clock.playing = false;
+        f.input->update();
+
+        const auto notes = f.notes();
+        REQUIRE (notes.size() == 2);
+        CHECK (notes[0].pitch == 60);
+        CHECK (notes[1].pitch == 64);
+        CHECK (notes[1].getEndBeat() == doctest::Approx (16.0));
+    }
 }
 
 TEST_SUITE ("note input: main window")
@@ -338,18 +367,29 @@ TEST_SUITE ("note input: main window")
         CHECK (main.keyPressed (key (juce::KeyPress::upKey)));
         CHECK (input.getComputerKeyboard().getOctave() == octave + 1);
 
-        // Ctrl shortcuts still work; Ctrl+R arms recording even while the keyboard plays.
-        CHECK (main.keyPressed (key ('r', 0, ctrl)));
-        CHECK (input.isRecordArmed());
+        // R is a piano key while the keyboard plays: recording stays as it is.
+        CHECK (main.keyPressed (key ('r')));
+        CHECK_FALSE (input.isRecordArmed());
 
+        // Ctrl shortcuts still work.
         CHECK (main.keyPressed (key ('t', 0, ctrl)));
         CHECK_FALSE (input.getComputerKeyboard().isEnabled());
         CHECK (main.keyPressed (key ('p')));
         CHECK (model.getTool() == pianoroll::Tool::draw);
 
-        // Plain R toggles recording when the keyboard isn't playing notes.
+        // Plain R toggles recording when the keyboard isn't playing notes (also with the Russian layout: К).
+        CHECK (main.keyPressed (key ('R', 0x043a)));
+        CHECK (input.isRecordArmed());
         CHECK (main.keyPressed (key ('r')));
         CHECK_FALSE (input.isRecordArmed());
+
+        // L: clip / song (Д with the Russian layout).
+        auto& arrangement = main.getArrangementModel();
+        CHECK (arrangement.getPlayMode() == arrangement::PlayMode::clip);
+        CHECK (main.keyPressed (key ('L', 0x0434)));
+        CHECK (arrangement.getPlayMode() == arrangement::PlayMode::song);
+        CHECK (main.keyPressed (key ('l')));
+        CHECK (arrangement.getPlayMode() == arrangement::PlayMode::clip);
 
         const auto click = project->getEdit().clickTrackEnabled.get();
         CHECK (main.keyPressed (key ('m', 0, ctrl)));

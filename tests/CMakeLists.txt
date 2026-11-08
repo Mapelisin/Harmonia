@@ -9,11 +9,13 @@ add_executable(harmonia_tests
     core/SnapTests.cpp
     core/NoteOpsTests.cpp
     core/NoteRecorderTests.cpp
+    core/ClipsTests.cpp
     audio/DeviceStatusTests.cpp
     audio/AudioTests.cpp
     ui/PianoRollTests.cpp
     ui/PianoRollViewTests.cpp
-    ui/NoteInputTests.cpp)
+    ui/NoteInputTests.cpp
+    ui/ArrangementTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)

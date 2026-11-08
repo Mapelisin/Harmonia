@@ -2,6 +2,7 @@
 #include "audio/DeviceSetup.h"
 #include "audio/DeviceStatus.h"
 #include "audio/Instruments.h"
+#include "audio/Export.h"
 #include "audio/NotePreview.h"
 #include "audio/PlaybackClock.h"
 #include "audio/PluginScanner.h"
@@ -252,6 +253,7 @@ namespace harmonia::app
                 }
 
                 checkRender (*project, "builtin-synth.wav");
+                checkExport (*project, "export.wav");
 
                 if (options.pluginPath.isNotEmpty())
                     checkExternalInstrument (*project, track, transport, level);
@@ -468,6 +470,30 @@ namespace harmonia::app
                                                       + juce::String (juce::Decibels::gainToDecibels (stats.peak), 1) + " dBFS)");
                 report.check (stats.seconds >= expected - 0.1, "Rendered length " + juce::String (stats.seconds, 2)
                                                                    + " s covers the song (" + juce::String (expected, 2) + " s)");
+            }
+
+            /** File > Export WAV: the song plus its tail, with the device running. */
+            void checkExport (core::Project& project, const juce::String& fileName)
+            {
+                const auto file = options.renderDirectory.getChildFile (fileName);
+                file.deleteFile();
+
+                setQuiet (project, false);
+                const auto error = audio::exportWav (project.getEdit(), file);
+                setQuiet (project, options.quiet);
+                report.check (error.isEmpty() && file.existsAsFile(), "Export WAV -> " + file.getFullPathName()
+                                                                         + (error.isEmpty() ? juce::String() : " (" + error + ")"));
+
+                if (! error.isEmpty())
+                    return;
+
+                const auto stats = analyse (file);
+                const auto expected = project.getEdit().getLength().inSeconds() + audio::exportTailSeconds;
+
+                report.check (stats.peak > 0.01f, "Exported audio is not silent (peak "
+                                                      + juce::String (juce::Decibels::gainToDecibels (stats.peak), 1) + " dBFS)");
+                report.check (std::abs (stats.seconds - expected) < 0.1, "Exported length " + juce::String (stats.seconds, 2)
+                                                                             + " s = song + tail (" + juce::String (expected, 2) + " s)");
             }
 
             void checkExternalInstrument (core::Project& project, te::AudioTrack& track,

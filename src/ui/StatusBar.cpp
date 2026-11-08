@@ -33,6 +33,9 @@ namespace harmonia::ui
         if (auto* top = getTopLevelComponent())
             rendererText = getCurrentRendererName (*top);
 
+        if (messageText.isNotEmpty() && juce::Time::getMillisecondCounter() - messageTime > 8000)
+            messageText.clear();
+
         repaint();
     }
 
@@ -55,6 +58,11 @@ namespace harmonia::ui
             g.setColour (theme::colour::warning);
             g.drawText (warningText, area.removeFromRight (area.getWidth() / 2), juce::Justification::centredRight, true);
         }
+        else if (messageText.isNotEmpty())
+        {
+            g.setColour (theme::colour::textPrimary);
+            g.drawText (messageText, area.removeFromRight (area.getWidth() / 2), juce::Justification::centredRight, true);
+        }
 
         g.setColour (deviceOpen ? theme::colour::textSecondary : theme::colour::warning);
         g.drawText (deviceText, area, juce::Justification::centredLeft, true);
@@ -63,6 +71,13 @@ namespace harmonia::ui
     void StatusBar::setMidiText (const juce::String& text)
     {
         midiText = text;
+        repaint();
+    }
+
+    void StatusBar::setMessage (const juce::String& text)
+    {
+        messageText = text;
+        messageTime = juce::Time::getMillisecondCounter();
         repaint();
     }
 

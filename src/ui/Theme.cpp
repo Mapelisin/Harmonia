@@ -17,6 +17,19 @@ namespace harmonia::ui::theme
         }
     }
 
+    namespace arrangement
+    {
+        juce::Colour getTrackColour (int trackIndex)
+        {
+            static const juce::Colour palette[] = {
+                juce::Colour (0xff5aa9e6), juce::Colour (0xff62c79a), juce::Colour (0xffd9c45a), juce::Colour (0xffe0875a),
+                juce::Colour (0xffd9677a), juce::Colour (0xffb17ad9), juce::Colour (0xff4fc2c9), juce::Colour (0xff9ccf5c)
+            };
+
+            return palette[(size_t) std::max (0, trackIndex) % std::size (palette)];
+        }
+    }
+
     LookAndFeel::LookAndFeel()
     {
         setColourScheme ({ colour::background,      // windowBackground

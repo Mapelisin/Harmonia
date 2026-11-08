@@ -63,6 +63,18 @@ namespace harmonia::audio
         return edit.tempoSequence.toBeats (te::TimePosition::fromSeconds (heard)).inBeats();
     }
 
+    juce::Range<double> PlaybackClock::getLoopBeats() const
+    {
+        auto& transport = edit.getTransport();
+
+        if (! transport.looping)
+            return {};
+
+        const auto range = transport.getLoopRange();
+        return { edit.tempoSequence.toBeats (range.getStart()).inBeats(),
+                 edit.tempoSequence.toBeats (range.getEnd()).inBeats() };
+    }
+
     double PlaybackClock::toHeardSeconds (double rendered, double latency, std::optional<juce::Range<double>> loop)
     {
         auto heard = rendered - latency;

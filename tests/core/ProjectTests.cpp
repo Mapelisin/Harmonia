@@ -167,4 +167,64 @@ TEST_SUITE ("core::Project")
         CHECK (project == nullptr);
         CHECK (error.contains ("newer version"));
     }
+
+    TEST_CASE ("unsaved changes: none in a new or just saved project, any edit counts")
+    {
+        auto& session = harmonia::test::session();
+        juce::TemporaryFile file (".harmonia");
+        auto project = Project::createEmpty (session);
+
+        CHECK_FALSE (project->hasUnsavedChanges());
+
+        project->beginGesture ("Add track");
+        project->addTrack ("Bass");
+        CHECK (project->hasUnsavedChanges());
+
+        REQUIRE (project->save (file.getFile()).isEmpty());
+        CHECK_FALSE (project->hasUnsavedChanges());
+
+        project->beginGesture ("Rename");
+        project->getTracks().getLast()->setName ("Lead");
+        CHECK (project->hasUnsavedChanges());
+
+        // Setting up defaults and forgetting the undo history counts as a fresh start.
+        project->clearUndoHistory();
+        CHECK_FALSE (project->hasUnsavedChanges());
+    }
+
+    TEST_CASE ("a whole arrangement survives saving: tracks, names, clip positions, mute and volume")
+    {
+        auto& session = harmonia::test::session();
+        juce::TemporaryFile file (".harmonia");
+
+        {
+            harmonia::test::ProjectWithClip p;
+            p.track->setName ("Drums");
+            p.clip->setName ("Beat");
+            auto* bass = p.project->addTrack ("Bass");
+            REQUIRE (bass != nullptr);
+            p.project->addMidiClip (*bass, 16.0, 8.0, "Line");
+            bass->setMute (true);
+            bass->getVolumePlugin()->setVolumeDb (-6.0f);
+            REQUIRE (p.project->save (file.getFile()).isEmpty());
+        }
+
+        juce::String error;
+        auto loaded = Project::load (session, file.getFile(), error);
+        REQUIRE_MESSAGE (loaded != nullptr, error.toStdString());
+        CHECK_FALSE (loaded->hasUnsavedChanges());
+
+        const auto tracks = loaded->getTracks();
+        REQUIRE (tracks.size() == 2);
+        CHECK (tracks[0]->getName() == "Drums");
+        CHECK (tracks[1]->getName() == "Bass");
+        CHECK (tracks[1]->isMuted (false));
+        CHECK (tracks[1]->getVolumePlugin()->getVolumeDb() == doctest::Approx (-6.0f).epsilon (0.01));
+
+        auto* line = dynamic_cast<te::MidiClip*> (tracks[1]->getClips().getFirst());
+        REQUIRE (line != nullptr);
+        CHECK (line->getName() == "Line");
+        CHECK (line->getStartBeat().inBeats() == doctest::Approx (16.0));
+        CHECK (line->getEndBeat().inBeats() == doctest::Approx (24.0));
+    }
 }

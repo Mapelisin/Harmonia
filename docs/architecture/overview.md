@@ -84,6 +84,14 @@ Tracktion останавливает воспроизведение, когда 
   компоненты `NoteGrid`, `PianoKeys`, `TimeRuler`, `ControlLane` только рисуют общий вид (`View`: масштаб и прокрутка)
   и передают ввод. Привязка к сетке и операции над нотами — чистые функции в `core/Snap`, `core/NoteOps`.
   Сетка рисует только перерисовываемую полосу, поэтому курсор воспроизведения дешёвый даже при 20 000 нот.
+- **Аранжировка** (`src/ui/arrangement`): `ArrangementModel` — дорожки, текущая дорожка и открытый в piano roll
+  клип, выделение клипов (по ID, чтобы undo не оставлял висячих указателей), привязка, режим Clip/Song, луп и
+  команды; `ArrangementGestures` — мышь (двигать, копии, края, удаление, рамка); компоненты `ClipArea`,
+  `ArrangementRuler`, `TrackHeaders`, `Arrangement` только рисуют общий вид (`ArrangementView`) и передают ввод.
+  Операции над клипами — в `core/Clips` (`move`, `setStart`, `setEnd`, `remove`), связанные копии — `core/ClipLinks`.
+  `ui/MainComponent` связывает: открытый клип → piano roll, текущая дорожка → инструмент, клавиатуры; что играет
+  Play — `ArrangementModel::getPlayRange`. Файлы (новый/открыть/сохранить, экспорт `audio/Export`) — `app/MainWindow`,
+  он владеет проектом и пересоздаёт экран при смене проекта; `MainComponent` зовёт их через `ui/FileCommands`.
 - **Ввод нот:** `ui/NoteInput` собирает ноты с клавиатуры компьютера (`ui/ComputerKeyboard`) и MIDI-клавиатур
   (`audio/MidiInputs`), даёт их услышать и во время записи пишет в клип через `core/NoteRecorder` (чистая логика:
   нажатия → ноты, круги, педаль; квантование). Место ноты — то, что человек слышал: `audio/PlaybackClock` сводит

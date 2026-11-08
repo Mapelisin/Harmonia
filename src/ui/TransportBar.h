@@ -2,16 +2,18 @@
 
 #include "audio/Transport.h"
 #include "ui/NoteInput.h"
+#include "ui/arrangement/ArrangementModel.h"
 
 namespace harmonia::ui
 {
-    /** Play, record, metronome, the position (bar.beat and time) and the note input settings:
-        the computer keyboard piano and how recorded notes are quantized. */
+    /** Play, record, metronome, what Play plays (clip or song), the position (bar.beat and
+        time) and the note input settings: the computer keyboard piano and how recorded notes
+        are quantized. */
     class TransportBar final : public juce::Component,
                                private juce::Timer
     {
     public:
-        TransportBar (audio::Transport&, te::Edit&, NoteInput&);
+        TransportBar (audio::Transport&, te::Edit&, NoteInput&, arrangement::ArrangementModel&);
         ~TransportBar() override;
 
         void resized() override;
@@ -19,12 +21,16 @@ namespace harmonia::ui
         /** Re-reads everything shown (also runs on a timer). */
         void refresh();
 
+        /** The Clip / Song button was clicked. */
+        std::function<void()> onPlayModeToggled;
+
     private:
         audio::Transport& transport;
         te::Edit& edit;
         NoteInput& noteInput;
+        arrangement::ArrangementModel& arrangementModel;
 
-        juce::TextButton playButton { "Play" }, recordButton { "Rec" }, clickButton { "Click" }, keysButton;
+        juce::TextButton playButton { "Play" }, recordButton { "Rec" }, clickButton { "Click" }, modeButton, keysButton;
         juce::Label positionLabel;
         juce::ComboBox quantizeBox;
 

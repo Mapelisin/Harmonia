@@ -3,6 +3,8 @@ add_library(harmonia_audio STATIC
     DeviceStatus.cpp
     DeviceSetup.h
     DeviceSetup.cpp
+    Export.h
+    Export.cpp
     Instruments.h
     Instruments.cpp
     MidiInputs.h

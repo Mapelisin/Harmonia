@@ -19,11 +19,29 @@ namespace harmonia::core
         // SCENES node. Creating it up front keeps track insertion cleanly undoable.
         edit->getSceneList();
 
+        edit->getUndoManager().addChangeListener (this);
+
         // A new or freshly opened project starts with an empty undo history.
         clearUndoHistory();
     }
 
-    Project::~Project() = default;
+    Project::~Project()
+    {
+        edit->getUndoManager().removeChangeListener (this);
+    }
+
+    void Project::changeListenerCallback (juce::ChangeBroadcaster*)
+    {
+        changedSinceSave = true;
+    }
+
+    void Project::markAsSaved()
+    {
+        // Change messages arrive asynchronously: take the pending ones before forgetting them.
+        edit->getUndoManager().dispatchPendingMessages();
+        changedSinceSave = false;
+        edit->resetChangedStatus();
+    }
 
     std::unique_ptr<Project> Project::createEmpty (Session& session)
     {
@@ -79,7 +97,14 @@ namespace harmonia::core
         if (! te::EditFileOperations (*edit).writeToFile (file, false))
             return "Cannot write project file: " + file.getFullPathName();
 
+        markAsSaved();
         return {};
+    }
+
+    bool Project::hasUnsavedChanges() const
+    {
+        edit->getUndoManager().dispatchPendingMessages();
+        return changedSinceSave;
     }
 
     int Project::getFormatVersion() const
@@ -137,6 +162,7 @@ namespace harmonia::core
     void Project::clearUndoHistory()
     {
         edit->getUndoManager().clearUndoHistory();
+        markAsSaved();
     }
 
     bool Project::canUndo() const

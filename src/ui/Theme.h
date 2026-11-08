@@ -49,6 +49,23 @@ namespace harmonia::ui::theme
         juce::Colour getNoteColour (int colourGroup);
     }
 
+    /** Arrangement (timeline) colours. */
+    namespace arrangement
+    {
+        inline const juce::Colour laneEven        { 0xff1f2126 };
+        inline const juce::Colour laneOdd         { 0xff1c1e23 };
+        inline const juce::Colour laneCurrent     { 0xff262a31 };
+        inline const juce::Colour belowTracks     { 0xff16181b };
+        inline const juce::Colour clipOpen        { 0xfff2f2f2 };
+        inline const juce::Colour clipText        { 0xf0101215 };
+        inline const juce::Colour loopRegion      { 0x204f9fe0 };
+        inline const juce::Colour mute            { 0xffe0a64f };
+        inline const juce::Colour solo            { 0xff62c79a };
+
+        /** Colour of a track's clips (and its header strip), by track position. */
+        juce::Colour getTrackColour (int trackIndex);
+    }
+
     namespace size
     {
         inline constexpr int headerHeight = 34;

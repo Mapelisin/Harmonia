@@ -6,7 +6,7 @@ namespace harmonia::core
 {
     /** A Harmonia project: one Tracktion Edit plus Harmonia's own metadata
         (stored as extra properties on the Edit's ValueTree). */
-    class Project
+    class Project : private juce::ChangeListener
     {
     public:
         /** Bumped whenever the on-disk format changes in a way older versions can't read. */
@@ -17,10 +17,14 @@ namespace harmonia::core
         /** Loads a project file. Returns nullptr and fills `error` on failure. */
         static std::unique_ptr<Project> load (Session&, const juce::File&, juce::String& error);
 
-        ~Project();
+        ~Project() override;
 
-        /** Writes the project to `file`. Returns an error message, empty on success. */
+        /** Writes the project to `file`. Returns an error message, empty on success.
+            On success the project counts as saved (no unsaved changes). */
         juce::String save (const juce::File& file);
+
+        /** Something changed since the project was created, opened or saved. */
+        bool hasUnsavedChanges() const;
 
         te::Edit& getEdit() noexcept                { return *edit; }
         const te::Edit& getEdit() const noexcept    { return *edit; }
@@ -49,7 +53,8 @@ namespace harmonia::core
         /** Starts a new undo transaction; everything changed until the next call is undone together. */
         void beginGesture (const juce::String& name);
 
-        /** Forgets all undo steps, e.g. after setting up a new project's defaults. */
+        /** Forgets all undo steps, e.g. after setting up a new project's defaults. The project
+            then counts as unchanged. */
         void clearUndoHistory();
 
         bool canUndo() const;
@@ -61,6 +66,13 @@ namespace harmonia::core
         explicit Project (std::unique_ptr<te::Edit>);
 
         std::unique_ptr<te::Edit> edit;
+
+        // Every undoable change counts (Tracktion's own flag only starts listening a moment after
+        // the edit is created).
+        bool changedSinceSave = false;
+
+        void changeListenerCallback (juce::ChangeBroadcaster*) override;
+        void markAsSaved();
 
         JUCE_DECLARE_NON_COPYABLE (Project)
     };

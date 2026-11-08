@@ -60,6 +60,14 @@ namespace harmonia::ui::pianoroll
 
         paintNotes (g, area);
         paintOverlays (g);
+
+        if (model.getClip() == nullptr)
+        {
+            g.setColour (theme::colour::textSecondary);
+            g.setFont (juce::FontOptions (theme::size::fontSize));
+            g.drawText ("No clip open: click a clip in the arrangement, or double-click in a track's row to make one",
+                        getLocalBounds(), juce::Justification::centred);
+        }
     }
 
     void NoteGrid::paintRows (juce::Graphics& g, juce::Rectangle<int> area)

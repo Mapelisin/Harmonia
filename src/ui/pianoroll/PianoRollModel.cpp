@@ -908,8 +908,20 @@ namespace harmonia::ui::pianoroll
 
     void PianoRollModel::handleAsyncUpdate()
     {
+        // A clip moved to another track is taken out and put back in: only a clip that is
+        // still out of the edit is gone.
         if (clipRemoved)
-            setClip (nullptr);
+        {
+            if (clip != nullptr && clip->state.isAChildOf (getEdit().state))
+            {
+                clipRemoved = false;
+                notesDirty = ghostsDirty = true;
+            }
+            else
+            {
+                setClip (nullptr);
+            }
+        }
 
         listeners.call ([] (Listener& l) { l.pianoRollChanged(); });
     }

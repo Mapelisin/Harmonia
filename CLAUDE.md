@@ -48,11 +48,16 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Piano roll: всё поведение — в `ui/pianoroll/PianoRollModel` (команды, выделение) и `GridGestures` (мышь),
   их тесты гоняют синтетические события без окна. Компоненты только рисуют и передают ввод. Время в piano roll —
   доли от начала песни; в клипе ноты хранятся от начала его содержимого (`PianoRollModel` переводит).
-- Проверка интерфейса без окна: тест «the main window paints while recording» рисует главное окно в картинку;
-  с переменной `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняет `main-recording.png`. Живая проверка мышью (скрипт
+- Проверка интерфейса без окна: тесты «the main window paints…» рисуют главное окно в картинку; с переменной
+  `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png` и `main-arrangement.png`
+  (`harmonia_tests.exe -tc="*paints*"`). Живая проверка мышью (скрипт
   кликает по окну) захватывает настоящий курсор — только если пользователь не за компьютером или разрешил.
 - Самопроверка без звука в динамиках: `--selftest --quiet` (громкость мастера в ноль, уровни меряются на дорожке).
 - Горячие клавиши сверять по `ui::keys::getLetter` (русская раскладка); клавиатура-пианино — по скан-кодам.
+- Аранжировка: поведение — в `ui/arrangement/ArrangementModel` и `ArrangementGestures` (тесты без окна).
+  Открытый клип и текущая дорожка живут в `ArrangementModel`; `MainComponent` переносит их в piano roll.
+  Перед сменой клипа piano roll — `NoteInput::finishTake()`.
+- Несохранённые изменения считает `core::Project` (любое действие в undo); `clearUndoHistory()` и `save()` их сбрасывают.
 - Сборки — в `build/` (не в git). Пробные программы — в `spikes/`, их выводы — в `docs/research/`.
 
 ## Git

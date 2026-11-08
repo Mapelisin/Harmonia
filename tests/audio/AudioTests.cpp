@@ -2,6 +2,7 @@
 
 #include "TestSession.h"
 #include "audio/DeviceSetup.h"
+#include "audio/Export.h"
 #include "audio/Instruments.h"
 #include "audio/MidiInputs.h"
 #include "audio/NotePreview.h"
@@ -166,5 +167,49 @@ TEST_SUITE ("audio::MidiInputs")
         inputs.setTrack (project->getTracks().getFirst());
         inputs.setTrack (nullptr);
         CHECK (inputs.getDeviceNames().isEmpty());
+    }
+}
+
+TEST_SUITE ("audio::exportWav")
+{
+    TEST_CASE ("the song is exported to a WAV file as long as the song plus the tail, and it isn't silent")
+    {
+        auto project = core::Project::createEmpty (test::session());
+        auto& track = *project->getTracks().getFirst();
+        REQUIRE (instruments::useBuiltInSynth (track).isEmpty());
+
+        // Two bars at 120 BPM = 4 seconds, a chord in the first bar.
+        auto* clip = project->addMidiClip (track, 0.0, 8.0, "Chord");
+        REQUIRE (clip != nullptr);
+
+        for (int pitch : { 60, 64, 67 })
+            clip->getSequence().addNote (pitch, te::BeatPosition::fromBeats (0.0), te::BeatDuration::fromBeats (2.0), 110, 0, nullptr);
+
+        juce::TemporaryFile file (".wav");
+        const auto error = audio::exportWav (project->getEdit(), file.getFile());
+        REQUIRE_MESSAGE (error.isEmpty(), error.toStdString());
+        REQUIRE (file.getFile().existsAsFile());
+
+        juce::AudioFormatManager formats;
+        formats.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file.getFile()));
+        REQUIRE (reader != nullptr);
+        CHECK (reader->getFormatName().containsIgnoreCase ("wav"));
+
+        const auto seconds = (double) reader->lengthInSamples / reader->sampleRate;
+        CHECK (seconds == doctest::Approx (4.0 + audio::exportTailSeconds).epsilon (0.02));
+
+        juce::AudioBuffer<float> buffer ((int) reader->numChannels, (int) reader->lengthInSamples);
+        reader->read (&buffer, 0, (int) reader->lengthInSamples, 0, true, true);
+        CHECK (buffer.getMagnitude (0, (int) reader->sampleRate) > 0.01f);
+    }
+
+    TEST_CASE ("an empty song is not exported")
+    {
+        auto project = core::Project::createEmpty (test::session());
+        juce::TemporaryFile file (".wav");
+
+        CHECK (audio::exportWav (project->getEdit(), file.getFile()).contains ("Nothing to export"));
+        CHECK_FALSE (file.getFile().existsAsFile());
     }
 }

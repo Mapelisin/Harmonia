@@ -12,8 +12,9 @@ namespace harmonia::ui
         track's instrument and, while recording, written into the edited clip.
 
         Recording follows FL Studio: Record arms it, and whenever the song plays while armed the
-        played notes go into the clip. The clip loops, so every pass adds to what is there
-        (overdub). A whole take, from Play to Stop, is one undo step. Notes are placed where the
+        played notes go into the clip open in the piano roll. In clip mode playback loops the
+        clip, so every pass adds to what is there (overdub); in song mode only notes played while
+        the song is inside the clip go in. A whole take, from Play to Stop, is one undo step. Notes are placed where the
         player heard the song when they pressed the key (see audio::PlaybackClock), then
         quantized if asked. Keys being held are shown in the piano roll before they are
         released and become notes. */
@@ -66,7 +67,8 @@ namespace harmonia::ui
         ComputerKeyboard computerKeyboard;
         core::NoteRecorder recorder;
         std::optional<te::Edit::UndoTransactionInhibitor> keepOneUndoStep;
-        core::note_ops::BeatRange takeLoop;
+        core::note_ops::BeatRange takeLoop, takeClipRange;
+        juce::ReferenceCountedObjectPtr<te::MidiClip> takeClip;
         double lastHeardBeat = 0.0;
 
         bool armed = false;
@@ -78,6 +80,7 @@ namespace harmonia::ui
         std::optional<double> heardBeat (double wallMs);
         void commit (const std::vector<core::Note>&);
         void commit (const std::optional<core::Note>&);
+        std::vector<core::Note> keepInsideClip (std::vector<core::Note>) const;
         void showHeld();
         void stateChanged();
         void timerCallback() override;

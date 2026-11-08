@@ -22,9 +22,13 @@ namespace harmonia::ui
         /** Which MIDI keyboards are connected, e.g. "MIDI: KeyLab 61". */
         void setMidiText (const juce::String&);
 
+        /** A short note that something worked (e.g. "Saved"); disappears after a few seconds. */
+        void setMessage (const juce::String&);
+
     private:
         core::Session& session;
-        juce::String deviceText, cpuText, rendererText, warningText, midiText;
+        juce::String deviceText, cpuText, rendererText, warningText, midiText, messageText;
+        juce::uint32 messageTime = 0;
         bool deviceOpen = false;
 
         void timerCallback() override;

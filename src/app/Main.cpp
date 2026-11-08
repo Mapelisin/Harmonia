@@ -1,8 +1,6 @@
 #include "app/MainWindow.h"
 #include "app/SelfTest.h"
 #include "audio/DeviceSetup.h"
-#include "audio/Instruments.h"
-#include "core/Clips.h"
 #include "ui/PluginWindow.h"
 #include "ui/Theme.h"
 
@@ -61,18 +59,13 @@ namespace harmonia::app
             session = createSession (true);
             const auto deviceProblem = audio::checkStartupDevice (*session);
 
-            project = core::Project::createEmpty (*session);
+            mainWindow = std::make_unique<MainWindow> (*session, MainWindow::createNewProject (*session));
 
-            // A new project starts with an instrument and an empty 4-bar clip, ready to draw notes in.
-            if (auto* track = project->getTracks().getFirst())
-            {
-                audio::instruments::useBuiltInSynth (*track);
-                core::clips::getOrAddMainClip (*project, *track, 4 * core::clips::getBeatsPerBar (project->getEdit()));
-            }
-
-            project->clearUndoHistory();
-
-            mainWindow = std::make_unique<MainWindow> (*session, *project);
+            // A project file given on the command line (double-clicked in Explorer).
+            if (const juce::File file (commandLine.unquoted().trim()); commandLine.isNotEmpty()
+                    && juce::File::isAbsolutePath (file.getFullPathName()) && file.existsAsFile()
+                    && file.hasFileExtension (MainWindow::fileExtension))
+                mainWindow->open (file);
 
             if (deviceProblem.isNotEmpty())
                 mainWindow->showWarning (deviceProblem);
@@ -81,20 +74,21 @@ namespace harmonia::app
         void shutdown() override
         {
             mainWindow.reset();
-            project.reset();
             session.reset();
             juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
         }
 
         void systemRequestedQuit() override
         {
-            quit();
+            if (mainWindow != nullptr)
+                mainWindow->askToSaveChanges ([this] { quit(); });
+            else
+                quit();
         }
 
     private:
         ui::theme::LookAndFeel lookAndFeel;
         std::unique_ptr<core::Session> session;
-        std::unique_ptr<core::Project> project;
         std::unique_ptr<MainWindow> mainWindow;
     };
 }

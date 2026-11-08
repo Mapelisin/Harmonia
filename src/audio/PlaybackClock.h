@@ -14,6 +14,9 @@ namespace harmonia::audio
         /** The song beat the listener heard at `wallMs` (juce::Time::getMillisecondCounterHiRes()),
             or nothing when the song isn't playing. */
         virtual std::optional<double> getHeardBeat (double wallMs) const = 0;
+
+        /** The range playback loops, in song beats; empty when it doesn't loop. */
+        virtual juce::Range<double> getLoopBeats() const = 0;
     };
 
     /** SongClock of an edit's transport.
@@ -36,6 +39,7 @@ namespace harmonia::audio
 
         bool isPlaying() const override;
         std::optional<double> getHeardBeat (double wallMs) const override;
+        juce::Range<double> getLoopBeats() const override;
 
         /** Total delay between rendering and hearing, in seconds. */
         double getLatencySeconds() const;

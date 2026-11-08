@@ -13,6 +13,7 @@ add_library(harmonia_ui STATIC
     ComputerKeyboard.cpp
     NoteInput.h
     NoteInput.cpp
+    FileCommands.h
     TransportBar.h
     TransportBar.cpp
     InstrumentPanel.h
@@ -35,6 +36,19 @@ add_library(harmonia_ui STATIC
     pianoroll/NotePropertiesPanel.cpp
     pianoroll/PianoRoll.h
     pianoroll/PianoRoll.cpp
+    arrangement/ArrangementView.h
+    arrangement/ArrangementModel.h
+    arrangement/ArrangementModel.cpp
+    arrangement/ArrangementGestures.h
+    arrangement/ArrangementGestures.cpp
+    arrangement/ClipArea.h
+    arrangement/ClipArea.cpp
+    arrangement/ArrangementRuler.h
+    arrangement/ArrangementRuler.cpp
+    arrangement/TrackHeaders.h
+    arrangement/TrackHeaders.cpp
+    arrangement/Arrangement.h
+    arrangement/Arrangement.cpp
     MainComponent.h
     MainComponent.cpp)
 

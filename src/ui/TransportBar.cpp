@@ -3,8 +3,8 @@
 
 namespace harmonia::ui
 {
-    TransportBar::TransportBar (audio::Transport& t, te::Edit& e, NoteInput& n)
-        : transport (t), edit (e), noteInput (n)
+    TransportBar::TransportBar (audio::Transport& t, te::Edit& e, NoteInput& n, arrangement::ArrangementModel& a)
+        : transport (t), edit (e), noteInput (n), arrangementModel (a)
     {
         playButton.setTooltip ("Play / stop (Space)");
         playButton.onClick = [this]
@@ -13,7 +13,7 @@ namespace harmonia::ui
             refresh();
         };
 
-        recordButton.setTooltip ("Record: notes played while the song plays go into the clip (R, Ctrl+R)");
+        recordButton.setTooltip ("Record (R): notes played while the song plays go into the clip open in the piano roll");
         recordButton.onClick = [this] { noteInput.setRecordArmed (! noteInput.isRecordArmed()); };
 
         clickButton.setTooltip ("Metronome (Ctrl+M)");
@@ -21,6 +21,15 @@ namespace harmonia::ui
         {
             edit.clickTrackEnabled = ! edit.clickTrackEnabled.get();
             refresh();
+        };
+
+        modeButton.setTooltip ("What Play plays (L): the clip open in the piano roll, looped (Clip),\n"
+                               "or the arrangement (Song: the loop region set with Ctrl+drag on its ruler, or the whole song).\n"
+                               "Like PAT / SONG in FL Studio.");
+        modeButton.onClick = [this]
+        {
+            if (onPlayModeToggled != nullptr)
+                onPlayModeToggled();
         };
 
         keysButton.setTooltip ("Play notes on the computer keyboard (Ctrl+T).\n"
@@ -48,7 +57,7 @@ namespace harmonia::ui
         positionLabel.setFont (juce::FontOptions (theme::size::fontSize));
         positionLabel.setJustificationType (juce::Justification::centredLeft);
 
-        for (auto* c : std::initializer_list<juce::Component*> { &playButton, &recordButton, &clickButton, &positionLabel,
+        for (auto* c : std::initializer_list<juce::Component*> { &playButton, &recordButton, &clickButton, &modeButton, &positionLabel,
                                                                  &keysButton, &quantizeBox })
         {
             c->setWantsKeyboardFocus (false);
@@ -76,6 +85,7 @@ namespace harmonia::ui
         place (playButton, 60);
         place (recordButton, 50);
         place (clickButton, 54);
+        place (modeButton, 54);
         area.removeFromLeft (theme::size::padding);
         place (positionLabel, 110);
         place (keysButton, 78);
@@ -101,6 +111,11 @@ namespace harmonia::ui
 
         clickButton.setColour (juce::TextButton::buttonColourId,
                                edit.clickTrackEnabled.get() ? theme::colour::accent.withAlpha (0.35f) : theme::colour::surfaceRaised);
+
+        const auto song = arrangementModel.getPlayMode() == arrangement::PlayMode::song;
+        modeButton.setButtonText (song ? "Song" : "Clip");
+        modeButton.setColour (juce::TextButton::buttonColourId,
+                              song ? theme::colour::warning.withAlpha (0.35f) : theme::colour::surfaceRaised);
 
         const auto& keyboard = noteInput.getComputerKeyboard();
         keysButton.setButtonText ("Keys  C" + juce::String (keyboard.getOctave()));
