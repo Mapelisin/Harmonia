@@ -1,4 +1,5 @@
 #include "ui/automation/AutomationPanel.h"
+#include "ui/TrackColours.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui::automation
@@ -58,7 +59,7 @@ namespace harmonia::ui::automation
 
         if (track != nullptr)
         {
-            g.setColour (theme::arrangement::getTrackColour (model.indexOf (track.get())));
+            g.setColour (track_colours::getTrackColour (*track, model.indexOf (track.get())));
             g.fillRect (0, 0, 4, getHeight());
         }
     }
@@ -108,7 +109,7 @@ namespace harmonia::ui::automation
         }
 
         lane.setParameter (parameter);
-        lane.setLineColour (current != nullptr ? theme::arrangement::getTrackColour (model.indexOf (current))
+        lane.setLineColour (current != nullptr ? track_colours::getTrackColour (*current, model.indexOf (current))
                                                : theme::colour::accent);
         updateControls();
         lane.repaint();

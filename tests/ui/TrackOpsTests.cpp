@@ -219,6 +219,7 @@ TEST_SUITE ("arrangement: track commands")
         ArrangementModel model { *project };
         auto& lead = *project->getTracks().getFirst();
         lead.setName ("Lead");
+        core::tracks::setColour (lead, juce::Colour (0xff336699));
         REQUIRE (instruments::useBuiltInSynth (lead).isEmpty());
         auto* clip = project->addMidiClip (lead, 4.0, 4.0, "Lead");
         core::NoteEditor (*clip).add ({ makeNote (60, 0.0, 2.0), makeNote (67, 0.0, 2.0) });   // 2–3 s
@@ -245,6 +246,7 @@ TEST_SUITE ("arrangement: track commands")
         REQUIRE (getNames (model) == juce::StringArray { "Lead", "Lead (audio)", "Bass" });
         auto* audioTrack = model.getTrack (1);
         CHECK (core::tracks::isAudio (*audioTrack));
+        CHECK (core::tracks::getColour (*audioTrack) == juce::Colour (0xff336699));      // looks like the track it came from
         CHECK (lead.isMuted (false));
         CHECK (model.getCurrentTrack() == audioTrack);
         CHECK (sends::getLevelDb (*audioTrack, *reverb) == doctest::Approx (-6.0f).epsilon (0.01));

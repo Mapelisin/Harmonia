@@ -1,4 +1,5 @@
 #include "ui/mixer/ChannelStrip.h"
+#include "ui/TrackColours.h"
 #include "audio/Sends.h"
 #include "core/Tracks.h"
 #include "ui/Theme.h"
@@ -314,7 +315,7 @@ namespace harmonia::ui::mixer
         if (isReturn())
             return theme::mixer::returnTrack;
 
-        return theme::arrangement::getTrackColour (model.indexOf (track.get()));
+        return track_colours::getTrackColour (*track, model.indexOf (track.get()));
     }
 
     bool ChannelStrip::isReturn() const

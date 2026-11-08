@@ -16,6 +16,8 @@ namespace harmonia::core::clips
             return edit.tempoSequence.toBeats (time).inBeats();
         }
 
+        const juce::Identifier colourId ("hClipColour");
+
         te::AudioFadeCurve::Type toEngine (FadeShape shape)
         {
             switch (shape)
@@ -334,5 +336,26 @@ namespace harmonia::core::clips
     void setGainDb (te::AudioClipBase& clip, float db)
     {
         clip.setGainDB (juce::jlimit (silentGainDb, maxGainDb, db));
+    }
+
+    //==============================================================================
+    std::optional<juce::Colour> getColour (const te::Clip& clip)
+    {
+        const auto text = clip.state[colourId].toString();
+
+        if (text.isEmpty())
+            return std::nullopt;
+
+        return juce::Colour::fromString (text);
+    }
+
+    void setColour (te::Clip& clip, std::optional<juce::Colour> colour)
+    {
+        auto* undoManager = &clip.edit.getUndoManager();
+
+        if (colour.has_value() && ! colour->isTransparent())
+            clip.state.setProperty (colourId, colour->toString(), undoManager);
+        else
+            clip.state.removeProperty (colourId, undoManager);
     }
 }

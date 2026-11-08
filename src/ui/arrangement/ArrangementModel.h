@@ -166,6 +166,12 @@ namespace harmonia::ui::arrangement
         /** Clips still named after the track get the new name too. */
         void renameTrack (te::AudioTrack&, const juce::String&);
 
+        /** A colour for the track (none: by its place in the song). One undo step. */
+        void setTrackColour (te::AudioTrack&, std::optional<juce::Colour>);
+
+        /** A colour for these clips (none: their track's). One undo step. */
+        void setClipColour (const juce::Array<te::Clip*>&, std::optional<juce::Colour>);
+
         /** An empty one-bar clip in the grid cell at `beat`, opened in the piano roll.
             Nothing on an audio track. */
         te::MidiClip* createClip (te::AudioTrack&, double beat);

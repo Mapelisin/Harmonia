@@ -18,4 +18,10 @@ namespace harmonia::core::tracks
 
     inline bool isAudio (const te::AudioTrack& track)  { return getKind (track) == Kind::audio; }
     inline bool isReturn (const te::AudioTrack& track) { return getKind (track) == Kind::fxReturn; }
+
+    /** The colour the user chose for the track; none means it is coloured by its place in the song. */
+    std::optional<juce::Colour> getColour (const te::Track&);
+
+    /** Undoable (the caller starts the gesture). Saved with the project. */
+    void setColour (te::Track&, std::optional<juce::Colour>);
 }

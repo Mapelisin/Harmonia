@@ -83,6 +83,10 @@ namespace harmonia::ui::arrangement
         void updateScrollBars();
         void updatePlayhead();
         void showClipMenu (te::Clip&, juce::Point<float>);
+    public:
+        /** The menu a right-click on the clip's mark shows. */
+        juce::PopupMenu createClipMenu (te::Clip&);
+    private:
         void askToRename (te::Clip&);
         double getPlayheadBeat() const;
         void tell (const juce::String&, bool isProblem);

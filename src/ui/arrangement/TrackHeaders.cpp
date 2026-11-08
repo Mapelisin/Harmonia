@@ -1,4 +1,5 @@
 #include "ui/arrangement/TrackHeaders.h"
+#include "ui/TrackColours.h"
 #include "audio/AudioInputs.h"
 #include "audio/Instruments.h"
 #include "core/Clips.h"
@@ -235,7 +236,7 @@ namespace harmonia::ui::arrangement
 
             g.setColour (isCurrent ? colours::laneCurrent : theme::colour::surface);
             g.fillRect (bounds);
-            g.setColour (colours::getTrackColour (index).withAlpha (isCurrent ? 1.0f : 0.7f));
+            g.setColour (track_colours::getTrackColour (*track, index).withAlpha (isCurrent ? 1.0f : 0.7f));
             g.fillRect (bounds.removeFromLeft (colourStripWidth));
             g.setColour (theme::colour::border);
             g.fillRect (getLocalBounds().removeFromBottom (1));
@@ -319,6 +320,11 @@ namespace harmonia::ui::arrangement
                 if (safe != nullptr)
                     safe->name.showEditor();
             });
+            menu.addSubMenu ("Colour", track_colours::createMenu (core::tracks::getColour (*track), "Automatic",
+                                                                  [&m = model, t = track] (std::optional<juce::Colour> colour)
+                                                                  {
+                                                                      m.setTrackColour (*t, colour);
+                                                                  }));
             if (core::tracks::isAudio (*track))
             {
                 auto& engine = track->edit.engine;

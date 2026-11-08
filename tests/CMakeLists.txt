@@ -39,7 +39,8 @@ add_executable(harmonia_tests
     ui/TrackOpsTests.cpp
     ui/NoteCommandsTests.cpp
     ui/NoteToolWindowTests.cpp
-    ui/ScaleChordTests.cpp)
+    ui/ScaleChordTests.cpp
+    ui/TrackColourTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)

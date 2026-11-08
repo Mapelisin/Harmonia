@@ -102,4 +102,12 @@ namespace harmonia::core::clips
     void setGainDb (te::AudioClipBase&, float db);
 
     inline constexpr float maxGainDb = 6.0f, silentGainDb = -100.0f;
+
+    //==============================================================================
+    /** The colour the user chose for the clip; none means its track's colour. (Tracktion gives
+        every clip a colour of its own when it is made, so this is kept apart from it.) */
+    std::optional<juce::Colour> getColour (const te::Clip&);
+
+    /** Undoable (the caller starts the gesture). Saved with the project; copies keep it. */
+    void setColour (te::Clip&, std::optional<juce::Colour>);
 }

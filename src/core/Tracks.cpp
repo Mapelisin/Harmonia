@@ -22,6 +22,24 @@ namespace harmonia::core::tracks
         return Kind::instrument;
     }
 
+    std::optional<juce::Colour> getColour (const te::Track& track)
+    {
+        const auto colour = track.getColour();
+
+        if (colour.isTransparent())
+            return std::nullopt;
+
+        return colour;
+    }
+
+    void setColour (te::Track& track, std::optional<juce::Colour> colour)
+    {
+        if (colour.has_value() && ! colour->isTransparent())
+            track.setColour (*colour);
+        else
+            track.state.removeProperty (te::IDs::colour, &track.edit.getUndoManager());
+    }
+
     void setKind (te::AudioTrack& track, Kind kind)
     {
         auto* undoManager = &track.edit.getUndoManager();

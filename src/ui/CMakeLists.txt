@@ -1,6 +1,8 @@
 add_library(harmonia_ui STATIC
     Theme.h
     Theme.cpp
+    TrackColours.h
+    TrackColours.cpp
     RenderingPolicy.h
     RenderingPolicy.cpp
     StatusBar.h

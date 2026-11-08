@@ -1,4 +1,5 @@
 #include "ui/arrangement/Arrangement.h"
+#include "ui/TrackColours.h"
 #include "audio/AudioInputs.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
@@ -382,6 +383,12 @@ namespace harmonia::ui::arrangement
     //==============================================================================
     void Arrangement::showClipMenu (te::Clip& clip, juce::Point<float> position)
     {
+        const auto screen = clipArea.localPointToGlobal (position.toInt());
+        createClipMenu (clip).showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea ({ screen.x, screen.y, 1, 1 }));
+    }
+
+    juce::PopupMenu Arrangement::createClipMenu (te::Clip& clip)
+    {
         const te::Clip::Ptr target (&clip);
         const auto isValid = [target] { return target != nullptr && core::clips::isInEdit (*target); };
         auto* midi = dynamic_cast<te::MidiClip*> (&clip);
@@ -389,6 +396,28 @@ namespace harmonia::ui::arrangement
         juce::PopupMenu menu;
         menu.addSectionHeader (clip.getName());
         menu.addItem ("Rename...", [this, target, isValid] { if (isValid()) askToRename (*target); });
+
+        // The colour goes to the whole selection if the clip is in it.
+        juce::Array<te::Clip::Ptr> coloured;
+
+        if (model.isSelected (clip))
+            for (auto* selected : model.getSelectedClips())
+                coloured.add (selected);
+        else
+            coloured.add (target);
+
+        menu.addSubMenu (coloured.size() > 1 ? "Colour (" + juce::String (coloured.size()) + " clips)" : juce::String ("Colour"),
+                         track_colours::createMenu (core::clips::getColour (clip), "Same as the track",
+                                                    [this, coloured] (std::optional<juce::Colour> colour)
+                                                    {
+                                                        juce::Array<te::Clip*> clips;
+
+                                                        for (const auto& c : coloured)
+                                                            if (c != nullptr && core::clips::isInEdit (*c))
+                                                                clips.add (c.get());
+
+                                                        model.setClipColour (clips, colour);
+                                                    }));
 
         if (midi != nullptr)
         {
@@ -463,9 +492,7 @@ namespace harmonia::ui::arrangement
 
         menu.addSeparator();
         menu.addItem ("Delete (Del)", [this] { model.deleteSelected(); });
-
-        const auto screen = clipArea.localPointToGlobal (position.toInt());
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea ({ screen.x, screen.y, 1, 1 }));
+        return menu;
     }
 
     void Arrangement::exportClipAsMidi (te::MidiClip& clip)

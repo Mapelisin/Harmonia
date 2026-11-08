@@ -418,4 +418,47 @@ TEST_SUITE ("piano roll: tool windows")
         pianoRoll.removeChildComponent (window.get());
         window.reset();
     }
+
+    TEST_CASE ("the Chord progression window over an empty clip draws")
+    {
+        auto project = core::Project::createEmpty (test::session());
+        MainComponent main (test::session(), *project);
+        main.setBounds (0, 0, 1280, 800);
+
+        auto* clip = project->addMidiClip (*project->getTracks().getFirst(), 0.0, 16.0, "Chords");
+        auto& model = main.getPianoRollModel();
+        model.setClip (clip);
+        model.setScale ({ 9, core::scales::ScaleType::minor });
+
+        auto& pianoRoll = main.getPianoRoll();
+        pianoRoll.showClip();
+
+        std::unique_ptr<NoteToolWindow> window;
+        pianoRoll.onShowNoteTool = [&] (std::unique_ptr<NoteToolWindow> w) { window = std::move (w); };
+        CHECK (main.keyPressed (juce::KeyPress ('P', juce::ModifierKeys::altModifier, 0)));
+        REQUIRE (window != nullptr);
+
+        pianoRoll.addAndMakeVisible (*window);
+        window->setTopLeftPosition (560, 40);
+        window->setValue (indexOf (*window, "Rhythm"), 3.0);        // offbeats
+        window->setValue (indexOf (*window, "Bass"), 1.0);
+        pianoRoll.showClip();
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
+
+        CHECK (model.getNotes().size() == 4 * (4 * 3 + 1));
+
+        const auto image = main.createComponentSnapshot (main.getLocalBounds());
+        CHECK (image.isValid());
+
+        if (const auto dir = juce::SystemStats::getEnvironmentVariable ("HARMONIA_SNAPSHOT_DIR", {}); dir.isNotEmpty())
+        {
+            juce::FileOutputStream out (juce::File (dir).getChildFile ("main-chords.png"));
+            out.setPosition (0);
+            out.truncate();
+            juce::PNGImageFormat().writeImageToStream (image, out);
+        }
+
+        pianoRoll.removeChildComponent (window.get());
+        window.reset();
+    }
 }

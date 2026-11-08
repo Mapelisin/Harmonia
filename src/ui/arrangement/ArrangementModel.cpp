@@ -660,6 +660,9 @@ namespace harmonia::ui::arrangement
         const auto name = track.getName() + " (audio)";
         auto* audioTrack = createAudioTrack (name, &track);
 
+        if (audioTrack != nullptr)
+            core::tracks::setColour (*audioTrack, core::tracks::getColour (track));
+
         if (audioTrack == nullptr)
             return "Couldn't add a track for the audio";
 
@@ -919,6 +922,32 @@ namespace harmonia::ui::arrangement
         core::clip_links::unlink (clip);
         clipsDirty = true;
         changed();
+    }
+
+    void ArrangementModel::setTrackColour (te::AudioTrack& track, std::optional<juce::Colour> colour)
+    {
+        if (core::tracks::getColour (track) == colour)
+            return;
+
+        project.beginGesture ("Track colour");
+        core::tracks::setColour (track, colour);
+    }
+
+    void ArrangementModel::setClipColour (const juce::Array<te::Clip*>& clips, std::optional<juce::Colour> colour)
+    {
+        auto began = false;
+
+        for (auto* clip : clips)
+        {
+            if (clip == nullptr || core::clips::getColour (*clip) == colour)
+                continue;
+
+            if (! began)
+                project.beginGesture ("Clip colour");
+
+            began = true;
+            core::clips::setColour (*clip, colour);
+        }
     }
 
     void ArrangementModel::renameClip (te::Clip& clip, const juce::String& name)

@@ -1,4 +1,5 @@
 #include "ui/arrangement/ClipArea.h"
+#include "ui/TrackColours.h"
 #include "core/Clips.h"
 #include "ui/Theme.h"
 #include <set>
@@ -140,7 +141,7 @@ namespace harmonia::ui::arrangement
                                                              view.beatToX (d.endBeat), top + view.trackHeight - 2.0f);
         r.setWidth (std::max (r.getWidth(), 3.0f));
 
-        const auto colour = colours::getTrackColour (d.trackIndex);
+        const auto colour = track_colours::getClipColour (*d.clip, d.trackIndex);
         const auto header = r.withHeight (headerHeight);
         const auto body = r.withTrimmedTop (headerHeight);
 
