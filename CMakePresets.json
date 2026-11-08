@@ -1,0 +1,32 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "windows-base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "windows-release",
+            "displayName": "Windows Release (MSVC, Ninja)",
+            "inherits": "windows-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+        },
+        {
+            "name": "windows-debug",
+            "displayName": "Windows Debug (MSVC, Ninja)",
+            "inherits": "windows-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+        }
+    ],
+    "buildPresets": [
+        { "name": "windows-release", "configurePreset": "windows-release" },
+        { "name": "windows-debug", "configurePreset": "windows-debug" }
+    ],
+    "testPresets": [
+        { "name": "windows-release", "configurePreset": "windows-release", "output": { "outputOnFailure": true } },
+        { "name": "windows-debug", "configurePreset": "windows-debug", "output": { "outputOnFailure": true } }
+    ]
+}

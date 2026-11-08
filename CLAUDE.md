@@ -31,7 +31,13 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Зависимости: подмодуль `external/tracktion_engine` (JUCE внутри него, `modules/juce`). Вложенный подмодуль
   прописан через SSH, поэтому инициализировать так:
   `git -c url."https://github.com/".insteadOf="git@github.com:" submodule update --init --recursive`
-- C++: MSVC + CMake + Ninja из Visual Studio 2026 через `vcvars64.bat` (пример — `spikes/01-engine-playback/build.cmd`).
+- C++: MSVC + CMake + Ninja из Visual Studio 2026 через `vcvars64.bat`.
+- **Одна команда:** `tools\build.cmd [windows-release|windows-debug]` — настройка, сборка и тесты (её же запускает CI).
+  Пресеты — в `CMakePresets.json`. Программа: `build\windows-release\src\app\Harmonia_artefacts\Release\Harmonia.exe`.
+- Структура: `src/core` (модель проекта, без GUI), `src/audio` (движок, устройства), `src/ui` (интерфейс),
+  `src/app` (точка входа), `tests/` (doctest, по папке на модуль). JUCE+Tracktion компилируются один раз
+  в библиотеку `harmonia_juce` (`cmake/HarmoniaJuce.cmake`); новые цели настраивать через `harmonia_configure_target`.
+- Предупреждения — ошибки (`/W4 /WX`). Каждое изменение модели — с тестом.
 - Сборки — в `build/` (не в git). Пробные программы — в `spikes/`, их выводы — в `docs/research/`.
 
 ## Git
