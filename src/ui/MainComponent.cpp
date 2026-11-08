@@ -1,4 +1,5 @@
 #include "ui/MainComponent.h"
+#include "core/Markers.h"
 #include "core/MidiFiles.h"
 #include "core/Tracks.h"
 #include "audio/DeviceStatus.h"
@@ -328,6 +329,22 @@ namespace harmonia::ui
         const auto mods = key.getModifiers();
         const auto letter = keys::getLetter (key);
         const auto code = key.getKeyCode();
+
+        // Ctrl+Left / Ctrl+Right: play from the previous / next marker.
+        if (mods.isCommandDown() && ! mods.isShiftDown() && ! mods.isAltDown()
+            && (code == juce::KeyPress::leftKey || code == juce::KeyPress::rightKey))
+        {
+            const auto now = project.getEdit().tempoSequence.toBeats (te::TimePosition::fromSeconds (transport.getPositionSeconds())).inBeats();
+            const auto target = code == juce::KeyPress::leftKey ? core::markers::findAtOrBefore (project.getEdit(), now - 1.0e-3)
+                                                                : core::markers::findAfter (project.getEdit(), now + 1.0e-6);
+
+            if (target.has_value())
+                playFrom (target->beat);
+            else if (code == juce::KeyPress::leftKey)
+                playFrom (0.0);
+
+            return true;
+        }
 
         if (! mods.isAnyModifierKeyDown()
             && (code == juce::KeyPress::F7Key || code == juce::KeyPress::F8Key || code == juce::KeyPress::F9Key))

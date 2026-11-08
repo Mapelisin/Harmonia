@@ -31,7 +31,7 @@ namespace harmonia::ui::arrangement
         {
             for (; tree.isValid(); tree = tree.getParent())
                 if (tree.hasType (te::IDs::TRACK) || tree.hasType (te::IDs::MIDICLIP) || tree.hasType (te::IDs::AUDIOCLIP)
-                    || tree.hasType (te::IDs::TEMPOSEQUENCE))
+                    || tree.hasType (te::IDs::TEMPOSEQUENCE) || core::markers::isMarkerTree (tree))
                     return true;
 
             return false;
@@ -948,6 +948,57 @@ namespace harmonia::ui::arrangement
             began = true;
             core::clips::setColour (*clip, colour);
         }
+    }
+
+    std::vector<core::markers::Marker> ArrangementModel::getMarkers() const
+    {
+        return core::markers::getAll (project.getEdit());
+    }
+
+    core::markers::Marker ArrangementModel::addMarker (double beat, const juce::String& name)
+    {
+        project.beginGesture ("Add marker");
+        return core::markers::add (getEdit(), beat, name.trim().isNotEmpty() ? name.trim() : getNewMarkerName());
+    }
+
+    void ArrangementModel::renameMarker (const core::markers::Marker& marker, const juce::String& name)
+    {
+        if (name.trim().isEmpty() || name.trim() == marker.name)
+            return;
+
+        project.beginGesture ("Rename marker");
+        core::markers::rename (getEdit(), marker, name);
+    }
+
+    void ArrangementModel::removeMarker (const core::markers::Marker& marker)
+    {
+        project.beginGesture ("Delete marker");
+        core::markers::remove (getEdit(), marker);
+    }
+
+    juce::String ArrangementModel::getNewMarkerName() const
+    {
+        juce::StringArray used;
+
+        for (const auto& m : getMarkers())
+            used.add (m.name);
+
+        for (const auto& name : core::markers::getSuggestedNames())
+            if (! used.contains (name))
+                return name;
+
+        return "Marker " + juce::String (used.size() + 1);
+    }
+
+    void ArrangementModel::loopSection (const core::markers::Marker& marker)
+    {
+        const auto [start, end] = core::markers::getSection (project.getEdit(), marker, getSongEndBeat());
+
+        if (end <= start)
+            return;
+
+        setPlayMode (PlayMode::song);
+        setLoopRegion ({ start, end });
     }
 
     void ArrangementModel::setLooping (te::MidiClip& clip, bool shouldLoop)

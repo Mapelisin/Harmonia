@@ -46,6 +46,12 @@ namespace harmonia::ui::arrangement
             showClipMenu (clip, position);
         };
 
+        addMarkerButton.setTooltip ("Add a marker (a named place: Verse, Chorus...) where the playhead is. "
+                                    "Double-click the strip above the bar numbers to add one there.");
+        addMarkerButton.onClick = [this] { addMarkerAtPlayhead(); };
+        addAndMakeVisible (addMarkerButton);
+        ruler.onRenameMarker = [this] (const core::markers::Marker& marker) { askToRenameMarker (marker); };
+
         ruler.onPositionChosen = [this] (double beat)
         {
             if (onPositionChosen != nullptr)
@@ -78,13 +84,21 @@ namespace harmonia::ui::arrangement
         g.fillAll (theme::colour::surface);
         g.setColour (theme::colour::border);
         g.fillRect (0, rulerHeight - 1, headerWidth, 1);
+
+        g.setColour (theme::colour::textSecondary);
+        g.setFont (juce::FontOptions (theme::size::smallFontSize));
+        g.drawText ("Markers", juce::Rectangle<int> (8, 0, 60, (int) ArrangementRuler::markerLaneHeight),
+                    juce::Justification::centredLeft, false);
     }
 
     void Arrangement::resized()
     {
         auto area = getLocalBounds();
         auto top = area.removeFromTop (rulerHeight);
-        auto corner = top.removeFromLeft (headerWidth).reduced (4, 1);
+        auto corner = top.removeFromLeft (headerWidth);
+        auto markerRow = corner.removeFromTop ((int) ArrangementRuler::markerLaneHeight);
+        addMarkerButton.setBounds (markerRow.removeFromRight (72).reduced (4, 1));
+        corner = corner.reduced (4, 1);
         addTrackButton.setBounds (corner.removeFromLeft (64));
         corner.removeFromLeft (4);
         snapBox.setBounds (corner);
@@ -531,6 +545,29 @@ namespace harmonia::ui::arrangement
             const auto error = core::midi_files::writeClip (*midi, file);
             safe->tell (error.isNotEmpty() ? error : "Exported " + file.getFileName(), error.isNotEmpty());
         });
+    }
+
+    void Arrangement::addMarkerAtPlayhead()
+    {
+        model.addMarker (std::max (0.0, core::snap::snapNearest (getPlayheadBeat(), core::snap::Mode::beat, model.getSnapContext())),
+                         model.getNewMarkerName());
+    }
+
+    void Arrangement::askToRenameMarker (const core::markers::Marker& marker)
+    {
+        auto* window = new juce::AlertWindow ("Rename marker", {}, juce::MessageBoxIconType::NoIcon, this);
+        window->addTextEditor ("name", marker.name);
+        window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
+        window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+        juce::Component::SafePointer<juce::AlertWindow> safeWindow (window);
+        juce::Component::SafePointer<Arrangement> safeThis (this);
+
+        window->enterModalState (true, juce::ModalCallbackFunction::create ([safeThis, marker, safeWindow] (int result)
+        {
+            if (result == 1 && safeThis != nullptr && safeWindow != nullptr)
+                safeThis->model.renameMarker (marker, safeWindow->getTextEditorContents ("name"));
+        }), true);
     }
 
     void Arrangement::askToRename (te::Clip& clip)

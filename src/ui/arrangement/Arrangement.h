@@ -59,7 +59,15 @@ namespace harmonia::ui::arrangement
         /** Asks where to save the clip's notes as a MIDI file. */
         void exportClipAsMidi (te::MidiClip&);
 
-        static constexpr int headerWidth = 200, rulerHeight = 22, scrollBarSize = 10;
+        static constexpr int headerWidth = 200, rulerHeight = 40, scrollBarSize = 10;
+
+        ArrangementRuler& getRuler() noexcept       { return ruler; }
+
+        /** Adds a marker where the playhead is (the "+ Marker" button). */
+        void addMarkerAtPlayhead();
+
+        /** Asks for the marker's new name. */
+        void askToRenameMarker (const core::markers::Marker&);
 
     private:
         ArrangementModel& model;
@@ -69,7 +77,7 @@ namespace harmonia::ui::arrangement
         ClipArea clipArea { model, view };
         ArrangementRuler ruler { model, view };
         TrackHeaders headers { model, view };
-        juce::TextButton addTrackButton { "+ Track" };
+        juce::TextButton addTrackButton { "+ Track" }, addMarkerButton { "+ Marker" };
         juce::ComboBox snapBox;
         juce::ScrollBar horizontalScroll { false }, verticalScroll { true };
 

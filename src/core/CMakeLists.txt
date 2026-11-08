@@ -30,6 +30,8 @@ add_library(harmonia_core STATIC
     Scales.cpp
     Progressions.h
     Progressions.cpp
+    Markers.h
+    Markers.cpp
     NoteRecorder.h
     NoteRecorder.cpp)
 

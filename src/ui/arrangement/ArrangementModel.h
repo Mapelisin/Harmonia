@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Markers.h"
 #include "core/NoteOps.h"
 #include "core/Project.h"
 #include "core/Snap.h"
@@ -234,6 +235,21 @@ namespace harmonia::ui::arrangement
         std::optional<core::note_ops::BeatRange> getLoopRegion() const   { return loopRegion; }
         void setLoopRegion (core::note_ops::BeatRange);
         void clearLoopRegion();
+
+        //==============================================================================
+        // Markers: named places in the song (core::markers); each change is one undo step.
+
+        std::vector<core::markers::Marker> getMarkers() const;
+        core::markers::Marker addMarker (double beat, const juce::String& name);
+        void renameMarker (const core::markers::Marker&, const juce::String& name);
+        void removeMarker (const core::markers::Marker&);
+
+        /** A name for a new marker: the first suggestion not used yet ("Intro", "Verse"...), else
+            "Marker N". */
+        juce::String getNewMarkerName() const;
+
+        /** Song mode, looping from the marker to the next one (or the song's end). */
+        void loopSection (const core::markers::Marker&);
 
         /** What Play loops: the open clip (or the clicked audio clip) in clip mode; in song mode
             the loop region, or else

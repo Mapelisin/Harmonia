@@ -64,6 +64,12 @@ namespace harmonia::ui::arrangement
             }
         }
 
+        // The markers' lines, faint: where the song's parts begin.
+        g.setColour (theme::colour::accent.withAlpha (0.3f));
+
+        for (const auto& marker : model.getMarkers())
+            g.fillRect (juce::Rectangle<float> (std::round (view.beatToX (marker.beat)), (float) area.getY(), 1.0f, (float) area.getHeight()));
+
         const auto leftBeat = view.xToBeat ((float) area.getX()), rightBeat = view.xToBeat ((float) area.getRight());
 
         for (const auto& d : model.getClips())
