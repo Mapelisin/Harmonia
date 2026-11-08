@@ -1,22 +1,77 @@
 #include "app/MainWindow.h"
+#include "app/SelfTest.h"
+#include "audio/DeviceSetup.h"
+#include "audio/Instruments.h"
+#include "ui/PluginWindow.h"
 #include "ui/Theme.h"
 
 namespace harmonia::app
 {
+    namespace
+    {
+        /** Harmonia.exe is also started as the plugin-scanning child process. */
+        bool isPluginScanChild (const juce::String& commandLine)
+        {
+            return commandLine.contains ("PluginScan");
+        }
+
+        std::unique_ptr<core::Session> createSession (bool openDevices)
+        {
+            core::Session::Options options;
+            options.openDevices = openDevices;
+            options.uiBehaviour = std::make_unique<ui::HarmoniaUIBehaviour>();
+            options.scanPluginsOutOfProcess = true;
+            return std::make_unique<core::Session> (std::move (options));
+        }
+    }
+
     class HarmoniaApplication final : public juce::JUCEApplication
     {
     public:
         const juce::String getApplicationName() override    { return "Harmonia"; }
         const juce::String getApplicationVersion() override { return HARMONIA_VERSION_STRING; }
-        bool moreThanOneInstanceAllowed() override          { return false; }
 
-        void initialise (const juce::String&) override
+        bool moreThanOneInstanceAllowed() override
         {
+            const auto commandLine = getCommandLineParameters();
+            return isPluginScanChild (commandLine) || SelfTestOptions::fromCommandLine (commandLine).has_value();
+        }
+
+        void initialise (const juce::String& commandLine) override
+        {
+            if (te::PluginManager::startChildProcessPluginScan (commandLine))
+                return;
+
             juce::LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
 
-            session = std::make_unique<core::Session> (core::Session::Options {});
+            if (auto selfTest = SelfTestOptions::fromCommandLine (commandLine))
+            {
+                session = createSession (selfTest->useDevice);
+
+                juce::MessageManager::callAsync ([this, options = *selfTest]
+                {
+                    setApplicationReturnValue (runSelfTest (*session, options));
+                    quit();
+                });
+
+                return;
+            }
+
+            session = createSession (true);
+            const auto deviceProblem = audio::checkStartupDevice (*session);
+
             project = core::Project::createEmpty (*session);
+
+            // A new project starts with an instrument so the keyboard makes sound right away.
+            if (auto* track = project->getTracks().getFirst())
+                audio::instruments::useBuiltInSynth (*track);
+
+            project->clearUndoHistory();
+
             mainWindow = std::make_unique<MainWindow> (*session, *project);
+
+            if (deviceProblem.isNotEmpty())
+                mainWindow->showWarning (deviceProblem);
         }
 
         void shutdown() override

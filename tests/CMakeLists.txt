@@ -6,7 +6,8 @@ add_executable(harmonia_tests
     core/NoteTests.cpp
     core/NoteEditorTests.cpp
     core/ClipLinksTests.cpp
-    audio/DeviceStatusTests.cpp)
+    audio/DeviceStatusTests.cpp
+    audio/AudioTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_audio)

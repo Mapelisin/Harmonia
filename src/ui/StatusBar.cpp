@@ -49,7 +49,19 @@ namespace harmonia::ui
         g.drawText (rendererText, area.removeFromRight (160), juce::Justification::centredRight, true);
         g.drawText (cpuText, area.removeFromRight (110), juce::Justification::centredRight, true);
 
+        if (warningText.isNotEmpty())
+        {
+            g.setColour (theme::colour::warning);
+            g.drawText (warningText, area.removeFromRight (area.getWidth() / 2), juce::Justification::centredRight, true);
+        }
+
         g.setColour (deviceOpen ? theme::colour::textSecondary : theme::colour::warning);
         g.drawText (deviceText, area, juce::Justification::centredLeft, true);
+    }
+
+    void StatusBar::setWarning (const juce::String& text)
+    {
+        warningText = text;
+        repaint();
     }
 }

@@ -1,18 +1,40 @@
 #include "ui/MainComponent.h"
+#include "audio/DeviceStatus.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui
 {
+    namespace
+    {
+        constexpr int keyboardHeight = 90;
+        constexpr int instrumentPanelHeight = 64;
+    }
+
     MainComponent::MainComponent (core::Session& s, core::Project& p)
         : session (s), project (p)
     {
+        if (auto* track = project.getTracks().getFirst())
+        {
+            notePreview.setTrack (track);
+            instrumentPanel = std::make_unique<InstrumentPanel> (session, *track);
+            addAndMakeVisible (*instrumentPanel);
+        }
+
+        addAndMakeVisible (transportBar);
         addAndMakeVisible (audioSettingsButton);
+        addAndMakeVisible (keyboard);
         addAndMakeVisible (statusBar);
 
         audioSettingsButton.setEnabled (session.devicesEnabled());
         audioSettingsButton.onClick = [this] { showAudioSettings(); };
 
         setSize (1280, 800);
+    }
+
+    MainComponent::~MainComponent()
+    {
+        transport.stop();
+        notePreview.setTrack (nullptr);
     }
 
     juce::String MainComponent::getProjectSummary() const
@@ -40,18 +62,38 @@ namespace harmonia::ui
 
         g.setColour (theme::colour::textSecondary);
         g.setFont (juce::FontOptions (theme::size::fontSize));
-        g.drawText (getProjectSummary(), text, juce::Justification::centredLeft);
+        g.drawText (getProjectSummary(), text.removeFromLeft (260), juce::Justification::centredLeft);
     }
 
     void MainComponent::resized()
     {
         auto area = getLocalBounds();
-        auto header = area.removeFromTop (theme::size::headerHeight);
+        auto header = area.removeFromTop (theme::size::headerHeight).reduced (theme::size::padding, 0);
         statusBar.setBounds (area.removeFromBottom (theme::size::statusBarHeight));
+        keyboard.setBounds (area.removeFromBottom (keyboardHeight));
 
-        audioSettingsButton.setBounds (header.reduced (theme::size::padding, 0)
-                                             .removeFromRight (120)
-                                             .withSizeKeepingCentre (120, theme::size::buttonHeight));
+        audioSettingsButton.setBounds (header.removeFromRight (120).withSizeKeepingCentre (120, theme::size::buttonHeight));
+        header.removeFromLeft (90 + 260);
+        transportBar.setBounds (header.removeFromLeft (260));
+
+        if (instrumentPanel != nullptr)
+            instrumentPanel->setBounds (area.reduced (theme::size::padding).removeFromTop (instrumentPanelHeight));
+    }
+
+    bool MainComponent::keyPressed (const juce::KeyPress& key)
+    {
+        if (key == juce::KeyPress::spaceKey)
+        {
+            transport.togglePlayStop();
+            return true;
+        }
+
+        return false;
+    }
+
+    void MainComponent::showWarning (const juce::String& text)
+    {
+        statusBar.setWarning (text);
     }
 
     void MainComponent::showAudioSettings()
@@ -67,5 +109,7 @@ namespace harmonia::ui
         selector->setSize (500, 440);
         options.content.setOwned (selector.release());
         options.launchAsync();
+
+        statusBar.setWarning ({});
     }
 }

@@ -10,7 +10,9 @@ juce_add_gui_app(Harmonia
 target_sources(Harmonia PRIVATE
     Main.cpp
     MainWindow.h
-    MainWindow.cpp)
+    MainWindow.cpp
+    SelfTest.h
+    SelfTest.cpp)
 
 harmonia_configure_target(Harmonia)
 target_link_libraries(Harmonia PRIVATE harmonia_ui)

@@ -17,6 +17,12 @@ namespace harmonia::app
         ui::applyPreferredRenderer (*this);
     }
 
+    void MainWindow::showWarning (const juce::String& text)
+    {
+        if (auto* content = dynamic_cast<ui::MainComponent*> (getContentComponent()))
+            content->showWarning (text);
+    }
+
     void MainWindow::closeButtonPressed()
     {
         juce::JUCEApplication::getInstance()->systemRequestedQuit();

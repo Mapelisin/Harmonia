@@ -11,6 +11,9 @@ namespace harmonia::app
 
         void closeButtonPressed() override;
 
+        /** Shows a problem in the status bar. */
+        void showWarning (const juce::String&);
+
     private:
         JUCE_DECLARE_NON_COPYABLE (MainWindow)
     };

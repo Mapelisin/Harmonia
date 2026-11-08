@@ -20,7 +20,7 @@ namespace harmonia::core
         edit->getSceneList();
 
         // A new or freshly opened project starts with an empty undo history.
-        edit->getUndoManager().clearUndoHistory();
+        clearUndoHistory();
     }
 
     Project::~Project() = default;
@@ -132,6 +132,11 @@ namespace harmonia::core
     void Project::beginGesture (const juce::String& name)
     {
         edit->getUndoManager().beginNewTransaction (name);
+    }
+
+    void Project::clearUndoHistory()
+    {
+        edit->getUndoManager().clearUndoHistory();
     }
 
     bool Project::canUndo() const

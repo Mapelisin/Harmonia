@@ -16,6 +16,14 @@ namespace harmonia::core
 
             /** How the engine opens plugin windows etc.; a default one is used if empty. */
             std::unique_ptr<te::UIBehaviour> uiBehaviour;
+
+            /** Folder name for settings (devices, plugin list) under the user's app data.
+                Tests use their own so they never touch the real app's settings. */
+            juce::String settingsName = "Harmonia";
+
+            /** Scan plugins in a child process (the app must hand the child's command line to
+                te::PluginManager::startChildProcessPluginScan). */
+            bool scanPluginsOutOfProcess = false;
         };
 
         explicit Session (Options);

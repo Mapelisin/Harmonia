@@ -47,7 +47,11 @@ int main (int argc, char** argv)
     int result = 0;
 
     {
-        harmonia::core::Session session (harmonia::core::Session::Options { false, nullptr });
+        harmonia::core::Session::Options options;
+        options.openDevices = false;
+        options.settingsName = "HarmoniaTests";
+
+        harmonia::core::Session session (std::move (options));
         harmonia::test::sharedSession = &session;
 
         doctest::Context context (argc, argv);

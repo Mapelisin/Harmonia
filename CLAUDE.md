@@ -41,6 +41,10 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Перед коммитом изменений в `core`/`audio` гонять и `windows-debug`: там тесты падают на любом jassert JUCE/Tracktion
   (`JUCE_LOG_ASSERTIONS` + ловушка в `tests/TestMain.cpp`). Release этого не видит.
 - Ноты клипа меняются только через `core::NoteEditor` (undo + связанные копии), жесты — `Project::beginGesture`.
+- После изменений в `src/audio` гонять самопроверку звука (нужна звуковая карта):
+  `Harmonia.exe --selftest --log=<файл> "--plugin=E:/HarmoniaTestPlugins/surge-xt/Surge Synth Team/Surge XT.vst3"`.
+  Код возврата = число проваленных проверок. В Debug она же ловит jassert движка.
+- Play/Stop — только через `audio::Transport` (он продолжает игру после самопроизвольных остановок движка).
 - Сборки — в `build/` (не в git). Пробные программы — в `spikes/`, их выводы — в `docs/research/`.
 
 ## Git

@@ -49,6 +49,9 @@ namespace harmonia::core
         /** Starts a new undo transaction; everything changed until the next call is undone together. */
         void beginGesture (const juce::String& name);
 
+        /** Forgets all undo steps, e.g. after setting up a new project's defaults. */
+        void clearUndoHistory();
+
         bool canUndo() const;
         bool canRedo() const;
         void undo();

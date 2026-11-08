@@ -5,6 +5,14 @@ add_library(harmonia_ui STATIC
     RenderingPolicy.cpp
     StatusBar.h
     StatusBar.cpp
+    PluginWindow.h
+    PluginWindow.cpp
+    TransportBar.h
+    TransportBar.cpp
+    InstrumentPanel.h
+    InstrumentPanel.cpp
+    PreviewKeyboard.h
+    PreviewKeyboard.cpp
     MainComponent.h
     MainComponent.cpp)
 
