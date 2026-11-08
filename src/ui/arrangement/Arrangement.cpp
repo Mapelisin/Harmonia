@@ -562,6 +562,17 @@ namespace harmonia::ui::arrangement
             const auto gain = core::clips::getGainDb (*audio);
             menu.addItem ("Reset gain to 0 dB (now " + juce::String (gain, 1) + " dB)", std::abs (gain) > 0.05f, false,
                           withAudioClip ("Reset clip gain", [] (te::AudioClipBase& a) { core::clips::setGainDb (a, 0.0f); }));
+
+            const auto peak = core::clips::getPeakDb (*audio);
+            menu.addItem ("Normalize (loudest point to 0 dB)", peak.has_value() && *peak > core::clips::silentGainDb + 1.0f, false,
+                          withAudioClip ("Normalize", [] (te::AudioClipBase& a) { core::clips::normalize (a); }));
+
+            const auto reversed = core::clips::isReversed (*audio);
+            menu.addItem ("Reverse (play backwards)", true, reversed,
+                          withAudioClip (reversed ? "Play forwards" : "Reverse", [reversed] (te::AudioClipBase& a)
+                          {
+                              core::clips::setReversed (a, ! reversed);
+                          }));
             menu.addSeparator();
             menu.addItem ("Duplicate (Ctrl+B)", [this] { model.duplicateSelected (false); });
         }

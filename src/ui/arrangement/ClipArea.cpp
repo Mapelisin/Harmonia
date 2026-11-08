@@ -272,6 +272,19 @@ namespace harmonia::ui::arrangement
     {
         const auto file = clip.getCurrentSourceFile();
 
+        if (core::clips::isReversing (clip))
+        {
+            // The engine is writing the reversed copy: look again soon.
+            g.setColour (theme::colour::textSecondary);
+            g.setFont (juce::FontOptions (theme::size::smallFontSize));
+            g.drawText ("Reversing...", body.reduced (4.0f, 0.0f), juce::Justification::centredLeft, true);
+
+            if (! isTimerRunning())
+                startTimer (250);
+
+            return;
+        }
+
         if (! file.existsAsFile())
         {
             g.setColour (theme::colour::warning);
@@ -390,6 +403,17 @@ namespace harmonia::ui::arrangement
         g.setColour (theme::colour::textPrimary);
         g.setFont (font);
         g.drawText (readout->first, box, juce::Justification::centred, false);
+    }
+
+    void ClipArea::timerCallback()
+    {
+        // Until every reversed copy is written.
+        for (const auto& d : model.getClips())
+            if (auto* audio = dynamic_cast<te::AudioClipBase*> (d.clip); audio != nullptr && core::clips::isReversing (*audio))
+                return;
+
+        stopTimer();
+        repaint();
     }
 
     te::SmartThumbnail& ClipArea::getWaveform (te::AudioClipBase& clip)

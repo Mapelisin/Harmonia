@@ -48,7 +48,8 @@ add_executable(harmonia_tests
     ui/PianoRollRulerTests.cpp
     ui/SoundBrowserTests.cpp
     ui/RecentProjectsTests.cpp
-    ui/DrumNamesTests.cpp)
+    ui/DrumNamesTests.cpp
+    ui/AudioClipToolsTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)

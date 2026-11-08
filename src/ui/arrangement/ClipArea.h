@@ -8,7 +8,8 @@ namespace harmonia::ui::arrangement
     /** The tracks' rows with their clips (a small picture of each MIDI clip's notes, the
         waveform of each audio clip), the grid, the loop region and the playhead. Mouse input goes
         to ArrangementGestures. */
-    class ClipArea final : public juce::Component
+    class ClipArea final : public juce::Component,
+                           private juce::Timer
     {
     public:
         ClipArea (ArrangementModel&, ArrangementView&);
@@ -67,6 +68,8 @@ namespace harmonia::ui::arrangement
     private:
         ArrangementModel& model;
         ArrangementView& view;
+
+        void timerCallback() override;
         ArrangementGestures gestures { model, view };
         std::optional<double> playheadBeat;
         std::optional<DropMarker> dropMarker;

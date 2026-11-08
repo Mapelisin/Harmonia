@@ -37,7 +37,7 @@ namespace harmonia::ui
                 { "Drag a clip's edge", "Hide or show its beginning or end (a looping clip repeats)" },
                 { "Right button", "Delete the clips under the mouse" },
                 { "Double-click empty space", "A new one-bar clip" },
-                { "Clip's corner mark", "Its menu: rename, colour, loop, copies, split..." },
+                { "Clip's corner mark", "Its menu: rename, colour, loop, copies, split; sounds: reverse, normalize..." },
                 { "Del", "Delete the selected clips" },
                 { "Ctrl+B / Ctrl+Shift+B", "Repeat the selection right after it: linked / independent copies" },
                 { "Ctrl+A / Ctrl+D, Esc", "Select all / deselect" },

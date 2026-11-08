@@ -396,6 +396,69 @@ namespace harmonia::core::clips
         clip.setGainDB (juce::jlimit (silentGainDb, maxGainDb, db));
     }
 
+    std::optional<float> getPeakDb (const te::AudioClipBase& clip)
+    {
+        // A reversed clip plays the original backwards: read the same stretch of the original.
+        const auto reversed = clip.getIsReversed();
+        const auto file = reversed ? clip.getOriginalFile() : clip.getCurrentSourceFile();
+        auto& formats = clip.edit.engine.getAudioFileFormatManager().readFormatManager;
+        std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
+
+        if (reader == nullptr || reader->sampleRate <= 0.0 || reader->lengthInSamples <= 0)
+            return std::nullopt;
+
+        const auto position = clip.getPosition();
+        const auto rate = reader->sampleRate;
+        const auto length = (juce::int64) std::ceil (position.getLength().inSeconds() * rate);
+        auto start = (juce::int64) std::floor (position.getOffset().inSeconds() * rate);
+
+        if (reversed)
+            start = reader->lengthInSamples - start - length;
+
+        const auto range = juce::Range<juce::int64> (start, start + length).getIntersectionWith ({ 0, reader->lengthInSamples });
+
+        if (range.isEmpty())
+            return silentGainDb;
+
+        const auto channels = (int) reader->numChannels;
+        std::vector<juce::Range<float>> levels ((size_t) channels);
+        reader->readMaxLevels (range.getStart(), range.getLength(), levels.data(), channels);
+
+        float peak = 0.0f;
+
+        for (const auto& level : levels)
+            peak = std::max ({ peak, std::abs (level.getStart()), std::abs (level.getEnd()) });
+
+        return juce::Decibels::gainToDecibels (peak, silentGainDb);
+    }
+
+    bool normalize (te::AudioClipBase& clip, float targetDb)
+    {
+        const auto peak = getPeakDb (clip);
+
+        if (! peak.has_value() || *peak <= silentGainDb + 1.0f)
+            return false;
+
+        clip.setGainDB (juce::jlimit (silentGainDb, maxNormalizeGainDb, targetDb - *peak));
+        return true;
+    }
+
+    bool isReversed (const te::AudioClipBase& clip)
+    {
+        return clip.getIsReversed();
+    }
+
+    void setReversed (te::AudioClipBase& clip, bool shouldBeReversed)
+    {
+        if (clip.getIsReversed() != shouldBeReversed)
+            clip.setIsReversed (shouldBeReversed);
+    }
+
+    bool isReversing (const te::AudioClipBase& clip)
+    {
+        return clip.getIsReversed() && ! clip.getCurrentSourceFile().existsAsFile();
+    }
+
     //==============================================================================
     bool isLooping (const te::Clip& clip)
     {

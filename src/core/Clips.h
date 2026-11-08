@@ -144,6 +144,23 @@ namespace harmonia::core::clips
 
     inline constexpr float maxGainDb = 6.0f, silentGainDb = -100.0f;
 
+    /** The loudest point of what the clip plays from its file, in dBFS, before the clip's gain
+        (-100 for silence); nothing if the file can't be read (yet). */
+    std::optional<float> getPeakDb (const te::AudioClipBase&);
+
+    /** Sets the clip's gain so that its loudest point is at `targetDb` (gain from -100 up to
+        +24 dB: a quiet recording can be brought up further than the gain handle goes). False if
+        the file can't be read or is silent. */
+    bool normalize (te::AudioClipBase&, float targetDb = -0.1f);
+
+    inline constexpr float maxNormalizeGainDb = 24.0f;
+
+    /** Plays the sound backwards. The engine writes a reversed copy in the background: until
+        it is there (`isReversing`) the clip is silent. */
+    bool isReversed (const te::AudioClipBase&);
+    void setReversed (te::AudioClipBase&, bool);
+    bool isReversing (const te::AudioClipBase&);
+
     //==============================================================================
     /** The colour the user chose for the clip; none means its track's colour. (Tracktion gives
         every clip a colour of its own when it is made, so this is kept apart from it.) */
