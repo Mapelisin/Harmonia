@@ -35,6 +35,9 @@ namespace harmonia::ui::pianoroll
         TimeRuler& getRuler() noexcept              { return ruler; }
         PianoKeys& getKeys() noexcept               { return keys; }
 
+        /** The line right of the tools: the clip's size, or the chord the selected notes make. */
+        juce::String getInfoText() const            { return infoLabel.getText(); }
+
         /** The Tools button's menu: the note commands with their shortcuts. */
         juce::PopupMenu createToolsMenu();
 

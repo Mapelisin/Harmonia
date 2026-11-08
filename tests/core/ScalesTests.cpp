@@ -75,6 +75,28 @@ TEST_SUITE ("core::scales")
         CHECK (chords::build (62, ChordType::scaleSeventh, none) == std::vector<int> { 62, 66, 69, 72 });
     }
 
+    TEST_CASE ("naming the chord some notes make")
+    {
+        CHECK (chords::nameOf ({ 60, 64, 67 }) == "C");
+        CHECK (chords::nameOf ({ 57, 60, 64 }) == "Am");
+        CHECK (chords::nameOf ({ 64, 67, 72 }) == "C/E");                 // with E in the bass
+        CHECK (chords::nameOf ({ 55, 59, 62, 65 }) == "G7");
+        CHECK (chords::nameOf ({ 57, 60, 64, 67 }) == "Am7");
+        CHECK (chords::nameOf ({ 60, 64, 67, 69 }) == "C6");              // the same notes, C in the bass
+        CHECK (chords::nameOf ({ 60, 64, 67, 71 }) == "Cmaj7");
+        CHECK (chords::nameOf ({ 59, 62, 65 }) == "Bdim");
+        CHECK (chords::nameOf ({ 62, 67, 69 }) == "Dsus4");
+        CHECK (chords::nameOf ({ 40, 47, 52 }) == "E5");                  // a power chord, octaves don't matter
+        CHECK (chords::nameOf ({ 50, 60, 65 }) == "Dm7");                 // no fifth
+        CHECK (chords::nameOf ({ 61, 65, 68 }) == "C#");
+        CHECK (chords::nameOf ({ 48, 60, 64, 67, 76 }) == "C");           // doubled notes
+
+        CHECK (chords::nameOf ({}).isEmpty());
+        CHECK (chords::nameOf ({ 60 }).isEmpty());
+        CHECK (chords::nameOf ({ 60, 72 }).isEmpty());                    // one note in two octaves
+        CHECK (chords::nameOf ({ 60, 61, 62 }).isEmpty());                // not a chord
+    }
+
     TEST_CASE ("the song's scale is kept in the project and saved with it")
     {
         auto& session = test::session();

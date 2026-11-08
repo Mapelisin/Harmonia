@@ -587,7 +587,22 @@ namespace harmonia::ui::pianoroll
                  << juce::String (bars, bars == std::floor (bars) ? 0 : 2) << (bars == 1.0 ? " bar" : " bars")
                  << juce::String::fromUTF8 ("  \xc2\xb7  ") << count << (count == 1 ? " note" : " notes");
 
-            if (selected > 0)
+            juce::String chord;
+
+            if (selected > 1)
+            {
+                std::vector<int> pitches;
+
+                for (auto* note : model.getSelectedNotes())
+                    pitches.push_back (note->getNoteNumber());
+
+                chord = core::chords::nameOf (pitches);
+            }
+
+            // The chord the selected notes make says more than the clip's size (and the space is short).
+            if (chord.isNotEmpty())
+                info = "Chord " + chord + juce::String::fromUTF8 ("  \xc2\xb7  ") + juce::String (selected) + " selected";
+            else if (selected > 0)
                 info << " (" << selected << " selected)";
         }
 

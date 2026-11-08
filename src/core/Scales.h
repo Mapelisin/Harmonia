@@ -92,5 +92,10 @@ namespace harmonia::core
         /** The chord's pitches from `root` up (notes above 127 left out). Scale chords take the
             root to the scale first; with no scale they are major and dominant seventh. */
         std::vector<int> build (int root, ChordType, const scales::Scale&);
+
+        /** The chord these pitches make, as a chord symbol: "C", "Am7", "Gsus4", "C/E" (with
+            another note in the bass)... Octaves and repeated notes don't matter. Empty for a
+            single note or a mix that isn't a common chord. */
+        juce::String nameOf (const std::vector<int>& pitches);
     }
 }

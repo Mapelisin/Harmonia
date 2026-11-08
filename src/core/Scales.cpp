@@ -267,5 +267,109 @@ namespace harmonia::core
 
             return pitches;
         }
+
+        namespace
+        {
+            constexpr int maskOf (std::initializer_list<int> intervals)
+            {
+                int mask = 0;
+
+                for (auto i : intervals)
+                    mask |= 1 << (i % 12);
+
+                return mask;
+            }
+
+            struct Shape
+            {
+                const char* suffix;
+                int mask;
+            };
+
+            // In the order a musician would rather read them when the notes fit more than one.
+            constexpr Shape shapes[] {
+                { "",      maskOf ({ 0, 4, 7 }) },
+                { "m",     maskOf ({ 0, 3, 7 }) },
+                { "7",     maskOf ({ 0, 4, 7, 10 }) },
+                { "m7",    maskOf ({ 0, 3, 7, 10 }) },
+                { "maj7",  maskOf ({ 0, 4, 7, 11 }) },
+                { "dim",   maskOf ({ 0, 3, 6 }) },
+                { "aug",   maskOf ({ 0, 4, 8 }) },
+                { "sus4",  maskOf ({ 0, 5, 7 }) },
+                { "sus2",  maskOf ({ 0, 2, 7 }) },
+                { "5",     maskOf ({ 0, 7 }) },
+                { "6",     maskOf ({ 0, 4, 7, 9 }) },
+                { "m6",    maskOf ({ 0, 3, 7, 9 }) },
+                { "m7b5",  maskOf ({ 0, 3, 6, 10 }) },
+                { "dim7",  maskOf ({ 0, 3, 6, 9 }) },
+                { "mMaj7", maskOf ({ 0, 3, 7, 11 }) },
+                { "7sus4", maskOf ({ 0, 5, 7, 10 }) },
+                { "add9",  maskOf ({ 0, 2, 4, 7 }) },
+                { "madd9", maskOf ({ 0, 2, 3, 7 }) },
+                { "9",     maskOf ({ 0, 2, 4, 7, 10 }) },
+                { "m9",    maskOf ({ 0, 2, 3, 7, 10 }) },
+                { "maj9",  maskOf ({ 0, 2, 4, 7, 11 }) },
+                { "7",     maskOf ({ 0, 4, 10 }) },         // sevenths are often played without the fifth
+                { "m7",    maskOf ({ 0, 3, 10 }) },
+                { "maj7",  maskOf ({ 0, 4, 11 }) },
+            };
+
+            /** The pitch classes `mask` holds, counted from `root`. */
+            int rotate (int mask, int root)
+            {
+                return ((mask >> root) | (mask << (12 - root))) & 0xfff;
+            }
+        }
+
+        juce::String nameOf (const std::vector<int>& pitches)
+        {
+            int mask = 0, bass = 128;
+
+            for (auto p : pitches)
+            {
+                if (p < 0 || p > 127)
+                    continue;
+
+                mask |= 1 << (p % 12);
+                bass = std::min (bass, p);
+            }
+
+            if (bass > 127 || juce::countNumberOfBits ((juce::uint32) mask) < 2)
+                return {};
+
+            const auto bassClass = bass % 12;
+            std::optional<std::pair<int, const Shape*>> found;
+
+            // The first shape that fits with the bass note as its root; else the first that fits at all.
+            for (const auto& shape : shapes)
+            {
+                const auto shapeMask = shape.mask;
+
+                if (rotate (mask, bassClass) == shapeMask)
+                {
+                    found = std::make_pair (bassClass, &shape);
+                    break;
+                }
+
+                if (! found.has_value())
+                    for (int i = 1; i < 12; ++i)
+                        if (const auto root = (bassClass + i) % 12; ((mask >> root) & 1) != 0 && rotate (mask, root) == shapeMask)
+                        {
+                            found = std::make_pair (root, &shape);
+                            break;
+                        }
+            }
+
+            if (! found.has_value())
+                return {};
+
+            const auto [root, shape] = *found;
+            auto name = scales::getRootName (root) + shape->suffix;
+
+            if (root != bassClass)
+                name << "/" << scales::getRootName (bassClass);
+
+            return name;
+        }
     }
 }
