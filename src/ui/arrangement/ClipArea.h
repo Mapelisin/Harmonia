@@ -43,6 +43,21 @@ namespace harmonia::ui::arrangement
         };
 
         void setDropMarker (std::optional<DropMarker>);
+
+        /** A recording in progress: what has been recorded so far on these tracks. */
+        struct RecordingMarker
+        {
+            double startBeat = 0.0, endBeat = 0.0;
+            std::vector<int> trackIndices;
+
+            bool operator== (const RecordingMarker& other) const
+            {
+                return startBeat == other.startBeat && endBeat == other.endBeat && trackIndices == other.trackIndices;
+            }
+        };
+
+        void setRecording (std::optional<RecordingMarker>);
+        std::optional<RecordingMarker> getRecording() const noexcept    { return recording; }
         std::optional<DropMarker> getDropMarker() const noexcept    { return dropMarker; }
 
         /** Every audio clip's waveform has been read (for tests and snapshots). */
@@ -54,6 +69,7 @@ namespace harmonia::ui::arrangement
         ArrangementGestures gestures { model, view };
         std::optional<double> playheadBeat;
         std::optional<DropMarker> dropMarker;
+        std::optional<RecordingMarker> recording;
 
         /** Waveforms of the audio clips, by clip ID; read in the background. */
         struct Waveform
@@ -69,6 +85,7 @@ namespace harmonia::ui::arrangement
         void paintNotes (juce::Graphics&, te::MidiClip&, juce::Rectangle<float> clip, juce::Rectangle<float> body, juce::Colour);
         void paintWaveform (juce::Graphics&, te::AudioClipBase&, juce::Rectangle<float> body, juce::Colour);
         void paintDropMarker (juce::Graphics&);
+        void paintRecording (juce::Graphics&);
         te::SmartThumbnail& getWaveform (te::AudioClipBase&);
         void forgetRemovedWaveforms();
         void repaintPlayheadAt (std::optional<double> beat);

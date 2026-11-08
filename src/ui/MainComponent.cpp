@@ -69,6 +69,9 @@ namespace harmonia::ui
                 statusBar.setMessage (text);
         };
 
+        // Record (R) + Play records the armed audio tracks too.
+        transport.recordsAudio = [this] { return noteInput.isRecordArmed() && audioInputs.anyArmed(); };
+
         arrangement.onMessage = [this] (const juce::String& text, bool isProblem)
         {
             if (isProblem)
@@ -110,6 +113,7 @@ namespace harmonia::ui
         pianoRollModel.removeListener (this);
         pianoRollModel.setAuditioner (nullptr);
         transportBar.onPlayModeToggled = nullptr;
+        transport.recordsAudio = nullptr;
         noteInput.onStateChanged = nullptr;
         midiInputs.onMessage = nullptr;
         midiInputs.onDevicesChanged = nullptr;

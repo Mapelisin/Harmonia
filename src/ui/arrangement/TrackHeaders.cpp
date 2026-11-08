@@ -1,4 +1,5 @@
 #include "ui/arrangement/TrackHeaders.h"
+#include "audio/AudioInputs.h"
 #include "audio/Instruments.h"
 #include "core/Tracks.h"
 #include "ui/Theme.h"
@@ -22,6 +23,93 @@ namespace harmonia::ui::arrangement
     }
 
     //==============================================================================
+    /** A thin horizontal meter of an input's level (the louder channel). */
+    class InputMeter final : public juce::Component,
+                             private juce::Timer
+    {
+    public:
+        InputMeter()
+        {
+            setInterceptsMouseClicks (false, false);
+        }
+
+        ~InputMeter() override
+        {
+            detach();
+        }
+
+        void setInput (te::InputDevice* input)
+        {
+            if (input == shownInput && (input == nullptr || attached != nullptr))
+                return;
+
+            detach();
+            shownInput = input;
+
+            if (input != nullptr)
+            {
+                attached = &input->levelMeasurer;
+                attached->addClient (client);
+                startTimerHz (30);
+            }
+
+            levelDb = minDb;
+            repaint();
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            auto area = getLocalBounds().toFloat();
+            g.setColour (theme::mixer::meterBackground);
+            g.fillRect (area);
+
+            const auto proportion = juce::jlimit (0.0f, 1.0f, (levelDb - minDb) / (maxDb - minDb));
+            const auto level = area.withWidth (area.getWidth() * proportion);
+            g.setColour (levelDb > 0.0f ? theme::colour::record : levelDb > -12.0f ? theme::mixer::meterMid : theme::mixer::meterLow);
+            g.fillRect (level);
+        }
+
+    private:
+        static constexpr float minDb = -60.0f, maxDb = 6.0f;
+
+        juce::WeakReference<te::LevelMeasurer> attached;
+        const te::InputDevice* shownInput = nullptr;   // only compared, never used
+        te::LevelMeasurer::Client client;
+        float levelDb = minDb;
+
+        void detach()
+        {
+            stopTimer();
+
+            if (auto* measurer = attached.get())
+                measurer->removeClient (client);
+
+            attached = nullptr;
+        }
+
+        void timerCallback() override
+        {
+            if (attached == nullptr)
+                return;
+
+            auto loudest = minDb;
+
+            for (int channel = 0; channel < 2; ++channel)
+                loudest = std::max (loudest, client.getAndClearAudioLevel (channel).dB);
+
+            // Falls back smoothly, jumps up at once.
+            const auto fallen = levelDb - 1.0f;
+            const auto newLevel = std::max (loudest, std::max (minDb, fallen));
+
+            if (std::abs (newLevel - levelDb) > 0.05f)
+            {
+                levelDb = newLevel;
+                repaint();
+            }
+        }
+    };
+
+    //==============================================================================
     class TrackHeaders::Header final : public juce::Component
     {
     public:
@@ -42,6 +130,13 @@ namespace harmonia::ui::arrangement
             {
                 model.getProject().beginGesture ("Mute track");
                 track->setMute (! track->isMuted (false));
+                refresh();
+            };
+
+            arm.setTooltip ("Record arm: when you record (R, then Play), this track records its input");
+            arm.onClick = [this]
+            {
+                audio::AudioInputs::setArmed (*track, ! audio::AudioInputs::isArmed (*track));
                 refresh();
             };
 
@@ -74,18 +169,42 @@ namespace harmonia::ui::arrangement
                 addAndMakeVisible (c);
             }
 
+            arm.setWantsKeyboardFocus (false);
+            addChildComponent (arm);
+            addChildComponent (inputMeter);
+
             refresh();
         }
 
         te::AudioTrack& getTrack() const noexcept  { return *track; }
+        juce::Button* getArmButton() noexcept      { return arm.isVisible() ? &arm : nullptr; }
 
         void refresh()
         {
             if (! name.isBeingEdited())
                 name.setText (track->getName(), juce::dontSendNotification);
 
-            instrument.setText (core::tracks::isAudio (*track) ? juce::String ("Audio") : audio::instruments::getName (*track),
-                                juce::dontSendNotification);
+            const auto isAudio = core::tracks::isAudio (*track);
+            auto* input = isAudio ? audio::AudioInputs::getInput (*track) : nullptr;
+            const auto armed = isAudio && audio::AudioInputs::isArmed (*track);
+
+            if (! isAudio)
+                instrument.setText (audio::instruments::getName (*track), juce::dontSendNotification);
+            else
+                instrument.setText (input != nullptr ? "In: " + input->getAliasOrName() : juce::String ("Audio"), juce::dontSendNotification);
+
+            instrument.setTooltip (isAudio ? juce::String ("The input this track records from (right-click to change)") : juce::String());
+
+            if (arm.isVisible() != isAudio)
+            {
+                arm.setVisible (isAudio);
+                resized();
+            }
+
+            arm.setColour (juce::TextButton::buttonColourId, armed ? theme::colour::record : theme::colour::surfaceRaised);
+            arm.setColour (juce::TextButton::textColourOffId, armed ? theme::colour::textPrimary : theme::colour::record);
+            inputMeter.setVisible (armed && input != nullptr);
+            inputMeter.setInput (armed ? input : nullptr);
 
             const auto muted = track->isMuted (false), soloed = track->isSolo (false);
             mute.setColour (juce::TextButton::buttonColourId, muted ? colours::mute.withAlpha (0.8f) : theme::colour::surfaceRaised);
@@ -123,13 +242,21 @@ namespace harmonia::ui::arrangement
             solo.setBounds (top.removeFromRight (smallButtonSize));
             top.removeFromRight (3);
             mute.setBounds (top.removeFromRight (smallButtonSize));
-            top.removeFromRight (4);
+            top.removeFromRight (3);
+
+            if (arm.isVisible())
+            {
+                arm.setBounds (top.removeFromRight (smallButtonSize));
+                top.removeFromRight (4);
+            }
+
             name.setBounds (top);
 
             area.removeFromTop (3);
             auto bottom = area.removeFromTop (18);
             volume.setBounds (bottom.removeFromRight (std::min (80, bottom.getWidth() / 2)));
             instrument.setBounds (bottom);
+            inputMeter.setBounds (bottom.withTrimmedLeft (2).withTrimmedRight (6).removeFromBottom (3).translated (0, 3));
         }
 
         void mouseDown (const juce::MouseEvent& e) override
@@ -151,8 +278,9 @@ namespace harmonia::ui::arrangement
         juce::ReferenceCountedObjectPtr<te::AudioTrack> track;   // kept alive while the header shows it
 
         juce::Label name, instrument;
-        juce::TextButton mute { "M" }, solo { "S" };
+        juce::TextButton mute { "M" }, solo { "S" }, arm { juce::String::fromUTF8 ("\xe2\x97\x8f") };
         juce::Slider volume;
+        InputMeter inputMeter;
 
         void showMenu()
         {
@@ -162,6 +290,35 @@ namespace harmonia::ui::arrangement
                 if (safe != nullptr)
                     safe->name.showEditor();
             });
+            if (core::tracks::isAudio (*track))
+            {
+                auto& engine = track->edit.engine;
+                const auto inputs = audio::AudioInputs::getInputs (engine);
+                auto* current = audio::AudioInputs::getInput (*track);
+                juce::PopupMenu inputMenu;
+
+                for (auto* input : inputs)
+                    inputMenu.addItem (input->getAliasOrName(), true, input == current, [t = track, inputName = input->getName()]
+                    {
+                        audio::AudioInputs::setInput (*t, inputName);
+                    });
+
+                if (inputs.empty())
+                    inputMenu.addItem ("No inputs (see Audio settings)", false, false, [] {});
+
+                menu.addSeparator();
+                menu.addItem ("Record arm", true, audio::AudioInputs::isArmed (*track), [t = track]
+                {
+                    audio::AudioInputs::setArmed (*t, ! audio::AudioInputs::isArmed (*t));
+                });
+                menu.addSubMenu ("Record from", inputMenu);
+                menu.addItem ("Hear the input while armed", true, audio::AudioInputs::isMonitoring (engine), [&engine]
+                {
+                    audio::AudioInputs::setMonitoring (engine, ! audio::AudioInputs::isMonitoring (engine));
+                });
+                menu.addSeparator();
+            }
+
             menu.addItem ("Add instrument track", [&m = model] { m.addTrack(); });
             menu.addItem ("Add audio track", [&m = model] { m.addAudioTrack(); });
             menu.addSeparator();
@@ -191,6 +348,12 @@ namespace harmonia::ui::arrangement
     {
         for (int i = 0; i < headers.size(); ++i)
             headers[i]->setBounds (0, (int) std::round (view.trackToY (i)), getWidth() - 1, (int) view.trackHeight);
+    }
+
+    juce::Button* TrackHeaders::getArmButton (int index) const
+    {
+        auto* header = headers[index];
+        return header != nullptr ? header->getArmButton() : nullptr;
     }
 
     void TrackHeaders::refresh()

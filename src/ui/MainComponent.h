@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/AudioInputs.h"
 #include "audio/MidiInputs.h"
 #include "audio/NotePreview.h"
 #include "audio/PlaybackClock.h"
@@ -48,6 +49,7 @@ namespace harmonia::ui
         NoteInput& getNoteInput() noexcept                              { return noteInput; }
         audio::Transport& getTransport() noexcept                       { return transport; }
         mixer::Mixer& getMixer() noexcept                               { return mixer; }
+        audio::AudioInputs& getAudioInputs() noexcept                   { return audioInputs; }
 
         /** What the lower part of the window shows. */
         enum class LowerPanel { pianoRoll, mixer };
@@ -82,6 +84,7 @@ namespace harmonia::ui
         arrangement::ArrangementModel arrangementModel { project };
         audio::PlaybackClock playbackClock { project.getEdit() };
         audio::MidiInputs midiInputs { project.getEdit() };
+        audio::AudioInputs audioInputs { project.getEdit() };
         NoteInput noteInput { pianoRollModel, notePreview, playbackClock };
         FileCommands* fileCommands = nullptr;
 

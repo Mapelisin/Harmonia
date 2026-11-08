@@ -13,7 +13,8 @@ namespace harmonia::ui
             refresh();
         };
 
-        recordButton.setTooltip ("Record (R): notes played while the song plays go into the clip open in the piano roll");
+        recordButton.setTooltip ("Record (R): notes played while the song plays go into the clip open in the piano roll,\n"
+                                 "and armed audio tracks record their input (straight on from where the song is)");
         recordButton.onClick = [this] { noteInput.setRecordArmed (! noteInput.isRecordArmed()); };
 
         clickButton.setTooltip ("Metronome (Ctrl+M)");
@@ -104,7 +105,7 @@ namespace harmonia::ui
         playButton.setColour (juce::TextButton::buttonColourId,
                               active ? theme::colour::accent.withAlpha (0.35f) : theme::colour::surfaceRaised);
 
-        const auto recordColour = noteInput.isRecording() ? theme::colour::record
+        const auto recordColour = noteInput.isRecording() || transport.isRecording() ? theme::colour::record
                                 : noteInput.isRecordArmed() ? theme::colour::record.withAlpha (0.45f)
                                                             : theme::colour::surfaceRaised;
         recordButton.setColour (juce::TextButton::buttonColourId, recordColour);

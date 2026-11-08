@@ -14,7 +14,10 @@ namespace harmonia::audio
           when MIDI devices appear (also twice in the first seconds after start-up). Such stops
           are resumed from the same position. If there is no working audio device, the request
           waits and playback starts once a device runs ("play when ready"). A resume limit keeps
-          this from fighting the engine forever. */
+          this from fighting the engine forever.
+        - Play records audio instead when `recordsAudio` says so (the armed audio tracks, see
+          audio::AudioInputs): straight on from where the song is, without looping (the loop comes
+          back at Stop). Stop turns the recordings into clips as one undo step. */
     class Transport : private juce::Timer
     {
     public:
@@ -24,6 +27,18 @@ namespace harmonia::audio
         void play();
         void stop();
         void togglePlayStop();
+
+        /** Asked at Play: record the armed audio inputs this time? */
+        std::function<bool()> recordsAudio;
+
+        /** True from a Play that records audio until Stop. */
+        bool isRecordRequested() const noexcept     { return recordRequested; }
+
+        /** True while the engine is actually recording. */
+        bool isRecording() const;
+
+        /** Song position (seconds) where the current or last recording started. */
+        double getRecordStartSeconds() const noexcept   { return recordStartSeconds; }
 
         /** True from Play until Stop, including while waiting for the engine or the device. */
         bool isPlayRequested() const noexcept       { return playRequested; }
@@ -37,12 +52,14 @@ namespace harmonia::audio
         double getPositionSeconds() const;
         void setPositionSeconds (double);
 
-        /** Loops the given beat range; an empty range turns looping off. */
+        /** Loops the given beat range; an empty range turns looping off. (While recording audio
+            the loop waits until Stop.) */
         void setLoopBeats (double startBeat, double endBeat);
 
     private:
         te::Edit& edit;
-        bool playRequested = false;
+        bool playRequested = false, recordRequested = false, loopWanted = false;
+        double recordStartSeconds = 0.0;
         int resumeCount = 0;
         std::vector<double> recentResumeTimesMs;
 

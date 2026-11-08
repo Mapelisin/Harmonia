@@ -1,4 +1,5 @@
 #include "app/SelfTest.h"
+#include "audio/AudioInputs.h"
 #include "audio/DeviceSetup.h"
 #include "audio/DeviceStatus.h"
 #include "audio/Effects.h"
@@ -8,6 +9,7 @@
 #include "audio/PlaybackClock.h"
 #include "audio/PluginScanner.h"
 #include "audio/Transport.h"
+#include "core/Clips.h"
 #include "core/NoteEditor.h"
 #include "core/Project.h"
 #include "core/Tracks.h"
@@ -256,6 +258,10 @@ namespace harmonia::app
                 }
 
                 checkAudioClip (*project, transport);
+
+                if (options.useDevice)
+                    checkAudioRecording (*project, transport);
+
                 checkRender (*project, "builtin-synth.wav");
                 checkExport (*project, "export.wav");
 
@@ -610,6 +616,66 @@ namespace harmonia::app
                                                  + juce::String (peak, 1) + " dBFS)");
                 transport.stop();
                 pump (200, audioLevel, transport, report);
+            }
+
+            /** Recording from the audio interface's first input onto an armed audio track: a clip
+                as long as the recording appears at Stop. (The file is deleted right away.) */
+            void checkAudioRecording (core::Project& project, audio::Transport& transport)
+            {
+                auto& engine = project.getEdit().engine;
+                const auto inputs = audio::AudioInputs::getInputs (engine);
+
+                if (inputs.empty())
+                {
+                    report.line ("       no audio inputs turned on: recording not checked");
+                    return;
+                }
+
+                auto* track = project.addTrack ("Mic");
+
+                if (track == nullptr)
+                    return;
+
+                core::tracks::setKind (*track, core::tracks::Kind::audio);
+                audio::AudioInputs audioInputs (project.getEdit());
+                audio::AudioInputs::setArmed (*track, true);
+                audioInputs.refresh();
+                project.getEdit().dispatchPendingUpdatesSynchronously();
+
+                transport.recordsAudio = [&audioInputs] { return audioInputs.anyArmed(); };
+                transport.setPositionSeconds (0.0);
+                transport.play();
+                TrackLevel micLevel (*track);
+                pump (1500, micLevel, transport, report);
+                const auto wasRecording = transport.isRecording();
+                transport.stop();
+                transport.recordsAudio = nullptr;
+                pump (300, micLevel, transport, report);
+
+                const auto recorded = core::clips::getClips (*track);
+                auto* clip = recorded.isEmpty() ? nullptr : dynamic_cast<te::AudioClipBase*> (recorded.getFirst());
+                const auto seconds = clip != nullptr ? clip->getPosition().getLength().inSeconds() : 0.0;
+                report.check (wasRecording && clip != nullptr && seconds > 1.0,
+                              "Recorded from " + inputs.front()->getAliasOrName() + " onto an armed audio track ("
+                                  + juce::String (seconds, 2) + " s clip)");
+
+                if (clip != nullptr)
+                {
+                    const auto file = clip->getCurrentSourceFile();
+                    report.line ("       recording went to " + file.getFullPathName());
+                    project.getEdit().deleteTrack (track);
+                    engine.getAudioFileManager().releaseAllFiles();
+                    file.deleteFile();
+
+                    // Don't leave an empty recordings folder behind either.
+                    if (const auto folder = file.getParentDirectory();
+                        folder.isDirectory() && folder.getNumberOfChildFiles (juce::File::findFilesAndDirectories) == 0)
+                        folder.deleteFile();
+                }
+                else
+                {
+                    project.getEdit().deleteTrack (track);
+                }
             }
 
             /** A 220 Hz tone at -6 dBFS. */

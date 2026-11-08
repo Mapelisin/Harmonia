@@ -70,6 +70,7 @@ namespace harmonia::ui::arrangement
                 paintClip (g, d);
 
         forgetRemovedWaveforms();
+        paintRecording (g);
         paintDropMarker (g);
 
         if (const auto rectangle = gestures.getSelectionRectangle())
@@ -358,6 +359,35 @@ namespace harmonia::ui::arrangement
 
         g.setColour (theme::colour::accent);
         g.fillRect (x, lane.getY(), 2.0f, lane.getHeight());
+    }
+
+    void ClipArea::paintRecording (juce::Graphics& g)
+    {
+        if (! recording.has_value())
+            return;
+
+        for (auto index : recording->trackIndices)
+        {
+            const auto top = view.trackToY (index);
+            const auto r = juce::Rectangle<float>::leftTopRightBottom (view.beatToX (recording->startBeat), top + 2.0f,
+                                                                       view.beatToX (recording->endBeat), top + view.trackHeight - 2.0f);
+            g.setColour (theme::colour::record.withAlpha (0.3f));
+            g.fillRect (r);
+            g.setColour (theme::colour::record);
+            g.drawRect (r, 1.0f);
+            g.setColour (theme::colour::textPrimary);
+            g.setFont (juce::FontOptions (theme::size::smallFontSize));
+            g.drawText ("Recording...", r.reduced (4.0f, 0.0f).withHeight (headerHeight), juce::Justification::centredLeft, true);
+        }
+    }
+
+    void ClipArea::setRecording (std::optional<RecordingMarker> marker)
+    {
+        if (marker == recording)
+            return;
+
+        recording = marker;
+        repaint();
     }
 
     void ClipArea::setDropMarker (std::optional<DropMarker> marker)

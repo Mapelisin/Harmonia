@@ -7,8 +7,14 @@ namespace harmonia::core
         class HarmoniaEngineBehaviour final : public te::EngineBehaviour
         {
         public:
-            HarmoniaEngineBehaviour (bool shouldOpenDevices, bool shouldScanOutOfProcess)
-                : openDevices (shouldOpenDevices), scanOutOfProcess (shouldScanOutOfProcess) {}
+            HarmoniaEngineBehaviour (bool shouldOpenDevices, bool shouldScanOutOfProcess, juce::File recordings)
+                : openDevices (shouldOpenDevices), scanOutOfProcess (shouldScanOutOfProcess),
+                  recordingsFolder (std::move (recordings)) {}
+
+            juce::File getFileForNewAudioRecording (te::Track& track, const juce::String& extension) override
+            {
+                return Session::getFileForNewRecording (track, extension, recordingsFolder);
+            }
 
             bool autoInitialiseDeviceManager() override  { return openDevices; }
             bool canScanPluginsOutOfProcess() override    { return scanOutOfProcess; }
@@ -23,6 +29,7 @@ namespace harmonia::core
 
         private:
             bool openDevices, scanOutOfProcess;
+            juce::File recordingsFolder;
         };
     }
 
@@ -35,7 +42,27 @@ namespace harmonia::core
         engine = std::make_unique<te::Engine> (std::make_unique<te::PropertyStorage> (options.settingsName),
                                                std::move (ui),
                                                std::make_unique<HarmoniaEngineBehaviour> (openDevices,
-                                                                                          options.scanPluginsOutOfProcess));
+                                                                                          options.scanPluginsOutOfProcess,
+                                                                                          options.recordingsFolder));
+    }
+
+    juce::File Session::getFileForNewRecording (const te::Track& track, const juce::String& extension,
+                                                const juce::File& recordingsFolder)
+    {
+        auto folder = recordingsFolder != juce::File() ? recordingsFolder
+                                                       : juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
+                                                             .getChildFile ("Harmonia").getChildFile ("Recordings");
+
+        if (track.edit.editFileRetriever != nullptr)
+            if (const auto projectFile = track.edit.editFileRetriever(); projectFile != juce::File())
+                folder = projectFile.getSiblingFile (projectFile.getFileNameWithoutExtension() + " Audio");
+
+        // Without the characters Windows doesn't allow in file names.
+        const auto trackName = juce::File::createLegalFileName (track.getName()).trim();
+        const auto time = juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M-%S");
+        const auto name = (trackName.isNotEmpty() ? trackName : juce::String ("Recording")) + " " + time;
+
+        return folder.getNonexistentChildFile (name, extension.startsWithChar ('.') ? extension : "." + extension, false);
     }
 
     Session::~Session() = default;

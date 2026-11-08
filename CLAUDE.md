@@ -50,7 +50,7 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   доли от начала песни; в клипе ноты хранятся от начала его содержимого (`PianoRollModel` переводит).
 - Проверка интерфейса без окна: тесты «the main window paints…» рисуют главное окно в картинку; с переменной
   `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png`, `main-arrangement.png`, `main-mixer.png`
-  и `main-audio.png`
+  `main-audio.png` и `main-audio-recording.png`
   (`harmonia_tests.exe -tc="*paints*"`). Живая проверка мышью (скрипт
   кликает по окну) захватывает настоящий курсор — только если пользователь не за компьютером или разрешил.
 - Самопроверка без звука в динамиках: `--selftest --quiet` (громкость мастера в ноль, уровни меряются на дорожке).
@@ -64,6 +64,9 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Клипы — `te::Clip` (MIDI или аудио) через `core::clips`; `getMidiClips` — только где нужны ноты. Вид дорожки —
   `core::tracks`: аудиоклипы только на аудиодорожки. В тестах после правки клипов — `dispatch()` перед undo:
   Tracktion сортирует клипы дорожки асинхронно и с undo, иначе этот шаг съест redo.
+- Запись звука: готовность/вход — только через `audio::AudioInputs`; запись — `audio::Transport` (`recordsAudio`).
+  Тесты записи — свой `core::Session` с `HostedAudioDeviceInterface` (см. `tests/audio/RecordingTests.cpp`),
+  общий тестовый движок без устройств не трогать.
 - Эффекты — через `audio::effects` (порядок в списке плагинов: инструмент, эффекты, громкость, индикатор).
   Ручки плагинов — через `audio::PluginControl` (у Chorus/Phaser/времени Delay/типа фильтра нет параметров).
 - Сборки — в `build/` (не в git). Пробные программы — в `spikes/`, их выводы — в `docs/research/`.

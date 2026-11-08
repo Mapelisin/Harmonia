@@ -25,8 +25,15 @@ namespace harmonia::audio
     void Transport::play()
     {
         playRequested = true;
+        recordRequested = recordsAudio != nullptr && recordsAudio();
         resumeCount = 0;
         recentResumeTimesMs.clear();
+
+        if (recordRequested)
+        {
+            recordStartSeconds = getPositionSeconds();
+            transport().looping = false;
+        }
 
         if (canPlayNow())
             issuePlay();
@@ -36,9 +43,23 @@ namespace harmonia::audio
 
     void Transport::stop()
     {
-        playRequested = false;
+        const auto wasRecording = recordRequested || isRecording();
+        playRequested = recordRequested = false;
         stopTimer();
+
+        // The engine makes the recordings into clips now: one undo step for all of them.
+        if (wasRecording)
+            edit.getUndoManager().beginNewTransaction ("Record audio");
+
         transport().stop (false, false);
+
+        if (wasRecording)
+            transport().looping = loopWanted;
+    }
+
+    bool Transport::isRecording() const
+    {
+        return transport().isRecording();
     }
 
     void Transport::togglePlayStop()
@@ -66,16 +87,16 @@ namespace harmonia::audio
 
     void Transport::setLoopBeats (double startBeat, double endBeat)
     {
-        if (endBeat <= startBeat)
+        loopWanted = endBeat > startBeat;
+
+        if (loopWanted)
         {
-            transport().looping = false;
-            return;
+            auto& tempo = edit.tempoSequence;
+            transport().setLoopRange ({ tempo.toTime (te::BeatPosition::fromBeats (startBeat)),
+                                        tempo.toTime (te::BeatPosition::fromBeats (endBeat)) });
         }
 
-        auto& tempo = edit.tempoSequence;
-        transport().setLoopRange ({ tempo.toTime (te::BeatPosition::fromBeats (startBeat)),
-                                    tempo.toTime (te::BeatPosition::fromBeats (endBeat)) });
-        transport().looping = true;
+        transport().looping = loopWanted && ! recordRequested;
     }
 
     bool Transport::canPlayNow() const
@@ -91,7 +112,11 @@ namespace harmonia::audio
     void Transport::issuePlay()
     {
         transport().ensureContextAllocated();
-        transport().play (false);
+
+        if (recordRequested)
+            transport().record (false, false);
+        else
+            transport().play (false);
     }
 
     void Transport::timerCallback()

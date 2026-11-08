@@ -24,6 +24,10 @@ namespace harmonia::core
             /** Scan plugins in a child process (the app must hand the child's command line to
                 te::PluginManager::startChildProcessPluginScan). */
             bool scanPluginsOutOfProcess = false;
+
+            /** Where recordings of projects that haven't been saved yet go (a saved project
+                keeps them in a folder next to it). Default: Documents/Harmonia/Recordings. */
+            juce::File recordingsFolder;
         };
 
         explicit Session (Options);
@@ -31,6 +35,11 @@ namespace harmonia::core
 
         te::Engine& getEngine() noexcept           { return *engine; }
         bool devicesEnabled() const noexcept       { return openDevices; }
+
+        /** The file a new recording on this track goes to: "<project> Audio" next to a saved
+            project, else the recordings folder; named after the track and the time. */
+        static juce::File getFileForNewRecording (const te::Track&, const juce::String& extension,
+                                                  const juce::File& recordingsFolder);
 
     private:
         bool openDevices;

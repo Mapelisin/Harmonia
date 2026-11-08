@@ -1,4 +1,5 @@
 #include "ui/arrangement/Arrangement.h"
+#include "audio/AudioInputs.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
 #include "core/Tracks.h"
@@ -207,6 +208,25 @@ namespace harmonia::ui::arrangement
 
         clipArea.setPlayheadBeat (beat);
         ruler.setPlayheadBeat (beat);
+
+        std::optional<ClipArea::RecordingMarker> recording;
+
+        if (transport.isRecording() && beat.has_value())
+        {
+            ClipArea::RecordingMarker marker;
+            marker.startBeat = model.getEdit().tempoSequence.toBeats (te::TimePosition::fromSeconds (transport.getRecordStartSeconds())).inBeats();
+            marker.endBeat = *beat;
+            const auto tracks = model.getTracks();
+
+            for (int i = 0; i < tracks.size(); ++i)
+                if (audio::AudioInputs::isArmed (*tracks[i]))
+                    marker.trackIndices.push_back (i);
+
+            if (! marker.trackIndices.empty() && marker.endBeat > marker.startBeat)
+                recording = marker;
+        }
+
+        clipArea.setRecording (recording);
     }
 
     //==============================================================================

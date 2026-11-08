@@ -94,6 +94,12 @@ Tracktion останавливает воспроизведение, когда 
   с инструментом. Звуковые файлы: `Project::addAudioClip` (клип ссылается на файл на месте),
   `ArrangementModel::importAudio` (куда класть), перетаскивание — `Arrangement` (`FileDragAndDropTarget`),
   волна — `ClipArea` (`te::SmartThumbnail` на клип, только видимая часть).
+- **Запись звука:** `audio/AudioInputs` — готовность к записи и вход аудиодорожки (свойства дорожки
+  `hRecordArmed`, `hRecordInput`) и назначение входов движка (`InputDeviceInstance::setTarget` +
+  `setRecordingEnabled`) только готовым дорожкам. `audio::Transport::play` записывает (`TransportControl::record`),
+  когда `recordsAudio` (в `MainComponent`: Rec включён и есть готовые дорожки); Stop — клипы одним шагом undo.
+  Куда пишутся файлы — `HarmoniaEngineBehaviour::getFileForNewAudioRecording` → `Session::getFileForNewRecording`
+  (`Project::save` задаёт `editFileRetriever`, чтобы записи шли к проекту).
   `ui/MainComponent` связывает: открытый клип → piano roll, текущая дорожка → инструмент, клавиатуры; что играет
   Play — `ArrangementModel::getPlayRange`. Файлы (новый/открыть/сохранить, экспорт `audio/Export`) — `app/MainWindow`,
   он владеет проектом и пересоздаёт экран при смене проекта; `MainComponent` зовёт их через `ui/FileCommands`.

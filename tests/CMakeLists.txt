@@ -14,6 +14,7 @@ add_executable(harmonia_tests
     audio/DeviceStatusTests.cpp
     audio/AudioTests.cpp
     audio/EffectsTests.cpp
+    audio/RecordingTests.cpp
     ui/PianoRollTests.cpp
     ui/PianoRollViewTests.cpp
     ui/NoteInputTests.cpp

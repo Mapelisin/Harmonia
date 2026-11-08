@@ -97,6 +97,8 @@ namespace harmonia::core
         if (! te::EditFileOperations (*edit).writeToFile (file, false))
             return "Cannot write project file: " + file.getFullPathName();
 
+        // Recordings from now on go next to the project (see Session::getFileForNewRecording).
+        edit->editFileRetriever = [file] { return file; };
         markAsSaved();
         return {};
     }
