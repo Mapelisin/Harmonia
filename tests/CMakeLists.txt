@@ -2,6 +2,7 @@ add_executable(harmonia_tests
     TestMain.cpp
     TestSession.h
     TestAudioFiles.h
+    TestAudioRig.h
     core/TestProject.h
     core/ProjectTests.cpp
     core/NoteTests.cpp
@@ -15,6 +16,7 @@ add_executable(harmonia_tests
     audio/AudioTests.cpp
     audio/EffectsTests.cpp
     audio/RecordingTests.cpp
+    audio/SendsTests.cpp
     ui/PianoRollTests.cpp
     ui/PianoRollViewTests.cpp
     ui/NoteInputTests.cpp

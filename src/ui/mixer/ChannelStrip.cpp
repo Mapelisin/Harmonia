@@ -1,4 +1,6 @@
 #include "ui/mixer/ChannelStrip.h"
+#include "audio/Sends.h"
+#include "core/Tracks.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui::mixer
@@ -9,6 +11,7 @@ namespace harmonia::ui::mixer
     {
         constexpr int nameHeight = 24, slotHeight = 20, panHeight = 58, valueHeight = 16, buttonRowHeight = 26;
         constexpr int ledWidth = 14, colourStripHeight = 3, meterWidth = 12;
+        constexpr int sendHeight = 18, maxVisibleSendRows = 4;
 
         std::function<te::LevelMeasurer*()> getMeterSource (te::Edit& edit, te::AudioTrack* track)
         {
@@ -98,9 +101,81 @@ namespace harmonia::ui::mixer
     };
 
     //==============================================================================
+    /** How much of the track goes to one return track: a bar with the return's name. */
+    class ChannelStrip::Send final : public juce::Component
+    {
+    public:
+        Send (ChannelStrip& o, te::AudioTrack& r)
+            : owner (o), returnTrack (&r)
+        {
+            slider.setSliderStyle (juce::Slider::LinearBar);
+            slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+            slider.setRange (0.0, 1.0);
+            slider.setDoubleClickReturnValue (true, 0.0);
+            slider.setScrollWheelEnabled (false);   // the wheel scrolls the mixer
+            slider.setWantsKeyboardFocus (false);
+            slider.setColour (juce::Slider::trackColourId, theme::mixer::send.withAlpha (0.55f));
+            slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+            slider.onDragStart = [this] { owner.model.getProject().beginGesture ("Send to " + returnTrack->getName()); };
+            slider.onValueChange = [this]
+            {
+                if (owner.track != nullptr && ! audio::sends::setLevel (*owner.track, *returnTrack, (float) slider.getValue()))
+                    owner.tell ("No room on " + owner.track->getName() + " for another send", true);
+
+                repaint();
+            };
+            addAndMakeVisible (slider);
+            refresh();
+        }
+
+        te::AudioTrack& getReturnTrack() const noexcept     { return *returnTrack; }
+        juce::Slider& getSlider() noexcept                  { return slider; }
+
+        void refresh()
+        {
+            slider.setTooltip ("Send to " + returnTrack->getName() + ": how much of this track goes through that return's "
+                               "effects (drag; double-click: none)");
+
+            if (! slider.isMouseButtonDown() && owner.track != nullptr)
+                slider.setValue (audio::sends::getLevel (*owner.track, *returnTrack), juce::dontSendNotification);
+
+            repaint();
+        }
+
+        void resized() override
+        {
+            slider.setBounds (getLocalBounds().reduced (0, 1));
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            g.setColour (theme::mixer::slot);
+            g.fillRoundedRectangle (getLocalBounds().reduced (0, 1).toFloat(), theme::size::cornerRadius);
+        }
+
+        void paintOverChildren (juce::Graphics& g) override
+        {
+            const auto db = owner.track != nullptr ? audio::sends::getLevelDb (*owner.track, *returnTrack) : -100.0f;
+            const auto off = slider.getValue() <= 0.0;
+            auto area = getLocalBounds().reduced (4, 0);
+
+            g.setFont (juce::FontOptions (theme::size::smallFontSize));
+            g.setColour (off ? theme::colour::textSecondary : theme::colour::textPrimary);
+            const auto value = off ? juce::String ("-") : juce::String (juce::roundToInt (db));
+            g.drawText (value, area.removeFromRight (24), juce::Justification::centredRight, false);
+            g.drawText (returnTrack->getName(), area, juce::Justification::centredLeft, true);
+        }
+
+    private:
+        ChannelStrip& owner;
+        juce::ReferenceCountedObjectPtr<te::AudioTrack> returnTrack;
+        juce::Slider slider;
+    };
+
+    //==============================================================================
     void ChannelStrip::ClickWatcher::mouseDown (const juce::MouseEvent&)
     {
-        if (owner.track != nullptr)
+        if (owner.track != nullptr && ! owner.isReturn())
             owner.model.setCurrentTrack (owner.track.get());
     }
 
@@ -137,6 +212,10 @@ namespace harmonia::ui::mixer
         slotView.setViewedComponent (&slotList, false);
         slotView.setScrollBarsShown (true, false);
         slotView.setScrollBarThickness (6);
+
+        sendView.setViewedComponent (&sendList, false);
+        sendView.setScrollBarsShown (true, false);
+        sendView.setScrollBarThickness (6);
 
         pan.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
         pan.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
@@ -202,12 +281,16 @@ namespace harmonia::ui::mixer
             addAndMakeVisible (solo);
         }
 
-        for (auto* c : std::initializer_list<juce::Component*> { &name, &slotView, &pan, &panText, &volume, &volumeText, &meter })
+        for (auto* c : std::initializer_list<juce::Component*> { &name, &slotView, &sendView, &pan, &panText, &volume, &volumeText, &meter })
             addAndMakeVisible (c);
 
         // The mixer never takes keyboard focus: Space and the shortcuts keep working.
-        for (auto* c : std::initializer_list<juce::Component*> { &addButton, &pan, &volume, &mute, &solo, &slotView })
+        for (auto* c : std::initializer_list<juce::Component*> { &addButton, &pan, &volume, &mute, &solo, &slotView, &sendView })
             c->setWantsKeyboardFocus (false);
+
+        if (isReturn())
+            name.setTooltip ("Return track: plays what the tracks send to it (the send bars on their strips) "
+                             "through its effects. Right-click for its menu");
 
         addMouseListener (&clickWatcher, true);
         refresh();
@@ -225,17 +308,81 @@ namespace harmonia::ui::mixer
 
     juce::Colour ChannelStrip::getColour() const
     {
-        return isMaster() ? theme::colour::accent : theme::arrangement::getTrackColour (model.indexOf (track.get()));
+        if (isMaster())
+            return theme::colour::accent;
+
+        if (isReturn())
+            return theme::mixer::returnTrack;
+
+        return theme::arrangement::getTrackColour (model.indexOf (track.get()));
+    }
+
+    bool ChannelStrip::isReturn() const
+    {
+        return track != nullptr && core::tracks::isReturn (*track);
+    }
+
+    juce::Slider* ChannelStrip::getSendSlider (int index) const
+    {
+        auto* send = sends[index];
+        return send != nullptr ? &send->getSlider() : nullptr;
+    }
+
+    te::AudioTrack* ChannelStrip::getSendTarget (int index) const
+    {
+        auto* send = sends[index];
+        return send != nullptr ? &send->getReturnTrack() : nullptr;
     }
 
     //==============================================================================
     void ChannelStrip::refresh()
     {
         name.setText (isMaster() ? juce::String ("Master") : track->getName(), juce::dontSendNotification);
-        name.setTooltip (name.getText());
+
+        if (! isReturn())
+            name.setTooltip (name.getText());
+
         refreshSlots();
+        refreshSends();
         refreshValues();
         repaint();
+    }
+
+    void ChannelStrip::refreshSends()
+    {
+        const auto returns = model.getProject().getReturnTracks();
+
+        if (returns.size() != numSendRows)
+        {
+            numSendRows = returns.size();
+            resized();
+        }
+
+        // Only song tracks send (a return sending to a return could feed itself).
+        juce::Array<te::AudioTrack*> targets;
+
+        if (track != nullptr && ! isReturn())
+            targets = returns;
+
+        auto same = targets.size() == sends.size();
+
+        for (int i = 0; same && i < targets.size(); ++i)
+            same = &sends[i]->getReturnTrack() == targets[i];
+
+        if (! same)
+        {
+            sends.clear();
+
+            for (auto* target : targets)
+                sendList.addAndMakeVisible (sends.add (std::make_unique<Send> (*this, *target)));
+
+            layOutSends();
+        }
+        else
+        {
+            for (auto* send : sends)
+                send->refresh();
+        }
     }
 
     void ChannelStrip::refreshSlots()
@@ -322,6 +469,19 @@ namespace harmonia::ui::mixer
         slotView.setBounds (area.removeFromTop (slotsHeight));
         layOutSlots();
 
+        // Sends: a row per return track (a few visible, the rest scroll).
+        if (numSendRows > 0)
+        {
+            area.removeFromTop (2);
+            sendView.setBounds (area.removeFromTop (std::min (numSendRows, maxVisibleSendRows) * sendHeight + (numSendRows > maxVisibleSendRows ? 2 : 0)));
+        }
+        else
+        {
+            sendView.setBounds ({});
+        }
+
+        layOutSends();
+
         // JUCE draws a rotary 10 px inside its bounds: give it room.
         auto panRow = area.removeFromTop (panHeight).reduced (0, 2);
         panText.setBounds (panRow.removeFromRight (26));
@@ -345,6 +505,55 @@ namespace harmonia::ui::mixer
             slots[i]->setBounds (0, i * slotHeight, listWidth, slotHeight);
 
         addButton.setBounds (0, slots.size() * slotHeight + 1, listWidth, slotHeight - 2);
+    }
+
+    void ChannelStrip::layOutSends()
+    {
+        const auto needsScroll = sends.size() * sendHeight > sendView.getHeight();
+        const auto listWidth = sendView.getWidth() - (needsScroll ? sendView.getScrollBarThickness() : 0);
+        sendList.setSize (std::max (0, listWidth), sends.size() * sendHeight);
+
+        for (int i = 0; i < sends.size(); ++i)
+            sends[i]->setBounds (0, i * sendHeight, listWidth, sendHeight);
+    }
+
+    //==============================================================================
+    void ChannelStrip::mouseDown (const juce::MouseEvent& e)
+    {
+        if (e.mods.isPopupMenu() && isReturn())
+            showReturnMenu();
+    }
+
+    void ChannelStrip::showReturnMenu()
+    {
+        juce::Component::SafePointer<ChannelStrip> safe (this);
+        juce::PopupMenu menu;
+        menu.addSectionHeader ("Return track " + track->getName());
+        menu.addItem ("Rename...", [safe] { if (safe != nullptr) safe->askToRenameReturn(); });
+        menu.addItem ("Delete (and the sends to it)", [safe, &project = model.getProject(), t = track]
+        {
+            audio::sends::removeReturnTrack (project, *t);
+
+            if (safe != nullptr)
+                safe->tell ("Return track " + t->getName() + " deleted (Ctrl+Z brings it back)", false);
+        });
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&name));
+    }
+
+    void ChannelStrip::askToRenameReturn()
+    {
+        auto* window = new juce::AlertWindow ("Rename return track", {}, juce::MessageBoxIconType::NoIcon, this);
+        window->addTextEditor ("name", track->getName());
+        window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
+        window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+        juce::Component::SafePointer<juce::AlertWindow> safeWindow (window);
+        window->enterModalState (true, juce::ModalCallbackFunction::create (
+            [safeWindow, &project = model.getProject(), t = track] (int result)
+            {
+                if (result == 1 && safeWindow != nullptr && t->state.getParent().isValid())
+                    audio::sends::renameReturnTrack (project, *t, safeWindow->getTextEditorContents ("name"));
+            }), true);
     }
 
     //==============================================================================

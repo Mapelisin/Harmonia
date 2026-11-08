@@ -65,8 +65,10 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   `core::tracks`: аудиоклипы только на аудиодорожки. В тестах после правки клипов — `dispatch()` перед undo:
   Tracktion сортирует клипы дорожки асинхронно и с undo, иначе этот шаг съест redo.
 - Запись звука: готовность/вход — только через `audio::AudioInputs`; запись — `audio::Transport` (`recordsAudio`).
-  Тесты записи — свой `core::Session` с `HostedAudioDeviceInterface` (см. `tests/audio/RecordingTests.cpp`),
-  общий тестовый движок без устройств не трогать.
+  Тесты записи и живого звука — `test::AudioRig` (`tests/TestAudioRig.h`: свой `core::Session` с
+  `HostedAudioDeviceInterface`, тест сам гонит звук и меряет выход), общий тестовый движок без устройств не трогать.
+- Посылы и возвратные дорожки — только через `audio::sends`. `Project::getTracks` — дорожки песни (без
+  возвратных), `getReturnTracks` — возвратные.
 - Эффекты — через `audio::effects` (порядок в списке плагинов: инструмент, эффекты, громкость, индикатор).
   Ручки плагинов — через `audio::PluginControl` (у Chorus/Phaser/времени Delay/типа фильтра нет параметров).
 - Сборки — в `build/` (не в git). Пробные программы — в `spikes/`, их выводы — в `docs/research/`.

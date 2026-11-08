@@ -1,4 +1,5 @@
 #include "core/Project.h"
+#include "core/Tracks.h"
 
 namespace harmonia::core
 {
@@ -116,7 +117,16 @@ namespace harmonia::core
 
     juce::Array<te::AudioTrack*> Project::getTracks() const
     {
-        return te::getAudioTracks (*edit);
+        auto result = te::getAudioTracks (*edit);
+        result.removeIf ([] (te::AudioTrack* track) { return tracks::isReturn (*track); });
+        return result;
+    }
+
+    juce::Array<te::AudioTrack*> Project::getReturnTracks() const
+    {
+        auto result = te::getAudioTracks (*edit);
+        result.removeIf ([] (te::AudioTrack* track) { return ! tracks::isReturn (*track); });
+        return result;
     }
 
     int Project::getNumTracks() const
@@ -132,6 +142,18 @@ namespace harmonia::core
         if (track != nullptr)
             track->setName (name);
 
+        return track.get();
+    }
+
+    te::AudioTrack* Project::addReturnTrack (const juce::String& name)
+    {
+        auto track = edit->insertNewAudioTrack (te::TrackInsertPoint (nullptr, te::getAudioTracks (*edit).getLast()), nullptr);
+
+        if (track == nullptr)
+            return nullptr;
+
+        track->setName (name);
+        tracks::setKind (*track, tracks::Kind::fxReturn);
         return track.get();
     }
 

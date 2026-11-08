@@ -4,12 +4,19 @@ namespace harmonia::audio::effects
 {
     namespace
     {
-        /** The fader end of a track's list: never an insert effect. */
-        bool isMixerStage (te::Plugin& plugin)
+        /** The fader end of a track's list (and its sends): effects go before it. */
+        bool isFaderStage (te::Plugin& plugin)
         {
             return dynamic_cast<te::VolumeAndPanPlugin*> (&plugin) != nullptr
                 || dynamic_cast<te::LevelMeterPlugin*> (&plugin) != nullptr
-                || dynamic_cast<te::VCAPlugin*> (&plugin) != nullptr;
+                || dynamic_cast<te::VCAPlugin*> (&plugin) != nullptr
+                || dynamic_cast<te::AuxSendPlugin*> (&plugin) != nullptr;
+        }
+
+        /** Never an insert effect: the fader end, and a return track's input (at the start). */
+        bool isMixerStage (te::Plugin& plugin)
+        {
+            return isFaderStage (plugin) || dynamic_cast<te::AuxReturnPlugin*> (&plugin) != nullptr;
         }
 
         bool isEffect (te::Plugin& plugin)
@@ -28,9 +35,9 @@ namespace harmonia::audio::effects
             if (! effects.isEmpty())
                 return chain.indexOf (effects.getLast()) + 1;
 
-            // The first effect: right before the fader (after the instrument).
+            // The first effect: right before the fader (after the instrument or the return's input).
             for (int i = 0; i < chain.size(); ++i)
-                if (isMixerStage (*chain[i]))
+                if (isFaderStage (*chain[i]))
                     return i;
 
             return -1;

@@ -1,11 +1,13 @@
 #pragma once
 
+#include "audio/Sends.h"
 #include "ui/mixer/ChannelStrip.h"
 
 namespace harmonia::ui::mixer
 {
-    /** The mixer: a strip per track (scrolls sideways) and the master strip on the right.
-        Follows the edit: tracks coming and going, effects, volumes, undo. */
+    /** The mixer: a strip per track, then the return tracks' strips (scrolls sideways), and the
+        master strip on the right. "+ Track" adds tracks and return tracks (Reverb, Delay...).
+        Follows the edit: tracks coming and going, effects, sends, volumes, undo. */
     class Mixer final : public juce::Component,
                         private arrangement::ArrangementModel::Listener,
                         private juce::ValueTree::Listener,
@@ -25,6 +27,11 @@ namespace harmonia::ui::mixer
 
         int getNumTrackStrips() const noexcept          { return strips.size(); }
         ChannelStrip* getTrackStrip (int index) const   { return strips[index]; }
+        int getNumReturnStrips() const noexcept         { return returnStrips.size(); }
+        ChannelStrip* getReturnStrip (int index) const  { return returnStrips[index]; }
+
+        /** Adds a return track with that effect (what "+ Track" offers); problems go to onMessage. */
+        te::AudioTrack* addReturnTrack (audio::sends::Preset);
         ChannelStrip& getMasterStrip() noexcept         { return master; }
 
         /** Something to tell the user (e.g. a plugin failed to load). */
@@ -37,13 +44,15 @@ namespace harmonia::ui::mixer
 
         juce::Viewport viewport;
         juce::Component stripRow;
-        juce::OwnedArray<ChannelStrip> strips;
+        juce::OwnedArray<ChannelStrip> strips, returnStrips;
         juce::TextButton addTrackButton { "+ Track" };
         ChannelStrip master;
         bool needsRefresh = false;
 
         void connect (ChannelStrip&);
         void layOutStrips();
+        void showAddMenu();
+        bool syncStrips (juce::OwnedArray<ChannelStrip>&, const juce::Array<te::AudioTrack*>&);
 
         void arrangementChanged() override;
         void handleAsyncUpdate() override;

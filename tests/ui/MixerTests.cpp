@@ -4,6 +4,7 @@
 #include "audio/Effects.h"
 #include "audio/Instruments.h"
 #include "audio/PluginControls.h"
+#include "audio/Sends.h"
 #include "core/Project.h"
 #include "ui/MainComponent.h"
 #include "ui/ParameterPanel.h"
@@ -224,6 +225,77 @@ TEST_SUITE ("mixer")
     }
 }
 
+TEST_SUITE ("mixer: sends")
+{
+    TEST_CASE ("return tracks get strips after the tracks; each song strip gets a send bar per return")
+    {
+        MixerFixture f;
+        CHECK (f.mixer->getNumReturnStrips() == 0);
+        CHECK (f.mixer->getTrackStrip (0)->getNumSends() == 0);
+
+        auto* reverb = f.mixer->addReturnTrack (audio::sends::Preset::reverb);
+        REQUIRE (reverb != nullptr);
+        REQUIRE (f.messages.size() == 1);
+        CHECK (f.messages[0].startsWith ("Return track Reverb added"));
+        CHECK (f.mixer->getNumTrackStrips() == 1);
+        CHECK (f.model.getTracks().size() == 1);   // not a song track: not in the arrangement
+
+        REQUIRE (f.mixer->getNumReturnStrips() == 1);
+        auto* returnStrip = f.mixer->getReturnStrip (0);
+        auto* strip = f.mixer->getTrackStrip (0);
+        CHECK (returnStrip->isReturn());
+        CHECK_FALSE (strip->isReturn());
+        CHECK (returnStrip->getTrack() == reverb);
+        CHECK (returnStrip->getNumSlots() == 1);   // its reverb
+        CHECK (returnStrip->getNumSends() == 0);
+        CHECK (returnStrip->getX() > strip->getRight());
+
+        REQUIRE (strip->getNumSends() == 1);
+        CHECK (strip->getSendTarget (0) == reverb);
+
+        // The faders line up: the return and the master keep room for the send rows too.
+        CHECK (strip->getFader().getY() == returnStrip->getFader().getY());
+        CHECK (strip->getFader().getY() == f.mixer->getMasterStrip().getFader().getY());
+
+        drag (*strip->getSendSlider (0), 0.6);
+        CHECK (audio::sends::getLevel (f.firstTrack(), *reverb) == doctest::Approx (0.6f));
+        CHECK (f.undoManager().getUndoDescription() == "Send to Reverb");
+
+        f.project->undo();
+        dispatch();
+        CHECK (audio::sends::getSend (f.firstTrack(), *reverb) == nullptr);
+        REQUIRE (f.mixer->getNumTrackStrips() == 1);
+        REQUIRE (f.mixer->getTrackStrip (0)->getNumSends() == 1);
+        CHECK (f.mixer->getTrackStrip (0)->getSendSlider (0)->getValue() == 0.0);
+
+        audio::sends::removeReturnTrack (*f.project, *reverb);
+        dispatch();
+        CHECK (f.mixer->getNumReturnStrips() == 0);
+        CHECK (f.mixer->getTrackStrip (0)->getNumSends() == 0);
+
+        f.project->undo();
+        dispatch();
+        CHECK (f.mixer->getNumReturnStrips() == 1);
+        CHECK (f.mixer->getTrackStrip (0)->getNumSends() == 1);
+    }
+
+    TEST_CASE ("tracks added after a return track come before it")
+    {
+        MixerFixture f;
+        auto* delay = f.mixer->addReturnTrack (audio::sends::Preset::delay);
+        REQUIRE (delay != nullptr);
+
+        auto* added = f.model.addTrack();
+        REQUIRE (added != nullptr);
+        dispatch();
+        CHECK (f.mixer->getNumTrackStrips() == 2);
+        CHECK (f.mixer->getTrackStrip (1)->getTrack() == added);
+        CHECK (f.mixer->getTrackStrip (1)->getNumSends() == 1);
+        CHECK (f.mixer->getNumReturnStrips() == 1);
+        CHECK (te::getAudioTracks (f.project->getEdit()).getLast() == delay);
+    }
+}
+
 TEST_SUITE ("ParameterPanel")
 {
     TEST_CASE ("a row per control, for effects and the built-in synth")
@@ -326,10 +398,22 @@ TEST_SUITE ("mixer: main window")
         tracks[3]->setMute (true);
         arrangement.setCurrentTrack (tracks[1]);
 
+        // A reverb and a delay shared by the tracks.
+        auto* reverb = audio::sends::addReturnTrack (*f.project, audio::sends::Preset::reverb, error);
+        auto* delay = audio::sends::addReturnTrack (*f.project, audio::sends::Preset::delay, error);
+        REQUIRE (reverb != nullptr);
+        REQUIRE (delay != nullptr);
+        audio::sends::setLevelDb (*tracks[0], *reverb, -10.0f);
+        audio::sends::setLevelDb (*tracks[2], *reverb, -4.0f);
+        audio::sends::setLevelDb (*tracks[2], *delay, -14.0f);
+        audio::sends::setLevelDb (*tracks[3], *delay, -2.0f);
+
         f.main->showLowerPanel (ui::MainComponent::LowerPanel::mixer);
         dispatch();
         CHECK (f.main->getMixer().getNumTrackStrips() == 4);
         CHECK (f.main->getMixer().getTrackStrip (0)->getNumSlots() == 3);
+        CHECK (f.main->getMixer().getNumReturnStrips() == 2);
+        CHECK (f.main->getArrangement().getHeaders().getNumHeaders() == 4);   // return tracks stay out of the arrangement
 
         const auto image = f.main->createComponentSnapshot (f.main->getLocalBounds());
         CHECK (image.isValid());

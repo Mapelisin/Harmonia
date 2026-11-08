@@ -6,10 +6,12 @@
 
 namespace harmonia::ui::mixer
 {
-    /** One mixer channel, a track's or the master's. Top to bottom: name; effect slots (click opens
-        the effect, the light turns it off and on, right-click for its menu) and "+" to add one;
+    /** One mixer channel: a track's, a return track's or the master's. Top to bottom: name; effect
+        slots (click opens the effect, the light turns it off and on, right-click for its menu) and
+        "+" to add one; on a song track a send bar per return track ("how much goes to the Reverb");
         pan; volume fader with the level meter; mute and solo.
-        A click anywhere on a track's strip makes that track current. */
+        A click anywhere on a song track's strip makes that track current; a right-click on a return
+        track's strip opens its menu (rename, delete). */
     class ChannelStrip final : public juce::Component
     {
     public:
@@ -23,6 +25,7 @@ namespace harmonia::ui::mixer
 
         te::AudioTrack* getTrack() const noexcept       { return track.get(); }
         bool isMaster() const noexcept                  { return track == nullptr; }
+        bool isReturn() const;
         te::PluginList& getChain() const;
         te::VolumeAndPanPlugin* getVolumePlugin() const;
 
@@ -33,6 +36,11 @@ namespace harmonia::ui::mixer
         void addEffect (const audio::effects::EffectType&);
 
         int getNumSlots() const noexcept                { return slots.size(); }
+
+        /** The send bars (one per return track, on song tracks only). */
+        int getNumSends() const noexcept                { return sends.size(); }
+        juce::Slider* getSendSlider (int index) const;
+        te::AudioTrack* getSendTarget (int index) const;
         LevelMeter& getMeter() noexcept                 { return meter; }
         juce::Slider& getFader() noexcept               { return volume; }
         juce::Slider& getPanKnob() noexcept             { return pan; }
@@ -42,11 +50,13 @@ namespace harmonia::ui::mixer
 
         void paint (juce::Graphics&) override;
         void resized() override;
+        void mouseDown (const juce::MouseEvent&) override;
 
         static constexpr int width = 104;
 
     private:
         class Slot;
+        class Send;
         struct ClickWatcher final : juce::MouseListener
         {
             explicit ClickWatcher (ChannelStrip& o) : owner (o) {}
@@ -64,6 +74,10 @@ namespace harmonia::ui::mixer
         juce::Component slotList;
         juce::OwnedArray<Slot> slots;
         juce::TextButton addButton { "+" };
+        juce::Viewport sendView;
+        juce::Component sendList;
+        juce::OwnedArray<Send> sends;
+        int numSendRows = 0;   // the same on every strip, so the faders line up
         juce::Slider pan, volume;
         juce::Label panText, volumeText;
         LevelMeter meter;
@@ -71,8 +85,12 @@ namespace harmonia::ui::mixer
 
         void setUp();
         void refreshSlots();
+        void refreshSends();
         void refreshValues();
         void layOutSlots();
+        void layOutSends();
+        void showReturnMenu();
+        void askToRenameReturn();
         void showAddMenu();
         void showSlotMenu (te::Plugin&);
         void tell (const juce::String&, bool isProblem);

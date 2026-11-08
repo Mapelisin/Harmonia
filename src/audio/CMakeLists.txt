@@ -21,6 +21,8 @@ add_library(harmonia_audio STATIC
     PluginControls.cpp
     PluginScanner.h
     PluginScanner.cpp
+    Sends.h
+    Sends.cpp
     Transport.h
     Transport.cpp)
 

@@ -14,12 +14,17 @@ namespace harmonia::ui::arrangement
         constexpr int smallButtonSize = 20;
     }
 
-    void showAddTrackMenu (ArrangementModel& model, juce::Component& target)
+    juce::PopupMenu makeAddTrackMenu (ArrangementModel& model)
     {
         juce::PopupMenu menu;
         menu.addItem ("Instrument track (MIDI, built-in synth)", [&model] { model.addTrack(); });
         menu.addItem ("Audio track (sound files)", [&model] { model.addAudioTrack(); });
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target));
+        return menu;
+    }
+
+    void showAddTrackMenu (ArrangementModel& model, juce::Component& target)
+    {
+        makeAddTrackMenu (model).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target));
     }
 
     //==============================================================================

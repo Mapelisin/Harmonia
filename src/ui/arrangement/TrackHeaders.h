@@ -5,7 +5,10 @@
 
 namespace harmonia::ui::arrangement
 {
-    /** "Instrument track" / "Audio track", shown under `target`. */
+    /** "Instrument track" / "Audio track". */
+    juce::PopupMenu makeAddTrackMenu (ArrangementModel&);
+
+    /** makeAddTrackMenu, shown under `target`. */
     void showAddTrackMenu (ArrangementModel&, juce::Component& target);
 
     /** The column left of the clips: one header per track with its name (double-click to

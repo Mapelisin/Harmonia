@@ -1,6 +1,6 @@
 #include <doctest.h>
 
-#include "TestAudioFiles.h"
+#include "TestAudioRig.h"
 #include "audio/AudioInputs.h"
 #include "audio/Instruments.h"
 #include "audio/Transport.h"
@@ -16,77 +16,7 @@ namespace tracks = core::tracks;
 
 namespace
 {
-    /** An engine of its own (so the shared test engine never gets a device), whose "audio
-        interface" is fed by the test: what `process` is given arrives at its inputs. */
-    struct RecordingRig
-    {
-        explicit RecordingRig (int numInputs = 1)
-        {
-            params.sampleRate = 44100.0;
-            params.blockSize = 512;
-            params.inputChannels = numInputs;
-            params.outputChannels = 2;
-            audioIO.initialise (params);
-            audioIO.prepareToPlay (params.sampleRate, params.blockSize);
-            engine().getDeviceManager().dispatchPendingUpdates();
-        }
-
-        ~RecordingRig()
-        {
-            project.reset();
-            engine().getDeviceManager().deviceManager.closeAudioDevice();
-            engine().getDeviceManager().removeHostedAudioDeviceInterface();
-            engine().getAudioFileManager().releaseAllFiles();
-        }
-
-        te::Engine& engine()    { return session.getEngine(); }
-
-        static core::Session::Options makeOptions (const juce::File& recordings)
-        {
-            core::Session::Options options;
-            options.openDevices = false;
-            options.settingsName = "HarmoniaRecordingTests";
-            options.recordingsFolder = recordings;
-            return options;
-        }
-
-        /** Runs the engine for `seconds` with a tone (or silence) at the inputs. */
-        void process (double seconds, float level = 0.5f)
-        {
-            const auto numSamples = (int) (seconds * params.sampleRate);
-            const auto numChannels = std::max (params.inputChannels, params.outputChannels);
-            juce::MidiBuffer midi;
-
-            for (int start = 0; start < numSamples; start += params.blockSize)
-            {
-                const auto n = std::min (params.blockSize, numSamples - start);
-                juce::AudioBuffer<float> block (numChannels, n);
-                block.clear();
-
-                for (int channel = 0; channel < params.inputChannels; ++channel)
-                    for (int i = 0; i < n; ++i)
-                        block.setSample (channel, i, level * (float) std::sin (juce::MathConstants<double>::twoPi * 440.0
-                                                                               * (samplesProcessed + i) / params.sampleRate));
-
-                audioIO.processBlock (block, midi);
-                samplesProcessed += n;
-            }
-        }
-
-        te::AudioTrack& addAudioTrack (const juce::String& name)
-        {
-            auto* track = project->addTrack (name);
-            tracks::setKind (*track, tracks::Kind::audio);
-            return *track;
-        }
-
-        test::TempFolder temp;
-        core::Session session { makeOptions (temp.getFile ("Recordings")) };
-        te::HostedAudioDeviceInterface::Parameters params;
-        te::HostedAudioDeviceInterface& audioIO { engine().getDeviceManager().getHostedAudioDeviceInterface() };
-        std::unique_ptr<core::Project> project = core::Project::createEmpty (session);
-        juce::int64 samplesProcessed = 0;
-    };
+    using RecordingRig = test::AudioRig;
 
     float rmsOf (const juce::File& file)
     {

@@ -1,4 +1,5 @@
 #include "audio/Export.h"
+#include "core/Tracks.h"
 
 namespace harmonia::audio
 {
@@ -33,7 +34,10 @@ namespace harmonia::audio
                 continue;
 
             audible.add (track);
-            anyAudioTrack = true;
+
+            // Return tracks only play what the song's tracks send them.
+            if (! core::tracks::isReturn (*dynamic_cast<te::AudioTrack*> (track)))
+                anyAudioTrack = true;
         }
 
         if (! anyAudioTrack)

@@ -26,8 +26,8 @@ namespace harmonia::audio::effects
     /** Scanned plugins that are effects (not instruments), sorted by name. */
     juce::Array<EffectType> getExternal (core::Session&);
 
-    /** The effects of a chain in processing order: the list without the instrument, the volume/pan
-        and the level meter. */
+    /** The effects of a chain in processing order: the list without the instrument, the volume/pan,
+        the level meter, sends and a return track's input. */
     juce::Array<te::Plugin*> get (te::PluginList&);
 
     /** The chain a plugin is in (a track's or the master's), or nullptr. */

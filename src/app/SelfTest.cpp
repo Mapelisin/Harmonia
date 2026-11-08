@@ -1,5 +1,6 @@
 #include "app/SelfTest.h"
 #include "audio/AudioInputs.h"
+#include "audio/Sends.h"
 #include "audio/DeviceSetup.h"
 #include "audio/DeviceStatus.h"
 #include "audio/Effects.h"
@@ -255,6 +256,7 @@ namespace harmonia::app
                     checkPlaybackClock (project->getEdit(), transport, level);
                     checkPlayAfterDeviceRestart (transport, level);
                     checkEffects (*project, track, transport, level);
+                    checkSends (*project, track, transport, level);
                 }
 
                 checkAudioClip (*project, transport);
@@ -616,6 +618,50 @@ namespace harmonia::app
                                                  + juce::String (peak, 1) + " dBFS)");
                 transport.stop();
                 pump (200, audioLevel, transport, report);
+            }
+
+            /** A reverb return added while playing hears what track 1 sends it; deleting it again
+                keeps the song playing. */
+            void checkSends (core::Project& project, te::AudioTrack& track, audio::Transport& transport, TrackLevel& level)
+            {
+                transport.setPositionSeconds (0.0);
+                transport.play();
+                pump (300, level, transport, report);
+
+                juce::String error;
+                auto* reverb = audio::sends::addReturnTrack (project, audio::sends::Preset::reverb, error);
+
+                if (reverb == nullptr)
+                {
+                    report.check (false, "Added a reverb return track: " + error);
+                    transport.stop();
+                    return;
+                }
+
+                {
+                    TrackLevel reverbLevel (*reverb);
+                    pump (600, reverbLevel, transport, report);
+                    const auto before = reverbLevel.takePeakDb();
+
+                    project.beginGesture ("Send to Reverb");
+                    const auto sent = audio::sends::setLevelDb (track, *reverb, 0.0f);
+                    pump (1500, reverbLevel, transport, report);
+                    const auto after = reverbLevel.takePeakDb();
+
+                    report.check (sent && before < -90.0f && after > -60.0f,
+                                  "Track 1 sends to a reverb return while playing (return peak "
+                                      + juce::String (before, 1) + " dBFS before the send, " + juce::String (after, 1) + " after)");
+                }
+
+                audio::sends::removeReturnTrack (project, *reverb);
+                level.takePeakDb();
+                pump (800, level, transport, report);
+                report.check (project.getReturnTracks().isEmpty() && audio::sends::getBus (track) < 0
+                                  && transport.isPlaying() && level.takePeakDb() > -60.0f,
+                              "Deleted the return track while playing, still audible");
+
+                transport.stop();
+                pump (300, level, transport, report);
             }
 
             /** Recording from the audio interface's first input onto an armed audio track: a clip

@@ -77,6 +77,8 @@ namespace harmonia::ui::theme
         inline const juce::Colour meterLow        { 0xff4fbf7a };
         inline const juce::Colour meterMid        { 0xffe0c04f };
         inline const juce::Colour fader           { 0xff4f9fe0 };
+        inline const juce::Colour send            { 0xffb48ae6 };
+        inline const juce::Colour returnTrack     { 0xffb48ae6 };
     }
 
     namespace size

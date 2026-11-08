@@ -56,7 +56,9 @@ namespace harmonia::test
 
         juce::File getFile (const juce::String& name) const   { return folder.getChildFile (name); }
 
+        // Never the same path twice: the engine remembers files by path (their length...), and a
+        // new file where an older test left another would look like the old one.
         juce::File folder = juce::File::getSpecialLocation (juce::File::tempDirectory)
-                                .getNonexistentChildFile ("harmonia-test-audio", {}, false);
+                                .getNonexistentChildFile ("harmonia-test-audio-" + juce::Uuid().toString().substring (0, 12), {}, false);
     };
 }

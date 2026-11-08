@@ -6,7 +6,7 @@ namespace harmonia::ui::mixer
 {
     namespace
     {
-        constexpr int addTrackWidth = 70, masterGap = 6;
+        constexpr int addTrackWidth = 70, masterGap = 6, returnGap = 6;
     }
 
     Mixer::Mixer (core::Session& s, arrangement::ArrangementModel& m)
@@ -19,9 +19,9 @@ namespace harmonia::ui::mixer
         viewport.setScrollBarThickness (10);
         viewport.setWantsKeyboardFocus (false);
 
-        addTrackButton.setTooltip ("Add a track");
+        addTrackButton.setTooltip ("Add a track, or a return track (one reverb or delay shared by several tracks)");
         addTrackButton.setWantsKeyboardFocus (false);
-        addTrackButton.onClick = [this] { arrangement::showAddTrackMenu (model, addTrackButton); };
+        addTrackButton.onClick = [this] { showAddMenu(); };
         stripRow.addAndMakeVisible (addTrackButton);
 
         connect (master);
@@ -49,35 +49,83 @@ namespace harmonia::ui::mixer
         };
     }
 
+    void Mixer::showAddMenu()
+    {
+        using audio::sends::Preset;
+        juce::Component::SafePointer<Mixer> safe (this);
+        const auto addReturn = [safe] (Preset preset)
+        {
+            return [safe, preset]
+            {
+                if (safe != nullptr)
+                    safe->addReturnTrack (preset);
+            };
+        };
+
+        auto menu = arrangement::makeAddTrackMenu (model);
+        menu.addSeparator();
+        menu.addSectionHeader ("Return track: one effect for several tracks");
+        menu.addItem ("Reverb return", addReturn (Preset::reverb));
+        menu.addItem ("Delay return", addReturn (Preset::delay));
+        menu.addItem ("Empty return (add effects yourself)", addReturn (Preset::empty));
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&addTrackButton));
+    }
+
+    te::AudioTrack* Mixer::addReturnTrack (audio::sends::Preset preset)
+    {
+        juce::String error;
+        auto* track = audio::sends::addReturnTrack (model.getProject(), preset, error);
+
+        if (onMessage != nullptr)
+        {
+            if (track == nullptr)
+                onMessage (error, true);
+            else
+                onMessage ("Return track " + track->getName() + " added: drag the \"" + track->getName()
+                               + "\" bar on a track's strip to send that track to it", false);
+        }
+
+        refresh();
+        return track;
+    }
+
     //==============================================================================
+    bool Mixer::syncStrips (juce::OwnedArray<ChannelStrip>& group, const juce::Array<te::AudioTrack*>& tracks)
+    {
+        auto same = tracks.size() == group.size();
+
+        for (int i = 0; same && i < tracks.size(); ++i)
+            same = group[i]->getTrack() == tracks[i];
+
+        if (same)
+        {
+            for (auto* strip : group)
+                strip->refresh();
+
+            return false;
+        }
+
+        group.clear();
+
+        for (auto* track : tracks)
+        {
+            auto* strip = group.add (std::make_unique<ChannelStrip> (session, model, *track));
+            connect (*strip);
+            stripRow.addAndMakeVisible (strip);
+        }
+
+        return true;
+    }
+
     void Mixer::refresh()
     {
         needsRefresh = false;
 
-        const auto tracks = model.getTracks();
-        auto same = tracks.size() == strips.size();
+        const auto tracksChanged = syncStrips (strips, model.getTracks());
+        const auto returnsChanged = syncStrips (returnStrips, model.getProject().getReturnTracks());
 
-        for (int i = 0; same && i < tracks.size(); ++i)
-            same = strips[i]->getTrack() == tracks[i];
-
-        if (! same)
-        {
-            strips.clear();
-
-            for (auto* track : tracks)
-            {
-                auto* strip = strips.add (std::make_unique<ChannelStrip> (session, model, *track));
-                connect (*strip);
-                stripRow.addAndMakeVisible (strip);
-            }
-
+        if (tracksChanged || returnsChanged)
             layOutStrips();
-        }
-        else
-        {
-            for (auto* strip : strips)
-                strip->refresh();
-        }
 
         master.refresh();
     }
@@ -102,15 +150,30 @@ namespace harmonia::ui::mixer
 
     void Mixer::layOutStrips()
     {
-        const auto height = viewport.getHeight()
-                          - (strips.size() * ChannelStrip::width + addTrackWidth > viewport.getWidth() ? viewport.getScrollBarThickness() : 0);
+        // Song tracks, a gap, the return tracks, "+ Track".
+        const auto returnsWidth = returnStrips.isEmpty() ? 0 : returnGap + returnStrips.size() * ChannelStrip::width;
+        const auto rowWidth = strips.size() * ChannelStrip::width + returnsWidth + addTrackWidth;
+        const auto height = viewport.getHeight() - (rowWidth > viewport.getWidth() ? viewport.getScrollBarThickness() : 0);
+        auto x = 0;
 
-        for (int i = 0; i < strips.size(); ++i)
-            strips[i]->setBounds (i * ChannelStrip::width, 0, ChannelStrip::width, height);
+        for (auto* strip : strips)
+        {
+            strip->setBounds (x, 0, ChannelStrip::width, height);
+            x += ChannelStrip::width;
+        }
 
-        addTrackButton.setBounds (juce::Rectangle<int> (strips.size() * ChannelStrip::width, 0, addTrackWidth, height)
+        if (! returnStrips.isEmpty())
+            x += returnGap;
+
+        for (auto* strip : returnStrips)
+        {
+            strip->setBounds (x, 0, ChannelStrip::width, height);
+            x += ChannelStrip::width;
+        }
+
+        addTrackButton.setBounds (juce::Rectangle<int> (x, 0, addTrackWidth, height)
                                       .reduced (8, 0).withHeight (theme::size::buttonHeight).withY (8));
-        stripRow.setSize (strips.size() * ChannelStrip::width + addTrackWidth, height);
+        stripRow.setSize (rowWidth, height);
     }
 
     void Mixer::visibilityChanged()

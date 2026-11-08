@@ -111,6 +111,11 @@ Tracktion останавливает воспроизведение, когда 
   следит за деревом проекта), `ChannelStrip`, `LevelMeter` (читает `te::LevelMeasurer`: дорожки — её
   `LevelMeterPlugin`, мастер — `masterLevels` текущего контекста воспроизведения, который бывает пересоздан).
   `MainComponent` показывает снизу piano roll или микшер (F7 / F9).
+- **Посылы:** `audio/Sends` — возвратные дорожки (`core::tracks::Kind::fxReturn`: в конце списка дорожек,
+  `Project::getTracks` их не отдаёт — аранжировка их не видит; `getReturnTracks`) с `te::AuxReturnPlugin` на
+  своей шине первым в списке и посылы — `te::AuxSendPlugin` на той же шине после громкости дорожки. Эффекты
+  (`audio::effects`) их не считают эффектами и ставят новые после aux return. Заглушённая дорожка не шлёт
+  (`HarmoniaEngineBehaviour::shouldProcessAuxSendWhenTrackIsMuted`), возвратные — solo isolate.
 - **Ввод нот:** `ui/NoteInput` собирает ноты с клавиатуры компьютера (`ui/ComputerKeyboard`) и MIDI-клавиатур
   (`audio/MidiInputs`), даёт их услышать и во время записи пишет в клип через `core/NoteRecorder` (чистая логика:
   нажатия → ноты, круги, педаль; квантование). Место ноты — то, что человек слышал: `audio/PlaybackClock` сводит

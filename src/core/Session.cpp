@@ -16,6 +16,13 @@ namespace harmonia::core
                 return Session::getFileForNewRecording (track, extension, recordingsFolder);
             }
 
+            // A muted track (or one silenced by another's solo) sends nothing to the return tracks:
+            // muting a track takes its reverb away too.
+            bool shouldProcessAuxSendWhenTrackIsMuted (te::AuxSendPlugin&) override
+            {
+                return false;
+            }
+
             bool autoInitialiseDeviceManager() override  { return openDevices; }
             bool canScanPluginsOutOfProcess() override    { return scanOutOfProcess; }
 
