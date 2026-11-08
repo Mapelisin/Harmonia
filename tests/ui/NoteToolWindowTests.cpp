@@ -228,12 +228,64 @@ TEST_SUITE ("piano roll: tool windows")
         CHECK (f.notes()[1].velocity == 30);
     }
 
-    TEST_CASE ("no notes, no window (but the chord progression writes into an empty clip)")
+    TEST_CASE ("no notes, no window (but the chord progression and the drum pattern write into an empty clip)")
     {
         ToolsFixture f;
 
         for (auto tool : getAllNoteTools())
-            CHECK ((NoteToolWindow::create (f.model, tool) == nullptr) == (tool != NoteTool::chordProgression));
+            CHECK ((NoteToolWindow::create (f.model, tool) == nullptr)
+                   == (tool != NoteTool::chordProgression && tool != NoteTool::drumPattern));
+    }
+
+    TEST_CASE ("the drum pattern writes a groove live, as long as the clip, as one undo step")
+    {
+        ToolsFixture f;
+
+        {
+            auto window = NoteToolWindow::create (f.model, NoteTool::drumPattern);
+            REQUIRE (window != nullptr);
+            CHECK (window->getToolName() == "Drum pattern");
+            CHECK (window->getValue (indexOf (*window, "Bars")) == 4.0);       // the clip's four bars
+
+            // Rock: three bars of 13 hits (the first with a crash for its hat), the fourth ending in a fill.
+            auto n = f.notes();
+            CHECK (n.size() == 3 * 13 + 6 + 10);
+            CHECK (f.model.getNumSelected() == (int) n.size());
+            REQUIRE (! n.empty());
+            CHECK (n.front().startBeat == doctest::Approx (0.0));
+            CHECK (n.back().startBeat < 16.0);
+
+            // House: the kick on every beat.
+            window->setValue (indexOf (*window, "Style"), 2.0);
+            n = f.notes();
+            CHECK (std::count_if (n.begin(), n.end(), [] (const Note& note) { return note.pitch == 36; }) == 16);
+
+            window->setValue (indexOf (*window, "Bars"), 8.0);
+            CHECK (f.model.getClipEndBeat() >= 32.0);                   // the clip grew to hold them
+            window->accept();
+        }
+
+        CHECK_FALSE (f.notes().empty());
+        f.project->undo();
+        CHECK (f.notes().empty());
+        CHECK (f.model.getClipEndBeat() == doctest::Approx (16.0));
+
+        // From the start of a time selection, as long as it.
+        f.model.setTimeSelection ({ 4.0, 12.0 });
+
+        {
+            auto window = NoteToolWindow::create (f.model, NoteTool::drumPattern);
+            REQUIRE (window != nullptr);
+            CHECK (window->getValue (indexOf (*window, "Bars")) == 2.0);
+
+            const auto n = f.notes();
+            REQUIRE (! n.empty());
+            CHECK (n.front().startBeat == doctest::Approx (4.0));
+            CHECK (n.back().startBeat < 12.0);
+            window->cancel();
+        }
+
+        CHECK (f.notes().empty());
     }
 
     TEST_CASE ("the chord progression writes chords live, selected, as one undo step; Cancel takes them away")
@@ -335,7 +387,8 @@ TEST_SUITE ("piano roll: tool windows")
         // S, Ы (for S), Ф (for A), К (for R), Ч (for X), З (for P) with the Russian layout.
         for (const auto& [code, text, name] : { std::tuple { 'S', 0x044b, "Strum" }, std::tuple { 'A', 0x0444, "Arpeggiate" },
                                                 std::tuple { 'R', 0x043a, "Humanize" }, std::tuple { 'X', 0x0447, "Scale levels" },
-                                                std::tuple { 'P', 0x0437, "Chord progression" } })
+                                                std::tuple { 'P', 0x0437, "Chord progression" },
+                                                std::tuple { 'D', 0x0432, "Drum pattern" } })
         {
             CHECK (main.keyPressed (juce::KeyPress (code, juce::ModifierKeys::altModifier, (juce::juce_wchar) text)));
             REQUIRE (opened != nullptr);
@@ -356,6 +409,7 @@ TEST_SUITE ("piano roll: tool windows")
         CHECK (items.contains ("Humanize... Alt+R"));
         CHECK (items.contains ("Scale levels... Alt+X"));
         CHECK (items.contains ("Chord progression... Alt+P"));
+        CHECK (items.contains ("Drum pattern... Alt+D"));
     }
 
     TEST_CASE ("the Strum window over the piano roll draws")
@@ -410,6 +464,50 @@ TEST_SUITE ("piano roll: tool windows")
         if (const auto dir = juce::SystemStats::getEnvironmentVariable ("HARMONIA_SNAPSHOT_DIR", {}); dir.isNotEmpty())
         {
             juce::FileOutputStream out (juce::File (dir).getChildFile ("main-strum.png"));
+            out.setPosition (0);
+            out.truncate();
+            juce::PNGImageFormat().writeImageToStream (image, out);
+        }
+
+        pianoRoll.removeChildComponent (window.get());
+        window.reset();
+    }
+
+    TEST_CASE ("the Drum pattern window over a drum track draws")
+    {
+        auto project = core::Project::createEmpty (test::session());
+        MainComponent main (test::session(), *project);
+        main.setBounds (0, 0, 1280, 800);
+
+        auto& track = *project->getTracks().getFirst();
+        track.setName ("Drums");        // shows drum names
+        auto* clip = project->addMidiClip (track, 0.0, 16.0, "Beat");
+        auto& model = main.getPianoRollModel();
+        model.setClip (clip);
+
+        auto& pianoRoll = main.getPianoRoll();
+        pianoRoll.showClip();
+
+        std::unique_ptr<NoteToolWindow> window;
+        pianoRoll.onShowNoteTool = [&] (std::unique_ptr<NoteToolWindow> w) { window = std::move (w); };
+        CHECK (main.keyPressed (juce::KeyPress ('D', juce::ModifierKeys::altModifier, 0)));
+        REQUIRE (window != nullptr);
+
+        pianoRoll.addAndMakeVisible (*window);
+        window->setTopLeftPosition (560, 40);
+        window->setValue (indexOf (*window, "Style"), 5.0);         // trap
+        window->setValue (indexOf (*window, "Bars"), 2.0);
+        pianoRoll.showClip();
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
+
+        CHECK (! model.getNotes().empty());
+
+        const auto image = main.createComponentSnapshot (main.getLocalBounds());
+        CHECK (image.isValid());
+
+        if (const auto dir = juce::SystemStats::getEnvironmentVariable ("HARMONIA_SNAPSHOT_DIR", {}); dir.isNotEmpty())
+        {
+            juce::FileOutputStream out (juce::File (dir).getChildFile ("main-drum-pattern.png"));
             out.setPosition (0);
             out.truncate();
             juce::PNGImageFormat().writeImageToStream (image, out);

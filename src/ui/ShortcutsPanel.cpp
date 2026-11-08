@@ -103,6 +103,7 @@ namespace harmonia::ui
                 { "Alt+R", "Humanize: a little random timing, velocity, length" },
                 { "Alt+X", "Scale levels: velocity (or another property) all at once" },
                 { "Alt+P", "Chord progression: writes chords, even into an empty clip" },
+                { "Alt+D", "Drum pattern: writes a groove (rock, house, trap...), even into an empty clip" },
                 { "In the window", "Space: listen; Enter: accept; Esc: cancel" } } },
 
             { "Sounds (F6)", {

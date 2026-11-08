@@ -11,7 +11,8 @@ namespace harmonia::ui::pianoroll
         arpeggiate,     // Alt+A
         humanize,       // Alt+R
         scaleLevels,    // Alt+X
-        chordProgression // Alt+P: writes chords, needs no notes
+        chordProgression, // Alt+P: writes chords, needs no notes
+        drumPattern     // Alt+D: writes a groove, needs no notes
     };
 
     const std::vector<NoteTool>& getAllNoteTools();
@@ -85,6 +86,7 @@ namespace harmonia::ui::pianoroll
         juce::TextButton resetButton { "Reset" }, cancelButton { "Cancel" }, acceptButton { "Accept" };
 
         static std::unique_ptr<NoteToolWindow> createChordProgression (PianoRollModel&);
+        static std::unique_ptr<NoteToolWindow> createDrumPattern (PianoRollModel&);
         std::vector<double> getValues() const;
         void update();
         void close();

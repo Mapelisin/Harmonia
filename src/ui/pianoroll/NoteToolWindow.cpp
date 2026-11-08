@@ -1,4 +1,5 @@
 #include "ui/pianoroll/NoteToolWindow.h"
+#include "core/DrumPatterns.h"
 #include "core/Progressions.h"
 #include "ui/Theme.h"
 
@@ -27,7 +28,7 @@ namespace harmonia::ui::pianoroll
     const std::vector<NoteTool>& getAllNoteTools()
     {
         static const std::vector<NoteTool> all { NoteTool::strum, NoteTool::arpeggiate, NoteTool::humanize,
-                                                 NoteTool::scaleLevels, NoteTool::chordProgression };
+                                                 NoteTool::scaleLevels, NoteTool::chordProgression, NoteTool::drumPattern };
         return all;
     }
 
@@ -40,6 +41,7 @@ namespace harmonia::ui::pianoroll
             case NoteTool::humanize:    return "Humanize";
             case NoteTool::scaleLevels: return "Scale levels";
             case NoteTool::chordProgression: return "Chord progression";
+            case NoteTool::drumPattern: return "Drum pattern";
         }
 
         return {};
@@ -54,6 +56,7 @@ namespace harmonia::ui::pianoroll
             case NoteTool::humanize:    return "Alt+R";
             case NoteTool::scaleLevels: return "Alt+X";
             case NoteTool::chordProgression: return "Alt+P";
+            case NoteTool::drumPattern: return "Alt+D";
         }
 
         return {};
@@ -242,6 +245,9 @@ namespace harmonia::ui::pianoroll
         if (tool == NoteTool::chordProgression)
             return createChordProgression (model);
 
+        if (tool == NoteTool::drumPattern)
+            return createDrumPattern (model);
+
         const auto targets = model.getSelectedOrAll();
 
         if (targets.isEmpty())
@@ -337,6 +343,7 @@ namespace harmonia::ui::pianoroll
             }
 
             case NoteTool::chordProgression:
+            case NoteTool::drumPattern:
                 break;
         }
 
@@ -399,6 +406,47 @@ namespace harmonia::ui::pianoroll
                 s.repeats = juce::roundToInt (v[9]);
                 s.startBeat = start;
                 return tools::Result { {}, {}, progressions::generate (s) };
+            }, juce::Array<te::MidiNote*>());
+    }
+
+    std::unique_ptr<NoteToolWindow> NoteToolWindow::createDrumPattern (PianoRollModel& model)
+    {
+        namespace patterns = core::drum_patterns;
+
+        if (model.getClip() == nullptr)
+            return nullptr;
+
+        juce::StringArray styles;
+
+        for (const auto& style : patterns::getStyles())
+            styles.add (style.name);
+
+        // From the start of the time selection, as long as it; else the whole clip.
+        const auto beatsPerBar = model.getBeatsPerBar();
+        const auto selection = model.getTimeSelection();
+        const auto start = selection.has_value() ? std::max (model.getMinBeat(), selection->start) : model.getClipStartBeat();
+        const auto end = selection.has_value() ? selection->end : model.getClipEndBeat();
+        const auto bars = juce::jlimit (1, 16, juce::roundToInt ((end - start) / beatsPerBar));
+
+        return std::make_unique<NoteToolWindow> (model, pianoroll::getName (NoteTool::drumPattern), std::vector<Setting> {
+            { "Style", 0.0, 0.0, 0.0, 0.0, {}, styles },
+            { "Bars", 1.0, 16.0, 1.0, (double) bars, {}, {} },
+            { "Fill", 0.0, 0.0, 0.0, 1.0, {}, { "None", "Every 4th bar", "Last bar" } },
+            { "Crash", 0.0, 0.0, 0.0, 1.0, {}, { "No", "Every 4 bars" } },
+            { "Swing", 0.0, 100.0, 1.0, 0.0, "%", {} },
+            { "Velocity", 40.0, 127.0, 1.0, 110.0, {}, {} } },
+            [start, beatsPerBar] (const std::vector<core::Note>&, const std::vector<double>& v)
+            {
+                patterns::Settings s;
+                s.style = juce::roundToInt (v[0]);
+                s.bars = juce::roundToInt (v[1]);
+                s.fill = (patterns::Fill) juce::jlimit (0, 2, juce::roundToInt (v[2]));
+                s.crash = juce::roundToInt (v[3]) == 1;
+                s.swing = v[4] / 100.0;
+                s.velocity = juce::roundToInt (v[5]);
+                s.beatsPerBar = beatsPerBar;
+                s.startBeat = start;
+                return tools::Result { {}, {}, patterns::generate (s) };
             }, juce::Array<te::MidiNote*>());
     }
 }

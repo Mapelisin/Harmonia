@@ -18,6 +18,7 @@ add_executable(harmonia_tests
     core/NoteToolsTests.cpp
     core/ScalesTests.cpp
     core/ProgressionsTests.cpp
+    core/DrumPatternsTests.cpp
     core/ClipLoopTests.cpp
     audio/DeviceStatusTests.cpp
     audio/AudioTests.cpp
