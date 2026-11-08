@@ -1,5 +1,6 @@
 #include "ui/pianoroll/PianoRollModel.h"
 #include "core/Clips.h"
+#include "core/Progressions.h"
 
 namespace harmonia::ui::pianoroll
 {
@@ -1218,6 +1219,17 @@ namespace harmonia::ui::pianoroll
             n.pitch += delta;
 
         return notes;
+    }
+
+    bool PianoRollModel::detectScale()
+    {
+        const auto notes = readAll (getSelectedOrAll());
+
+        if (notes.empty())
+            return false;
+
+        setScale (core::scales::detect (notes));
+        return true;
     }
 
     void PianoRollModel::fitToScale()

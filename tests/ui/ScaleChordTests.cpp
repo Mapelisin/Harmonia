@@ -211,6 +211,35 @@ TEST_SUITE ("piano roll: scale and chords")
         CHECK (longOnes == 3);
     }
 
+    TEST_CASE ("Detect from the notes sets the key the notes (selected, or all) are in")
+    {
+        ScaleFixture f;
+
+        // An A minor tune with its G sharp.
+        double at = 0.0;
+
+        for (const auto& [pitch, length] : { std::pair { 57, 2.0 }, { 60, 1.0 }, { 64, 1.0 }, { 69, 2.0 }, { 71, 1.0 },
+                                             { 68, 1.0 }, { 69, 2.0 }, { 64, 1.0 }, { 62, 1.0 }, { 60, 1.0 } })
+        {
+            f.add (pitch, at, length);
+            at += length;
+        }
+
+        f.model.deselectAll();
+        CHECK (f.model.detectScale());
+        CHECK (f.model.getScale() == Scale { 9, ScaleType::minor });
+
+        f.project->undo();
+        CHECK (f.model.getScale() == Scale { 0, ScaleType::major });
+
+        // Only the selected notes count: a G major chord with F sharp.
+        f.model.deselectAll();
+        f.model.setSelection ({ f.add (67, 20.0, 2.0), f.add (71, 20.0, 2.0), f.add (74, 20.0, 2.0), f.add (66, 22.0, 1.0),
+                                f.add (72, 23.0, 1.0) });
+        CHECK (f.model.detectScale());
+        CHECK (f.model.getScale() == Scale { 7, ScaleType::major });
+    }
+
     TEST_CASE ("the scale is an undo step and marks the project changed")
     {
         ScaleFixture f;
@@ -263,6 +292,21 @@ TEST_SUITE ("piano roll: scale and chords")
         CHECK (model.getTool() == Tool::draw);
         CHECK (runItem (pianoRoll.createChordMenu(), "Off (single notes)"));
         CHECK_FALSE (model.getChordStamp().has_value());
+
+        // With no notes there is nothing to detect from.
+        const auto scaleMenu = pianoRoll.createScaleMenu();
+        auto detectFound = false;
+
+        for (juce::PopupMenu::MenuItemIterator it (scaleMenu, true); it.next();)
+        {
+            if (it.getItem().text == "Detect from the notes")
+            {
+                detectFound = true;
+                CHECK_FALSE (it.getItem().isEnabled);
+            }
+        }
+
+        CHECK (detectFound);
 
         // A minor melody, for the picture.
         model.beginGesture ("test");

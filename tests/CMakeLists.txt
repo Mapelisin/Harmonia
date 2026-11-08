@@ -17,6 +17,7 @@ add_executable(harmonia_tests
     core/AutosaveTests.cpp
     core/NoteToolsTests.cpp
     core/ScalesTests.cpp
+    core/ProgressionsTests.cpp
     audio/DeviceStatusTests.cpp
     audio/AudioTests.cpp
     audio/EffectsTests.cpp

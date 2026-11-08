@@ -15,7 +15,8 @@ namespace harmonia::ui::pianoroll
     class ToolPreview
     {
     public:
-        /** Works on these notes; the selection follows them if they were selected. */
+        /** Works on these notes; the selection follows them if they were selected. With no notes
+            (a generator) the notes it adds are selected. */
         ToolPreview (PianoRollModel&, const juce::String& name, const juce::Array<te::MidiNote*>& targets);
 
         /** The notes' values (song beats) when the preview began. */

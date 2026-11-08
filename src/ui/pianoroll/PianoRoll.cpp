@@ -396,6 +396,7 @@ namespace harmonia::ui::pianoroll
         menu.addItem ("Snap notes to the scale", ! scale.isChromatic(), model.isSnappingToScale(),
                       [this] { model.setSnapToScale (! model.isSnappingToScale()); });
         menu.addItem ("Fit notes to the scale", ! scale.isChromatic(), false, [this] { model.fitToScale(); });
+        menu.addItem ("Detect from the notes", ! model.getNotes().empty(), false, [this] { model.detectScale(); });
         return menu;
     }
 

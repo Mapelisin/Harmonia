@@ -192,6 +192,10 @@ namespace harmonia::ui::pianoroll
         /** Fit to scale: every note's pitch moved to the nearest note of the scale. */
         void fitToScale();
 
+        /** Sets the major or minor scale the notes (selected, or all) most likely are in.
+            Returns false (and changes nothing) if there are no notes. */
+        bool detectScale();
+
         /** Quick legato (Ctrl+L): each note lasts until the next one starts. */
         void legato();
 

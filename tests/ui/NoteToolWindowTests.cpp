@@ -228,12 +228,64 @@ TEST_SUITE ("piano roll: tool windows")
         CHECK (f.notes()[1].velocity == 30);
     }
 
-    TEST_CASE ("no notes, no window")
+    TEST_CASE ("no notes, no window (but the chord progression writes into an empty clip)")
     {
         ToolsFixture f;
 
         for (auto tool : getAllNoteTools())
-            CHECK (NoteToolWindow::create (f.model, tool) == nullptr);
+            CHECK ((NoteToolWindow::create (f.model, tool) == nullptr) == (tool != NoteTool::chordProgression));
+    }
+
+    TEST_CASE ("the chord progression writes chords live, selected, as one undo step; Cancel takes them away")
+    {
+        ToolsFixture f;
+        f.add (40, 0.0, 1.0);       // something already there stays
+        f.model.deselectAll();
+
+        {
+            auto window = NoteToolWindow::create (f.model, NoteTool::chordProgression);
+            REQUIRE (window != nullptr);
+            CHECK (window->getToolName() == "Chord progression");
+
+            // I - V - vi - IV in C, a bar each, close together.
+            auto n = f.notes();
+            REQUIRE (n.size() == 13);
+            CHECK (n[1].pitch == 60);
+            CHECK (n[1].lengthBeats == doctest::Approx (4.0));
+            CHECK (f.model.getNumSelected() == 12);
+
+            window->setValue (indexOf (*window, "Rhythm"), 1.0);       // quarter notes
+            ToolsFixture::pause();
+            window->setValue (indexOf (*window, "Bass"), 1.0);
+            ToolsFixture::pause();
+            window->setValue (indexOf (*window, "Repeat"), 2.0);
+            CHECK (f.notes().size() == 1 + 2 * (48 + 4));
+            CHECK (f.model.getClipEndBeat() >= 32.0);                   // the clip grew to hold them
+            window->accept();
+        }
+
+        f.project->undo();
+        CHECK (f.notes().size() == 1);
+        CHECK (f.model.getClipEndBeat() == doctest::Approx (16.0));
+
+        // In the song's key, from the start of the time selection.
+        f.model.setScale ({ 9, core::scales::ScaleType::minor });
+        f.model.setTimeSelection ({ 4.0, 8.0 });
+
+        {
+            auto window = NoteToolWindow::create (f.model, NoteTool::chordProgression);
+            REQUIRE (window != nullptr);
+            CHECK (window->getValue (indexOf (*window, "Key")) == 9.0);
+            CHECK (window->getValue (indexOf (*window, "Mode")) == 1.0);
+
+            auto n = f.notes();
+            REQUIRE (n.size() == 13);
+            CHECK (n[1].startBeat == doctest::Approx (4.0));
+            CHECK (n[1].pitch == 57);       // A minor, from A3
+            window->cancel();
+        }
+
+        CHECK (f.notes().size() == 1);
     }
 
     TEST_CASE ("the note properties panel: every change is one undo step, even after pauses")
@@ -280,13 +332,15 @@ TEST_SUITE ("piano roll: tool windows")
         std::unique_ptr<NoteToolWindow> opened;
         pianoRoll.onShowNoteTool = [&] (std::unique_ptr<NoteToolWindow> window) { opened = std::move (window); };
 
-        // S, Ы (for S), Ф (for A), К (for R), Ч (for X) with the Russian layout.
+        // S, Ы (for S), Ф (for A), К (for R), Ч (for X), З (for P) with the Russian layout.
         for (const auto& [code, text, name] : { std::tuple { 'S', 0x044b, "Strum" }, std::tuple { 'A', 0x0444, "Arpeggiate" },
-                                                std::tuple { 'R', 0x043a, "Humanize" }, std::tuple { 'X', 0x0447, "Scale levels" } })
+                                                std::tuple { 'R', 0x043a, "Humanize" }, std::tuple { 'X', 0x0447, "Scale levels" },
+                                                std::tuple { 'P', 0x0437, "Chord progression" } })
         {
             CHECK (main.keyPressed (juce::KeyPress (code, juce::ModifierKeys::altModifier, (juce::juce_wchar) text)));
             REQUIRE (opened != nullptr);
             CHECK (opened->getToolName() == name);
+            opened->cancel();
             opened.reset();
         }
 
@@ -301,6 +355,7 @@ TEST_SUITE ("piano roll: tool windows")
         CHECK (items.contains ("Arpeggiate... Alt+A"));
         CHECK (items.contains ("Humanize... Alt+R"));
         CHECK (items.contains ("Scale levels... Alt+X"));
+        CHECK (items.contains ("Chord progression... Alt+P"));
     }
 
     TEST_CASE ("the Strum window over the piano roll draws")

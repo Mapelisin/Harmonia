@@ -10,7 +10,8 @@ namespace harmonia::ui::pianoroll
         strum,          // Alt+S
         arpeggiate,     // Alt+A
         humanize,       // Alt+R
-        scaleLevels     // Alt+X
+        scaleLevels,    // Alt+X
+        chordProgression // Alt+P: writes chords, needs no notes
     };
 
     const std::vector<NoteTool>& getAllNoteTools();
@@ -37,12 +38,14 @@ namespace harmonia::ui::pianoroll
         using Apply = std::function<core::note_tools::Result (const std::vector<core::Note>& originals,
                                                               const std::vector<double>& values)>;
 
-        NoteToolWindow (PianoRollModel&, const juce::String& title, std::vector<Setting>, Apply);
+        /** Works on `targets` (none for a tool that only adds notes). */
+        NoteToolWindow (PianoRollModel&, const juce::String& title, std::vector<Setting>, Apply,
+                        const juce::Array<te::MidiNote*>& targets);
 
         const juce::String& getToolName() const noexcept    { return toolName; }
 
         /** The window for this tool on the selected notes (or all), already showing its result
-            with the default settings; nullptr if there are no notes. */
+            with the default settings; nullptr if there are no notes to work on. */
         static std::unique_ptr<NoteToolWindow> create (PianoRollModel&, NoteTool);
 
         /** Opens the window in a call-out box pointing at `area` of `parent`. */
@@ -81,6 +84,7 @@ namespace harmonia::ui::pianoroll
         juce::OwnedArray<Control> controls;
         juce::TextButton resetButton { "Reset" }, cancelButton { "Cancel" }, acceptButton { "Accept" };
 
+        static std::unique_ptr<NoteToolWindow> createChordProgression (PianoRollModel&);
         std::vector<double> getValues() const;
         void update();
         void close();

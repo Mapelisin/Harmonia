@@ -85,7 +85,7 @@ namespace harmonia::ui::pianoroll
         const auto added = model.addNotes (result.added);
         showing = model.getEdit().getUndoManager().getNumActionsInCurrentTransaction() > 0;
 
-        if (wereSelected)
+        if (wereSelected || states.isEmpty())
         {
             kept.addArray (added);
             model.setSelection (kept);
