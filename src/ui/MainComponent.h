@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/AudioInputs.h"
+#include "audio/MixCheck.h"
 #include "audio/FilePreview.h"
 #include "audio/MidiInputs.h"
 #include "audio/NotePreview.h"
@@ -62,8 +63,12 @@ namespace harmonia::ui
         void raiseWithLimiter();
 
         /** File -> Check the mix: renders the song and each track, then shows Mix Doctor's report
-            (clipping, mono, bass and top, tracks lost under the others). */
+            (clipping, mono, bass and top, tracks lost under the others), with a button to fix the
+            levels if that is what's wrong. */
         void checkMix();
+
+        /** Mix Doctor's fixes (one undo step), saying what changed. */
+        void fixMix (const audio::mix_check::Fixes&);
 
         /** "bars 5-8", "bar 3", or in beats when it isn't whole bars ("beats 2.50-5"): for names.
             Bars and beats are counted from 1. */

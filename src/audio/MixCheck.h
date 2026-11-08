@@ -46,6 +46,7 @@ namespace harmonia::audio::mix_check
     {
         juce::String name;
         std::optional<loudness::Measurement> level;     ///< nothing if the track is silent
+        te::EditItemID track {};                        ///< which one it is (for the fixes)
     };
 
     struct Report
@@ -66,4 +67,31 @@ namespace harmonia::audio::mix_check
 
     /** The whole report, for the user: the numbers, the problems, the tracks. */
     juce::String describe (const Report&);
+
+    //==============================================================================
+    /** What Mix Doctor can put right by itself, with faders: the clipping, and tracks lost under
+        the others. */
+    struct Fixes
+    {
+        bool clips = false;                                     ///< the master comes down
+        std::vector<std::pair<te::EditItemID, float>> raise;    ///< tracks, and how many dB up
+        juce::StringArray descriptions;                         ///< what it would do, for the user
+
+        bool isEmpty() const noexcept       { return ! clips && raise.empty(); }
+    };
+
+    /** How far under the loudest track a lost one is brought up to. */
+    inline constexpr double raisedLu = 10.0;
+
+    /** The fixes for a report: a lost track goes up to raisedLu under the loudest (as far as its
+        fader goes: +6 dB); if the song clips, the master comes down. */
+    Fixes findFixes (const Report&, te::Edit&);
+
+    /** Puts them right, into the undo step already begun: raises the tracks, then (if the song
+        clipped, or the raised tracks might make it) brings the master down until the peaks are
+        at -1 dB, measuring the song again (a render or a few: a clipped peak doesn't say how far
+        over it went). Returns what it did, for the user ("master -2.5 dB", "\"Pad\" +7.0 dB");
+        if it couldn't measure the song, says why in `error`. */
+    juce::StringArray applyFixes (te::Edit&, const Fixes&, juce::String& error,
+                                  const std::function<void (const juce::String& step)>& progress = {});
 }

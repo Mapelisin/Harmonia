@@ -2,6 +2,7 @@
 
 #include "TestSession.h"
 #include "audio/Instruments.h"
+#include "audio/Loudness.h"
 #include "audio/MixCheck.h"
 #include "core/Project.h"
 
@@ -218,5 +219,95 @@ TEST_SUITE ("audio::mix_check")
         auto empty = core::Project::createEmpty (test::session());
         CHECK_FALSE (mix_check::check (empty->getEdit(), error).has_value());
         CHECK (error.startsWith ("Nothing to check"));
+    }
+
+    TEST_CASE ("Mix Doctor fixes the levels: lost tracks up, the master down until the peaks are at -1 dB, one undo step")
+    {
+        auto project = core::Project::createEmpty (test::session());
+        auto& edit = project->getEdit();
+
+        const auto addPart = [&project] (te::AudioTrack* track, const juce::String& name, std::initializer_list<int> pitches,
+                                         int velocity) -> te::AudioTrack&
+        {
+            if (track == nullptr)
+                track = project->addTrack (name);
+
+            REQUIRE (track != nullptr);
+            track->setName (name);
+            REQUIRE (audio::instruments::useBuiltInSynth (*track).isEmpty());
+            auto* clip = project->addMidiClip (*track, 0.0, 8.0, name);
+            REQUIRE (clip != nullptr);
+
+            for (int pitch : pitches)
+                clip->getSequence().addNote (pitch, te::BeatPosition(), te::BeatDuration::fromBeats (8.0), velocity, 0, nullptr);
+
+            return *track;
+        };
+
+        // Loud chords that clip with the master at +6 dB; a pad far under them.
+        addPart (project->getTracks().getFirst(), "Chords", { 48, 52, 55, 60, 64, 67 }, 127);
+        auto& pad = addPart (nullptr, "Pad", { 72 }, 60);
+        pad.getVolumePlugin()->setVolumeDb (-20.0f);
+        edit.getMasterVolumePlugin()->setVolumeDb (6.0f);
+        project->clearUndoHistory();
+
+        juce::String error;
+        const auto report = mix_check::check (edit, error);
+        REQUIRE_MESSAGE (report.has_value(), error.toStdString());
+        REQUIRE (report->mix.peakDb > -0.1f);
+        REQUIRE (report->tracks.size() == 2);
+        CHECK (report->tracks[1].name == "Pad");
+        CHECK (report->tracks[1].track == pad.itemID);
+
+        const auto fixes = mix_check::findFixes (*report, edit);
+        CHECK (fixes.clips);
+        REQUIRE (fixes.raise.size() == 1);
+        CHECK (fixes.raise[0].first == pad.itemID);
+        const auto gap = report->tracks[0].level->lufs - report->tracks[1].level->lufs;
+        CHECK (fixes.raise[0].second == doctest::Approx (std::min (gap - mix_check::raisedLu, 6.0 + 20.0)).epsilon (0.01));
+        CHECK (fixes.descriptions.joinIntoString ("; ").contains ("raise \"Pad\" by"));
+        CHECK (fixes.descriptions.joinIntoString ("; ").contains ("bring the master down"));
+
+        std::vector<juce::String> steps;
+        project->beginGesture ("Mix Doctor fixes");
+        const auto done = mix_check::applyFixes (edit, fixes, error, [&steps] (const juce::String& step) { steps.push_back (step); });
+        CHECK (error.isEmpty());
+        REQUIRE (done.size() == 2);
+        CHECK (done[0].startsWith ("master -"));
+        CHECK (done[1].startsWith ("\"Pad\" +"));
+        CHECK (! steps.empty());
+
+        CHECK (pad.getVolumePlugin()->getVolumeDb() == doctest::Approx (-20.0f + fixes.raise[0].second).epsilon (0.01));
+        CHECK (edit.getMasterVolumePlugin()->getVolumeDb() < 6.0f);
+
+        // The peaks now under the ceiling (the synth's phases change a little from render to render).
+        const auto after = audio::loudness::measureSong (edit, error);
+        REQUIRE (after.has_value());
+        CHECK (after->peakDb < -0.3f);
+        CHECK (after->peakDb > -2.5f);
+
+        project->undo();
+        CHECK (pad.getVolumePlugin()->getVolumeDb() == doctest::Approx (-20.0f));
+        CHECK (edit.getMasterVolumePlugin()->getVolumeDb() == doctest::Approx (6.0f));
+    }
+
+    TEST_CASE ("nothing to fix, nothing changes; a track as loud as its fader goes isn't offered")
+    {
+        auto project = core::Project::createEmpty (test::session());
+        auto* quiet = project->getTracks().getFirst();
+        quiet->getVolumePlugin()->setVolumeDb (6.0f);
+
+        auto report = goodMix();
+        CHECK (mix_check::findFixes (report, project->getEdit()).isEmpty());
+
+        // Lost, but its fader is already at the top.
+        report.tracks[2].level = Measurement { -40.0, -20.0f, 180.0 };
+        report.tracks[2].track = quiet->itemID;
+        CHECK (problemsOf (report).contains ("\"Pad\" is 24 LU quieter"));
+        CHECK (mix_check::findFixes (report, project->getEdit()).isEmpty());
+
+        juce::String error;
+        CHECK (mix_check::applyFixes (project->getEdit(), {}, error).isEmpty());
+        CHECK (error.isEmpty());
     }
 }

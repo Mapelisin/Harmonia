@@ -17,6 +17,7 @@ namespace harmonia::audio::mix_check
         constexpr double lostLu = 15.0;
         constexpr int maxLostTracks = 3;
         constexpr int maxListedTracks = 12;
+        constexpr float maxFaderDb = 6.0f;
 
         juce::String dbText (double db)
         {
@@ -29,9 +30,9 @@ namespace harmonia::audio::mix_check
             return juce::jlimit (-limit, limit, 10.0 * std::log10 ((energy + tiny) / (reference + tiny)));
         }
 
-        /** The name of the track a stem was made from: the number in its file name ("Check - 03
-            Bass.wav") counts the song's tracks from the top. */
-        juce::String trackOfStem (te::Edit& edit, const juce::File& stem, const juce::String& prefix)
+        /** The track a stem was made from, and its name: the number in the stem's file name
+            ("Check - 03 Bass.wav") counts the song's tracks from the top. */
+        std::pair<juce::String, te::EditItemID> trackOfStem (te::Edit& edit, const juce::File& stem, const juce::String& prefix)
         {
             const auto rest = stem.getFileNameWithoutExtension().fromFirstOccurrenceOf (prefix + " - ", false, false);
             const auto number = rest.upToFirstOccurrenceOf (" ", false, false).getIntValue();
@@ -39,9 +40,10 @@ namespace harmonia::audio::mix_check
 
             for (auto* track : te::getAudioTracks (edit))
                 if (! core::tracks::isReturn (*track) && ++count == number)
-                    return track->getName().trim().isNotEmpty() ? track->getName().trim() : "Track " + juce::String (number);
+                    return { track->getName().trim().isNotEmpty() ? track->getName().trim() : "Track " + juce::String (number),
+                             track->itemID };
 
-            return rest.fromFirstOccurrenceOf (" ", false, false);
+            return { rest.fromFirstOccurrenceOf (" ", false, false), {} };
         }
 
         /** A new folder for the check's files; deleted (with them) when it goes. */
@@ -187,7 +189,10 @@ namespace harmonia::audio::mix_check
             }
 
             for (const auto& file : result.files)
-                report.tracks.push_back ({ trackOfStem (edit, file, prefix), loudness::measureFile (file) });
+            {
+                const auto [name, id] = trackOfStem (edit, file, prefix);
+                report.tracks.push_back ({ name, loudness::measureFile (file), id });
+            }
         }
 
         std::stable_sort (report.tracks.begin(), report.tracks.end(), [] (const TrackLevel& a, const TrackLevel& b)
@@ -197,6 +202,113 @@ namespace harmonia::audio::mix_check
         });
 
         return report;
+    }
+
+    Fixes findFixes (const Report& report, te::Edit& edit)
+    {
+        Fixes fixes;
+        fixes.clips = report.mix.peakDb > clipDb;
+
+        // The same tracks findProblems calls lost.
+        const auto loudest = std::find_if (report.tracks.begin(), report.tracks.end(),
+                                           [] (const TrackLevel& t) { return t.level.has_value(); });
+
+        if (loudest != report.tracks.end())
+        {
+            int lost = 0;
+
+            for (auto it = std::next (loudest); it != report.tracks.end() && lost < maxLostTracks; ++it)
+            {
+                if (! it->level.has_value())
+                    continue;
+
+                const auto below = loudest->level->lufs - it->level->lufs;
+
+                if (below <= lostLu)
+                    continue;
+
+                ++lost;
+                auto* track = dynamic_cast<te::AudioTrack*> (te::findTrackForID (edit, it->track));
+                auto* volume = track != nullptr ? track->getVolumePlugin() : nullptr;
+
+                if (volume == nullptr)
+                    continue;
+
+                const auto up = std::min ((float) (below - raisedLu), maxFaderDb - volume->getVolumeDb());
+
+                if (up >= 0.5f)
+                {
+                    fixes.raise.emplace_back (it->track, up);
+                    fixes.descriptions.add ("raise \"" + it->name + "\" by " + juce::String (up, 1) + " dB");
+                }
+            }
+        }
+
+        if (fixes.clips)
+            fixes.descriptions.add ("bring the master down until the peaks are at " + dbText (loudness::peakCeilingDb));
+
+        return fixes;
+    }
+
+    juce::StringArray applyFixes (te::Edit& edit, const Fixes& fixes, juce::String& error,
+                                  const std::function<void (const juce::String&)>& progress)
+    {
+        juce::StringArray done;
+        bool raised = false;
+
+        for (const auto& [id, gainDb] : fixes.raise)
+        {
+            auto* track = dynamic_cast<te::AudioTrack*> (te::findTrackForID (edit, id));
+            auto* volume = track != nullptr ? track->getVolumePlugin() : nullptr;
+
+            if (volume == nullptr)
+                continue;
+
+            const auto before = volume->getVolumeDb();
+            volume->setVolumeDb (std::min (maxFaderDb, before + gainDb));
+
+            if (const auto added = volume->getVolumeDb() - before; added > 0.05f)
+            {
+                done.add ("\"" + track->getName() + "\" " + dbText (added));
+                raised = true;
+            }
+        }
+
+        if (! fixes.clips && ! raised)
+            return done;
+
+        // The peaks to the ceiling: over 0 dB the render can't say by how much, so down 3 dB, then
+        // 6, then 12, listening again each time; under it, exactly to the ceiling (back up a little
+        // if it went down too far, never above where the master was).
+        auto lowered = 0.0f, step = 3.0f;
+
+        for (int attempt = 0; attempt < 6; ++attempt)
+        {
+            if (progress != nullptr)
+                progress ("Mix Doctor: listening to the mix again...");
+
+            const auto measured = loudness::measureSong (edit, error);
+
+            if (! measured.has_value())
+                break;
+
+            if (measured->peakDb > clipDb)
+            {
+                lowered -= loudness::addToMasterVolume (edit, -step);
+                step *= 2.0f;
+                continue;
+            }
+
+            if (measured->peakDb > loudness::peakCeilingDb + 0.05f || lowered > 0.05f)
+                lowered -= loudness::addToMasterVolume (edit, std::min (loudness::peakCeilingDb - measured->peakDb, lowered));
+
+            break;
+        }
+
+        if (lowered > 0.05f)
+            done.insert (0, "master " + dbText (-lowered));
+
+        return done;
     }
 
     juce::StringArray findProblems (const Report& report)

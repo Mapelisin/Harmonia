@@ -717,13 +717,51 @@ namespace harmonia::ui
         showMessage (problems == 0 ? juce::String ("Mix Doctor: nothing stands out")
                                    : "Mix Doctor: " + juce::String (problems) + (problems == 1 ? " thing" : " things") + " to look at");
 
-        juce::AlertWindow::showAsync (juce::MessageBoxOptions().withIconType (problems == 0 ? juce::MessageBoxIconType::InfoIcon
-                                                                                            : juce::MessageBoxIconType::WarningIcon)
-                                                               .withTitle ("Mix Doctor")
-                                                               .withMessage (audio::mix_check::describe (*report))
-                                                               .withButton ("Close", 0)
-                                                               .withAssociatedComponent (this),
-                                      [] (int) {});
+        const auto fixes = audio::mix_check::findFixes (*report, project.getEdit());
+        auto text = audio::mix_check::describe (*report);
+
+        if (! fixes.isEmpty())
+            text << "\n\n\"Fix the levels\" will " << fixes.descriptions.joinIntoString ("; ") << " (Ctrl+Z puts it back).";
+
+        auto options = juce::MessageBoxOptions().withIconType (problems == 0 ? juce::MessageBoxIconType::InfoIcon
+                                                                             : juce::MessageBoxIconType::WarningIcon)
+                                                .withTitle ("Mix Doctor")
+                                                .withMessage (text)
+                                                .withAssociatedComponent (this);
+
+        if (! fixes.isEmpty())
+            options = options.withButton ("Fix the levels", 1);
+
+        juce::AlertWindow::showAsync (options.withButton ("Close", 0),
+                                      [safe = juce::Component::SafePointer<MainComponent> (this), fixes] (int result)
+        {
+            if (result == 1 && safe != nullptr)
+                safe->fixMix (fixes);
+        });
+    }
+
+    void MainComponent::fixMix (const audio::mix_check::Fixes& fixes)
+    {
+        transport.stop();
+        juce::MouseCursor::showWaitCursor();
+        project.beginGesture ("Mix Doctor fixes");
+
+        juce::String error;
+        const auto done = audio::mix_check::applyFixes (project.getEdit(), fixes, error, [this] (const juce::String& step)
+        {
+            showMessage (step);
+
+            if (auto* peer = getPeer())
+                peer->performAnyPendingRepaintsNow();
+        });
+
+        juce::MouseCursor::hideWaitCursor();
+
+        if (error.isNotEmpty())
+            showWarning (error);
+        else
+            showMessage (done.isEmpty() ? juce::String ("Mix Doctor: nothing needed changing")
+                                        : "Mix Doctor: " + done.joinIntoString (", ") + " (Ctrl+Z puts it back)");
     }
 
     void MainComponent::chooseMidiExport()
