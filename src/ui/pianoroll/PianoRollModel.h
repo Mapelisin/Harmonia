@@ -1,0 +1,265 @@
+#pragma once
+
+#include "core/NoteEditor.h"
+#include "core/NoteOps.h"
+#include "core/Project.h"
+#include "core/Snap.h"
+
+namespace harmonia::ui::pianoroll
+{
+    enum class Tool
+    {
+        draw,       // P
+        paint,      // B
+        erase,      // D
+        mute,       // T
+        slice,      // C
+        select      // E
+    };
+
+    const std::vector<Tool>& getAllTools();
+    juce::String getName (Tool);
+    juce::juce_wchar getShortcutKey (Tool);
+
+    /** Plays notes while they are edited (the app implements it with audio::NotePreview). */
+    struct Auditioner
+    {
+        virtual ~Auditioner() = default;
+        virtual void noteOn (int pitch, int velocity) = 0;
+        virtual void noteOff (int pitch) = 0;
+    };
+
+    /** A note of the edited clip as the piano roll sees it: times in song beats. */
+    struct DrawnNote
+    {
+        te::MidiNote* note = nullptr;
+        core::Note values;
+        bool selected = false;
+    };
+
+    /** A note of another clip, shown dimmed behind the edited notes. */
+    struct GhostNote
+    {
+        double startBeat = 0.0, lengthBeats = 0.0;
+        int pitch = 0;
+    };
+
+    /** Everything the piano roll edits and remembers, without any drawing: the edited clip,
+        selection, tool, snap, clipboard and the editing commands. The components draw it and
+        turn mouse and keyboard input into calls here, so all behaviour can be tested headless.
+
+        Times in this API are song beats; notes are stored in the clip relative to its content
+        start. Every command is one undo step and works on the selected notes, or on all notes
+        when nothing is selected (as in FL Studio). */
+    class PianoRollModel final : private juce::ValueTree::Listener,
+                                 private juce::AsyncUpdater
+    {
+    public:
+        struct Listener
+        {
+            virtual ~Listener() = default;
+
+            /** Notes, selection or settings changed (called asynchronously, coalesced). */
+            virtual void pianoRollChanged() = 0;
+        };
+
+        explicit PianoRollModel (core::Project&);
+        ~PianoRollModel() override;
+
+        core::Project& getProject() noexcept            { return project; }
+        te::Edit& getEdit() noexcept                    { return project.getEdit(); }
+
+        void addListener (Listener* l)                  { listeners.add (l); }
+        void removeListener (Listener* l)               { listeners.remove (l); }
+
+        //==============================================================================
+        // The edited clip
+
+        void setClip (te::MidiClip*);
+        te::MidiClip* getClip() const noexcept          { return clip.get(); }
+        core::NoteEditor* getEditor() noexcept          { return editor.get(); }
+
+        double getContentStartBeat() const;
+        double getClipStartBeat() const;
+        double getClipEndBeat() const;
+        double getBeatsPerBar() const;
+
+        //==============================================================================
+        // Notes for drawing and hit-testing (rebuilt lazily after changes)
+
+        const std::vector<DrawnNote>& getNotes();
+
+        /** Index range of notes that may overlap [startBeat, endBeat) (callers still check each one). */
+        std::pair<size_t, size_t> getNotesInRange (double startBeat, double endBeat);
+
+        /** The note drawn on top at this position, or nullptr. */
+        const DrawnNote* findNoteAt (double beat, int pitch);
+
+        const std::vector<GhostNote>& getGhostNotes();
+        std::pair<size_t, size_t> getGhostNotesInRange (double startBeat, double endBeat);
+
+        /** Reads a note with its start in song beats. */
+        core::Note read (const te::MidiNote&) const;
+
+        //==============================================================================
+        // Settings
+
+        Tool getTool() const noexcept                   { return tool; }
+        void setTool (Tool);
+
+        core::snap::Mode getSnap() const noexcept       { return snapMode; }
+        void setSnap (core::snap::Mode);
+
+        /** The horizontal zoom decides what "Line" and "Cell" snap to. */
+        void setPixelsPerBeat (double);
+        core::snap::Context getSnapContext() const;
+        double getGridBeats() const;
+
+        core::NoteProperty getLaneProperty() const noexcept  { return laneProperty; }
+        void setLaneProperty (core::NoteProperty);
+        void cycleLaneProperty (int direction);
+
+        bool areGhostsVisible() const noexcept          { return ghostsVisible; }
+        void setGhostsVisible (bool);
+
+        /** Length of the next drawn note: the last note clicked or drawn. */
+        double getNewNoteLength() const noexcept        { return newNoteLength; }
+        void setNewNoteLength (double);
+
+        //==============================================================================
+        // Selection
+
+        bool isSelected (const te::MidiNote&) const;
+        bool hasSelection();
+        int getNumSelected();
+        juce::Array<te::MidiNote*> getSelectedNotes();
+
+        /** The selected notes, or every note when nothing is selected. */
+        juce::Array<te::MidiNote*> getSelectedOrAll();
+
+        void setSelection (const juce::Array<te::MidiNote*>&);
+        void addToSelection (const juce::Array<te::MidiNote*>&);
+        void setSelected (te::MidiNote&, bool shouldBeSelected);
+        void selectAll();
+        void deselectAll();
+
+        /** Time range selected on the ruler; also selects the notes starting inside it. */
+        std::optional<core::note_ops::BeatRange> getTimeSelection() const  { return timeSelection; }
+        void setTimeSelection (core::note_ops::BeatRange);
+        void clearTimeSelection();
+
+        //==============================================================================
+        // Commands (one undo step each)
+
+        void deleteSelectedOrAll();
+        void transpose (int semitones);
+        void nudge (int gridSteps);
+        void quantize (bool startsOnly);
+        void duplicate();
+        void copy();
+        void cut();
+        bool canPaste() const;
+        void paste (double atBeat);
+
+        /** Where Paste puts notes when the view starts at `leftVisibleBeat`: the first whole bar on screen. */
+        double getPastePosition (double leftVisibleBeat) const;
+
+        void undo();
+        void redo();
+
+        //==============================================================================
+        // The lower panel (velocity and other per-note values)
+
+        /** Whether the lower panel edits this note: with a selection only selected notes are edited. */
+        bool isLaneEditable (const DrawnNote&);
+
+        /** One step of a swipe in the lower panel: sets the panel's value of every editable note
+            starting between the two beats (plus `toleranceBeats`), interpolated along the swipe.
+            Goes into the current undo transaction. */
+        void setLaneValues (double beatA, float valueA, double beatB, float valueB, double toleranceBeats);
+
+        /** Alt+wheel over a note: changes the panel's value of the note (and of the rest of the
+            selection if the note is selected) by `delta` on the 0..1 scale. Quick successive
+            changes are one undo step. */
+        void nudgeProperty (te::MidiNote&, float delta);
+
+        //==============================================================================
+        // Editing primitives for mouse gestures. Values are in song beats; changes go into the
+        // current undo transaction (start one with beginGesture). The clip grows to fit.
+
+        void beginGesture (const juce::String& name);
+        juce::Array<te::MidiNote*> addNotes (const std::vector<core::Note>&);
+        te::MidiNote* addNote (const core::Note&);
+        void updateNotes (const std::vector<core::NoteEditor::Change>&);
+        void removeNotes (const juce::Array<te::MidiNote*>&);
+
+        /** The earliest song beat a note can start at (content beat 0). */
+        double getMinBeat() const                       { return getContentStartBeat(); }
+
+        //==============================================================================
+        // Hearing notes while editing
+
+        void setAuditioner (Auditioner* a) noexcept     { auditioner = a; }
+        void auditionStart (int pitch, int velocity);
+        void auditionStop();
+
+    private:
+        core::Project& project;
+
+        // Holding a reference keeps the clip object alive if the edit drops it (e.g. an undo
+        // removes its track), so the model can notice and let go of it safely.
+        juce::ReferenceCountedObjectPtr<te::MidiClip> clip;
+        std::unique_ptr<core::NoteEditor> editor;
+        juce::ValueTree sequenceState;
+
+        Tool tool = Tool::draw;
+        core::snap::Mode snapMode = core::snap::Mode::line;
+        double pixelsPerBeat = 80.0;
+        core::NoteProperty laneProperty = core::NoteProperty::velocity;
+        bool ghostsVisible = true;
+        double newNoteLength = 0.25;
+
+        // Selected notes, keyed by the live MidiNote and checked against its tree, so a stale
+        // pointer can never be mistaken for a new note that happens to reuse the address.
+        std::unordered_map<const te::MidiNote*, juce::ValueTree> selection;
+        std::optional<core::note_ops::BeatRange> timeSelection;
+
+        std::vector<DrawnNote> drawn;
+        double longestNote = 0.0;
+        int numSelected = 0;
+        bool notesDirty = true, selectionDirty = true;
+        bool clipRemoved = false;   // the clip left the edit (undo); dropped on the next async update
+
+        std::vector<GhostNote> ghosts;
+        double longestGhost = 0.0;
+        bool ghostsDirty = true;
+
+        juce::ValueTree lastNudgedNote;
+        juce::uint32 lastNudgeTime = 0;
+
+        Auditioner* auditioner = nullptr;
+        int auditionPitch = -1;
+
+        juce::ListenerList<Listener> listeners;
+
+        bool canEdit() const noexcept                   { return editor != nullptr && ! clipRemoved; }
+        void ensureNotes();
+        void ensureSelectionFlags();
+        void rebuildGhosts();
+        void notifyChanged();
+        void selectionChanged();
+
+        core::Note toContent (const core::Note&) const;
+        std::vector<core::Note> readAll (const juce::Array<te::MidiNote*>&) const;
+        void growClipToFit (const std::vector<core::Note>& songValues);
+
+        void handleAsyncUpdate() override;
+        void treeChanged (const juce::ValueTree&);
+        void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
+        void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
+        void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
+        void valueTreeChildOrderChanged (juce::ValueTree&, int, int) override;
+
+        JUCE_DECLARE_NON_COPYABLE (PianoRollModel)
+    };
+}

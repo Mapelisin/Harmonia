@@ -14,12 +14,17 @@ namespace harmonia::ui
     InstrumentPanel::InstrumentPanel (core::Session& s, te::AudioTrack& t)
         : session (s), track (t)
     {
-        titleLabel.setText (track.getName() + "  instrument", juce::dontSendNotification);
+        titleLabel.setText ("Instrument", juce::dontSendNotification);
         titleLabel.setColour (juce::Label::textColourId, theme::colour::textPrimary);
         titleLabel.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
 
         messageLabel.setColour (juce::Label::textColourId, theme::colour::textSecondary);
         messageLabel.setFont (juce::FontOptions (theme::size::smallFontSize));
+
+        // Keyboard focus stays with the piano roll, so its shortcuts and Space keep working.
+        instrumentBox.setWantsKeyboardFocus (false);
+        editorButton.setWantsKeyboardFocus (false);
+        scanButton.setWantsKeyboardFocus (false);
 
         instrumentBox.onChange = [this] { instrumentChosen(); };
         editorButton.onClick = [this] { audio::instruments::showEditor (track); };
@@ -45,7 +50,7 @@ namespace harmonia::ui
         auto area = getLocalBounds().reduced (theme::size::padding);
         auto row = area.removeFromTop (theme::size::buttonHeight);
 
-        titleLabel.setBounds (row.removeFromLeft (180));
+        titleLabel.setBounds (row.removeFromLeft (90));
         instrumentBox.setBounds (row.removeFromLeft (320));
         row.removeFromLeft (theme::size::padding);
         editorButton.setBounds (row.removeFromLeft (110));
@@ -92,6 +97,9 @@ namespace harmonia::ui
         const auto id = instrumentBox.getSelectedId();
         juce::String error;
         juce::String name;
+
+        // A separate undo step, not merged into the last note edit.
+        track.edit.getUndoManager().beginNewTransaction ("Change instrument");
 
         if (id == builtInSynthId)
         {

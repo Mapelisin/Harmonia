@@ -9,7 +9,13 @@ add_library(harmonia_core STATIC
     NoteEditor.h
     NoteEditor.cpp
     ClipLinks.h
-    ClipLinks.cpp)
+    ClipLinks.cpp
+    Clips.h
+    Clips.cpp
+    Snap.h
+    Snap.cpp
+    NoteOps.h
+    NoteOps.cpp)
 
 harmonia_configure_target(harmonia_core)
 target_link_libraries(harmonia_core PUBLIC harmonia_juce)

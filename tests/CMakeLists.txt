@@ -6,11 +6,15 @@ add_executable(harmonia_tests
     core/NoteTests.cpp
     core/NoteEditorTests.cpp
     core/ClipLinksTests.cpp
+    core/SnapTests.cpp
+    core/NoteOpsTests.cpp
     audio/DeviceStatusTests.cpp
-    audio/AudioTests.cpp)
+    audio/AudioTests.cpp
+    ui/PianoRollTests.cpp
+    ui/PianoRollViewTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
-target_link_libraries(harmonia_tests PRIVATE harmonia_audio)
+target_link_libraries(harmonia_tests PRIVATE harmonia_ui)
 target_include_directories(harmonia_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_include_directories(harmonia_tests SYSTEM PRIVATE "${HARMONIA_TE_DIR}/modules/3rd_party/doctest")
 

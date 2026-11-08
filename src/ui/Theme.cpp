@@ -2,6 +2,21 @@
 
 namespace harmonia::ui::theme
 {
+    namespace pianoroll
+    {
+        juce::Colour getNoteColour (int colourGroup)
+        {
+            static const juce::Colour palette[] = {
+                juce::Colour (0xff5aa9e6), juce::Colour (0xff62c79a), juce::Colour (0xffd9c45a), juce::Colour (0xffe0875a),
+                juce::Colour (0xffd9677a), juce::Colour (0xffb17ad9), juce::Colour (0xff6f8be0), juce::Colour (0xff4fc2c9),
+                juce::Colour (0xff9ccf5c), juce::Colour (0xffe6a85a), juce::Colour (0xffe06f9f), juce::Colour (0xff8d95a8),
+                juce::Colour (0xff3d8fc4), juce::Colour (0xff42a77a), juce::Colour (0xffb8a24a), juce::Colour (0xffc46a4a)
+            };
+
+            return palette[juce::jlimit (0, 15, colourGroup)];
+        }
+    }
+
     LookAndFeel::LookAndFeel()
     {
         setColourScheme ({ colour::background,      // windowBackground

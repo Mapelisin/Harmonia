@@ -11,8 +11,24 @@ add_library(harmonia_ui STATIC
     TransportBar.cpp
     InstrumentPanel.h
     InstrumentPanel.cpp
-    PreviewKeyboard.h
-    PreviewKeyboard.cpp
+    pianoroll/View.h
+    pianoroll/View.cpp
+    pianoroll/PianoRollModel.h
+    pianoroll/PianoRollModel.cpp
+    pianoroll/GridGestures.h
+    pianoroll/GridGestures.cpp
+    pianoroll/NoteGrid.h
+    pianoroll/NoteGrid.cpp
+    pianoroll/PianoKeys.h
+    pianoroll/PianoKeys.cpp
+    pianoroll/TimeRuler.h
+    pianoroll/TimeRuler.cpp
+    pianoroll/ControlLane.h
+    pianoroll/ControlLane.cpp
+    pianoroll/NotePropertiesPanel.h
+    pianoroll/NotePropertiesPanel.cpp
+    pianoroll/PianoRoll.h
+    pianoroll/PianoRoll.cpp
     MainComponent.h
     MainComponent.cpp)
 

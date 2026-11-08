@@ -45,6 +45,10 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   `Harmonia.exe --selftest --log=<файл> "--plugin=E:/HarmoniaTestPlugins/surge-xt/Surge Synth Team/Surge XT.vst3"`.
   Код возврата = число проваленных проверок. В Debug она же ловит jassert движка.
 - Play/Stop — только через `audio::Transport` (он продолжает игру после самопроизвольных остановок движка).
+- Piano roll: всё поведение — в `ui/pianoroll/PianoRollModel` (команды, выделение) и `GridGestures` (мышь),
+  их тесты гоняют синтетические события без окна. Компоненты только рисуют и передают ввод. Время в piano roll —
+  доли от начала песни; в клипе ноты хранятся от начала его содержимого (`PianoRollModel` переводит).
+- Проверка интерфейса вживую: скрипт кликает мышью по окну и делает снимок (см. журнал M3 в `docs/PROJECT.md`).
 - Сборки — в `build/` (не в git). Пробные программы — в `spikes/`, их выводы — в `docs/research/`.
 
 ## Git

@@ -2,6 +2,7 @@
 #include "app/SelfTest.h"
 #include "audio/DeviceSetup.h"
 #include "audio/Instruments.h"
+#include "core/Clips.h"
 #include "ui/PluginWindow.h"
 #include "ui/Theme.h"
 
@@ -62,9 +63,12 @@ namespace harmonia::app
 
             project = core::Project::createEmpty (*session);
 
-            // A new project starts with an instrument so the keyboard makes sound right away.
+            // A new project starts with an instrument and an empty 4-bar clip, ready to draw notes in.
             if (auto* track = project->getTracks().getFirst())
+            {
                 audio::instruments::useBuiltInSynth (*track);
+                core::clips::getOrAddMainClip (*project, *track, 4 * core::clips::getBeatsPerBar (project->getEdit()));
+            }
 
             project->clearUndoHistory();
 

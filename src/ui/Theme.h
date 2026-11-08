@@ -19,6 +19,34 @@ namespace harmonia::ui::theme
         inline const juce::Colour warning       { 0xffe0a64f };
     }
 
+    /** Piano roll colours. Notes use a 16-colour palette (one per note colour group / MIDI channel). */
+    namespace pianoroll
+    {
+        inline const juce::Colour whiteRow        { 0xff202328 };
+        inline const juce::Colour blackRow        { 0xff1a1c20 };
+        inline const juce::Colour octaveLine      { 0xff30353d };
+        inline const juce::Colour barLine         { 0xff4a515b };
+        inline const juce::Colour beatLine        { 0xff32373f };
+        inline const juce::Colour stepLine        { 0xff282c32 };
+        inline const juce::Colour outsideClip     { 0x70000000 };
+        inline const juce::Colour noteBorder      { 0xff111316 };
+        inline const juce::Colour noteSelected    { 0xfff2b65c };
+        inline const juce::Colour noteMuted       { 0xff4b515a };
+        inline const juce::Colour noteLabel       { 0xe0101215 };
+        inline const juce::Colour ghostNote       { 0x2cffffff };
+        inline const juce::Colour playhead        { 0xffeaeaea };
+        inline const juce::Colour selectionFill   { 0x264f9fe0 };
+        inline const juce::Colour timeSelection   { 0x1c4f9fe0 };
+        inline const juce::Colour sliceLine       { 0xffff6b6b };
+        inline const juce::Colour whiteKey        { 0xffd9dce1 };
+        inline const juce::Colour whiteKeyText    { 0xff6b717a };
+        inline const juce::Colour blackKey        { 0xff23262b };
+        inline const juce::Colour clipRange       { 0xff3f6f99 };
+
+        /** Fill colour of a note in colour group 0..15. */
+        juce::Colour getNoteColour (int colourGroup);
+    }
+
     namespace size
     {
         inline constexpr int headerHeight = 34;
