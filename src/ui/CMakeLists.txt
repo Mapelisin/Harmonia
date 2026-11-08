@@ -23,6 +23,8 @@ add_library(harmonia_ui STATIC
     NoteInput.cpp
     FileCommands.h
     FileDrag.h
+    RecentProjects.h
+    RecentProjects.cpp
     TransportBar.h
     TransportBar.cpp
     InstrumentPanel.h

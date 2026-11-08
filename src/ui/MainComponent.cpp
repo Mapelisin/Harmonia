@@ -32,6 +32,7 @@ namespace harmonia::ui
         noteInput.onStateChanged = [this]
         {
             pianoRoll.setLetterShortcutsEnabled (! noteInput.getComputerKeyboard().isEnabled());
+            arrangement.setLetterShortcutsEnabled (! noteInput.getComputerKeyboard().isEnabled());
             transportBar.refresh();
         };
         updateMidiStatus();
@@ -504,6 +505,11 @@ namespace harmonia::ui
     //==============================================================================
     void MainComponent::showFileMenu()
     {
+        createFileMenu().showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fileButton));
+    }
+
+    juce::PopupMenu MainComponent::createFileMenu()
+    {
         const auto hasCommands = fileCommands != nullptr;
         juce::Component::SafePointer<MainComponent> safe (this);
 
@@ -519,6 +525,26 @@ namespace harmonia::ui
         juce::PopupMenu menu;
         menu.addItem ("New project  (Ctrl+N)", hasCommands, false, run (&FileCommands::newProject));
         menu.addItem ("Open...  (Ctrl+O)", hasCommands, false, run (&FileCommands::openProject));
+
+        // The last projects: name, and where it is.
+        juce::PopupMenu recentMenu;
+        const auto recent = hasCommands ? fileCommands->getRecentProjects() : juce::Array<juce::File>();
+
+        for (const auto& file : recent)
+        {
+            juce::PopupMenu::Item item (file.getFileNameWithoutExtension());
+            item.shortcutKeyDescription = file.getParentDirectory().getFullPathName();
+            item.action = [safe, file] { if (safe != nullptr && safe->fileCommands != nullptr) safe->fileCommands->openRecentProject (file); };
+            recentMenu.addItem (std::move (item));
+        }
+
+        if (! recent.isEmpty())
+        {
+            recentMenu.addSeparator();
+            recentMenu.addItem ("Clear the list", run (&FileCommands::clearRecentProjects));
+        }
+
+        menu.addSubMenu ("Open recent", recentMenu, ! recent.isEmpty());
         menu.addSeparator();
         menu.addItem ("Save  (Ctrl+S)", hasCommands, false, run (&FileCommands::saveProject));
         menu.addItem ("Save as...  (Ctrl+Shift+S)", hasCommands, false, run (&FileCommands::saveProjectAs));
@@ -527,7 +553,7 @@ namespace harmonia::ui
         menu.addItem ("Export WAV...  (Ctrl+R)", hasCommands, false, run (&FileCommands::exportWav));
         menu.addItem ("Export stems (WAV per track)...", hasCommands, false, run (&FileCommands::exportStems));
         menu.addItem ("Export MIDI...", [safe] { if (safe != nullptr) safe->chooseMidiExport(); });
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fileButton));
+        return menu;
     }
 
     void MainComponent::chooseFilesToImport()

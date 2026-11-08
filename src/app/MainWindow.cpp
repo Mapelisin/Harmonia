@@ -24,6 +24,7 @@ namespace harmonia::app
         setResizable (true, false);
         setResizeLimits (800, 500, 16384, 16384);
         setProject (std::move (p), projectFile);
+        recent.add (projectFile);
         centreWithSize (getWidth(), getHeight());
         setVisible (true);
         ui::applyPreferredRenderer (*this);
@@ -164,6 +165,24 @@ namespace harmonia::app
         askToSaveChanges ([this] { setProject (createNewProject (session), {}); });
     }
 
+    juce::Array<juce::File> MainWindow::getRecentProjects() const
+    {
+        return recent.getFiles();
+    }
+
+    void MainWindow::openRecentProject (const juce::File& fileToOpen)
+    {
+        if (fileToOpen == file)
+            return;
+
+        askToSaveChanges ([this, fileToOpen] { open (fileToOpen); });
+    }
+
+    void MainWindow::clearRecentProjects()
+    {
+        recent.clear();
+    }
+
     void MainWindow::openProject()
     {
         askToSaveChanges ([this]
@@ -186,11 +205,15 @@ namespace harmonia::app
 
         if (loaded == nullptr)
         {
+            if (! fileToOpen.existsAsFile())
+                recent.remove (fileToOpen);
+
             showError ("Cannot open the project", error);
             return false;
         }
 
         setProject (std::move (loaded), fileToOpen);
+        recent.add (fileToOpen);
 
         if (auto* content = getMainComponent())
             content->showMessage ("Opened " + fileToOpen.getFullPathName());
@@ -309,6 +332,7 @@ namespace harmonia::app
             return false;
         }
 
+        recent.add (target);
         updateTitle();
 
         if (auto* content = getMainComponent())

@@ -70,6 +70,9 @@ namespace harmonia::ui
         bool areShortcutsShown() const                                  { return shortcuts.isVisible(); }
         ShortcutsPanel& getShortcutsPanel() noexcept                    { return shortcuts; }
 
+        /** The File button's menu. */
+        juce::PopupMenu createFileMenu();
+
         /** What the lower part of the window shows. */
         enum class LowerPanel { pianoRoll, automation, mixer, sounds };
         void showLowerPanel (LowerPanel);

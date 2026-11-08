@@ -3,6 +3,7 @@
 #include "core/Autosave.h"
 #include "core/Project.h"
 #include "ui/FileCommands.h"
+#include "ui/RecentProjects.h"
 
 namespace harmonia::ui { class MainComponent; }
 
@@ -46,6 +47,9 @@ namespace harmonia::app
         void exportWav() override;
         void exportStems() override;
         juce::String getProjectName() const override;
+        juce::Array<juce::File> getRecentProjects() const override;
+        void openRecentProject (const juce::File&) override;
+        void clearRecentProjects() override;
 
         /** Opens a project file (also used for a file given on the command line). */
         bool open (const juce::File&);
@@ -62,6 +66,7 @@ namespace harmonia::app
         bool askingToSave = false;
 
         core::Autosave autosave;
+        ui::RecentProjects recent { session.getEngine().getPropertyStorage().getPropertiesFile() };
         std::optional<core::Autosave::Leftover> leftover;   // until the user says what to do with it
         juce::String autosaveProblem;
 

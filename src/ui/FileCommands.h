@@ -19,5 +19,10 @@ namespace harmonia::ui
 
         /** The project's file name without extension, or "Untitled". */
         virtual juce::String getProjectName() const = 0;
+
+        /** Projects opened or saved lately, newest first (File → Open recent). */
+        virtual juce::Array<juce::File> getRecentProjects() const      { return {}; }
+        virtual void openRecentProject (const juce::File&)              {}
+        virtual void clearRecentProjects()                              {}
     };
 }

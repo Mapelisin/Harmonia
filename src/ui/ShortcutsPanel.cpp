@@ -43,6 +43,7 @@ namespace harmonia::ui
                 { "Ctrl+A / Ctrl+D, Esc", "Select all / deselect" },
                 { "Ctrl+C / Ctrl+X / Ctrl+V", "Copy / cut / paste at the playhead" },
                 { "Ctrl+E", "Split the clips at the playhead" },
+                { "Z", "Zoom to fit: the whole song, or the selected clips" },
                 { "Click the ruler", "Play from there (Song mode)" },
                 { "Ctrl+drag on the ruler", "Loop region for Song mode (a click without dragging clears it)" },
                 { "Markers strip", "+ Marker, double-click: add; drag: move; double-click a marker: rename" },

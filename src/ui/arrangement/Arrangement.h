@@ -64,6 +64,12 @@ namespace harmonia::ui::arrangement
             files onto instrument tracks, audio files onto audio tracks (else onto new ones). */
         ClipArea::DropMarker getDropTarget (juce::Point<int>, bool midi = false) const;
 
+        /** Zooms so the selected clips, or else the whole song, fill the width (Z). */
+        void zoomToFit();
+
+        /** Off while the computer keyboard plays notes: Z is a note then, not a shortcut. */
+        void setLetterShortcutsEnabled (bool shouldBeEnabled) noexcept   { letterShortcutsEnabled = shouldBeEnabled; }
+
         /** Asks where to save the clip's notes as a MIDI file. */
         void exportClipAsMidi (te::MidiClip&);
 
@@ -90,6 +96,7 @@ namespace harmonia::ui::arrangement
         juce::ScrollBar horizontalScroll { false }, verticalScroll { true };
 
         juce::VBlankAttachment vblank { this, [this] { updatePlayhead(); } };
+        bool letterShortcutsEnabled = true;
 
         void arrangementChanged() override;
         void scrollBarMoved (juce::ScrollBar*, double newRangeStart) override;

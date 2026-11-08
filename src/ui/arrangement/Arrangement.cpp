@@ -160,7 +160,45 @@ namespace harmonia::ui::arrangement
             return true;
         }
 
+        if (letter == 'Z' && letterShortcutsEnabled)
+        {
+            zoomToFit();
+            return true;
+        }
+
         return false;
+    }
+
+    void Arrangement::zoomToFit()
+    {
+        if (view.width <= 0.0f)
+            return;
+
+        // The selected clips, or else the whole song (an empty one: four bars).
+        auto start = 0.0, end = model.getSongEndBeat();
+        const auto selected = model.getSelectedClips();
+
+        if (! selected.isEmpty())
+        {
+            start = std::numeric_limits<double>::max();
+            end = std::numeric_limits<double>::lowest();
+
+            for (auto* clip : selected)
+            {
+                start = std::min (start, core::clips::getStartBeat (*clip));
+                end = std::max (end, core::clips::getEndBeat (*clip));
+            }
+        }
+
+        if (end <= start)
+            end = start + 4.0 * model.getBeatsPerBar();
+
+        const auto length = end - start;
+        const auto margin = length * 0.02;
+        view.pixelsPerBeat = juce::jlimit (ArrangementView::minPixelsPerBeat, ArrangementView::maxPixelsPerBeat,
+                                           (double) view.width / (length + margin * 2.0));
+        view.leftBeat = std::max (0.0, start - margin);
+        viewChanged();
     }
 
     //==============================================================================
