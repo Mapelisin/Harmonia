@@ -5,6 +5,8 @@ add_library(harmonia_ui STATIC
     RenderingPolicy.cpp
     StatusBar.h
     StatusBar.cpp
+    ParameterPanel.h
+    ParameterPanel.cpp
     PluginWindow.h
     PluginWindow.cpp
     PhysicalKeys.h
@@ -49,6 +51,12 @@ add_library(harmonia_ui STATIC
     arrangement/TrackHeaders.cpp
     arrangement/Arrangement.h
     arrangement/Arrangement.cpp
+    mixer/LevelMeter.h
+    mixer/LevelMeter.cpp
+    mixer/ChannelStrip.h
+    mixer/ChannelStrip.cpp
+    mixer/Mixer.h
+    mixer/Mixer.cpp
     MainComponent.h
     MainComponent.cpp)
 

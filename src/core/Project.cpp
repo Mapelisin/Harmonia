@@ -178,10 +178,29 @@ namespace harmonia::core
     void Project::undo()
     {
         edit->undo();
+        syncPluginParameters();
     }
 
     void Project::redo()
     {
         edit->redo();
+        syncPluginParameters();
+    }
+
+    void Project::syncPluginParameters()
+    {
+        // Undo puts plugin settings (volume, pan, effect knobs) back into the edit's state, but
+        // Tracktion doesn't hand them to the running parameters: the sound would stay as it was.
+        auto& undoManager = edit->getUndoManager();
+
+        for (auto* plugin : te::getAllPlugins (*edit, true))
+            for (auto* parameter : plugin->getAutomatableParameters())
+                parameter->updateFromAttachedValue();
+
+        // A setting that undo took back to its default (the property removed) is written again by
+        // Tracktion as a new undo step, which would also drop the redo steps. Take that step back out:
+        // the value stays the same, the redo steps come back.
+        if (undoManager.getNumActionsInCurrentTransaction() > 0)
+            undoManager.undoCurrentTransactionOnly();
     }
 }

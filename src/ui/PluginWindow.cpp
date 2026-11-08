@@ -1,10 +1,13 @@
 #include "ui/PluginWindow.h"
+#include "audio/Effects.h"
+#include "ui/ParameterPanel.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui
 {
     PluginWindow::PluginWindow (te::Plugin& p)
-        : juce::DocumentWindow (p.getName(), theme::colour::background, juce::DocumentWindow::closeButton, true),
+        : juce::DocumentWindow (audio::effects::getDisplayName (p), theme::colour::background,
+                                juce::DocumentWindow::closeButton, true),
           plugin (p),
           editor (p.createEditor())
     {
@@ -14,6 +17,13 @@ namespace harmonia::ui
         {
             setContentNonOwned (editor.get(), true);
             setResizable (editor->allowWindowResizing(), false);
+        }
+        else
+        {
+            knobs = std::make_unique<ParameterPanel> (plugin);
+            setContentNonOwned (knobs.get(), true);
+            setResizable (true, false);
+            setResizeLimits (360, 120, 1200, 1600);
         }
 
         setTopLeftPosition (plugin.windowState->choosePositionForPluginWindow());
@@ -26,6 +36,7 @@ namespace harmonia::ui
         plugin.edit.flushPluginStateIfNeeded (plugin);
         clearContentComponent();
         editor.reset();
+        knobs.reset();
     }
 
     void PluginWindow::closeButtonPressed()
@@ -51,11 +62,6 @@ namespace harmonia::ui
             if (external->getAudioPluginInstance() == nullptr)
                 return {};
 
-        auto window = std::make_unique<PluginWindow> (plugin);
-
-        if (! window->hasEditor())
-            return {};
-
-        return window;
+        return std::make_unique<PluginWindow> (plugin);
     }
 }

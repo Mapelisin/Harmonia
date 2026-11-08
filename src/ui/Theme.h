@@ -66,6 +66,19 @@ namespace harmonia::ui::theme
         juce::Colour getTrackColour (int trackIndex);
     }
 
+    /** Mixer colours. */
+    namespace mixer
+    {
+        inline const juce::Colour stripCurrent    { 0xff262a31 };
+        inline const juce::Colour slot            { 0xff2a2e34 };
+        inline const juce::Colour slotBypassed    { 0xff1f2126 };
+        inline const juce::Colour slotOn          { 0xff62c79a };
+        inline const juce::Colour meterBackground { 0xff111316 };
+        inline const juce::Colour meterLow        { 0xff4fbf7a };
+        inline const juce::Colour meterMid        { 0xffe0c04f };
+        inline const juce::Colour fader           { 0xff4f9fe0 };
+    }
+
     namespace size
     {
         inline constexpr int headerHeight = 34;

@@ -73,6 +73,7 @@ namespace harmonia::core
 
         void changeListenerCallback (juce::ChangeBroadcaster*) override;
         void markAsSaved();
+        void syncPluginParameters();
 
         JUCE_DECLARE_NON_COPYABLE (Project)
     };

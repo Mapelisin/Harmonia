@@ -1,6 +1,7 @@
 #include "app/SelfTest.h"
 #include "audio/DeviceSetup.h"
 #include "audio/DeviceStatus.h"
+#include "audio/Effects.h"
 #include "audio/Instruments.h"
 #include "audio/Export.h"
 #include "audio/NotePreview.h"
@@ -250,6 +251,7 @@ namespace harmonia::app
                     checkLivePlayback (transport, level);
                     checkPlaybackClock (project->getEdit(), transport, level);
                     checkPlayAfterDeviceRestart (transport, level);
+                    checkEffects (*project, track, transport, level);
                 }
 
                 checkRender (*project, "builtin-synth.wav");
@@ -306,6 +308,106 @@ namespace harmonia::app
 
                 if (xrunsBefore >= 0)
                     report.check (xruns == 0, "No audio dropouts (" + juce::String (xruns) + ")");
+            }
+
+            /** The mixer while playing: effects come, move and go without stopping the sound;
+                the track and master meters show the song. Leaves no effects behind. */
+            void checkEffects (core::Project& project, te::AudioTrack& track, audio::Transport& transport, TrackLevel& level)
+            {
+                namespace effects = audio::effects;
+                auto* device = audio::getDeviceManager (session).getCurrentAudioDevice();
+
+                if (device == nullptr)
+                    return;
+
+                auto& edit = project.getEdit();
+                transport.setPositionSeconds (0.0);
+                transport.play();
+                pump (500, level, transport, report);
+                const auto xrunsBefore = device->getXRunCount();
+
+                juce::StringArray added, failed;
+                juce::String error;
+
+                for (const auto& type : effects::getBuiltIn())
+                {
+                    if (effects::add (track.pluginList, type, error) != nullptr)
+                        added.add (type.name);
+                    else
+                        failed.add (type.name + " (" + error + ")");
+                }
+
+                auto* masterEffect = effects::add (edit.getMasterPluginList(), effects::getBuiltIn()[1], error);
+
+                report.check (failed.isEmpty() && masterEffect != nullptr,
+                              "Added effects while playing: " + added.joinIntoString (", ") + " on track 1, "
+                                  + (masterEffect != nullptr ? masterEffect->getName() : "nothing") + " on the master"
+                                  + (failed.isEmpty() ? juce::String() : "; failed: " + failed.joinIntoString (", ")));
+
+                level.takePeakDb();
+                pump (1500, level, transport, report);
+                const auto trackPeak = level.takePeakDb();
+                report.check (transport.isPlaying() && trackPeak > -60.0f,
+                              "Still playing and audible through the effects (track peak "
+                                  + juce::String (trackPeak, 1) + " dBFS)");
+
+                // The master meter, as the mixer reads it. It measures after the master volume, which
+                // --quiet turns all the way down: then it can only show that it is fed.
+                auto masterPeak = -100.0f;
+                auto masterChannels = 0;
+
+                if (auto* context = edit.getTransport().getCurrentPlaybackContext())
+                {
+                    te::LevelMeasurer::Client client;
+                    context->masterLevels.addClient (client);
+                    const auto end = juce::Time::getMillisecondCounterHiRes() + 800;
+
+                    while (juce::Time::getMillisecondCounterHiRes() < end)
+                    {
+                        juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+
+                        for (int channel = 0; channel < 2; ++channel)
+                            masterPeak = std::max (masterPeak, client.getAndClearAudioLevel (channel).dB);
+
+                        masterChannels = std::max (masterChannels, client.getNumChannelsUsed());
+                    }
+
+                    context->masterLevels.removeClient (client);
+                }
+
+                if (options.quiet)
+                    report.check (masterChannels > 0, "The master meter is fed (" + juce::String (masterChannels)
+                                                          + " channels; silent: --quiet turns the master down)");
+                else
+                    report.check (masterPeak > -60.0f, "The master meter shows the song (peak " + juce::String (masterPeak, 1) + " dBFS)");
+
+                // Reorder and bypass while playing.
+                auto chain = effects::get (track.pluginList);
+
+                if (chain.size() >= 3)
+                {
+                    effects::move (*chain.getLast(), 0);
+                    effects::setBypassed (*chain[1], true);
+                }
+
+                pump (800, level, transport, report);
+                report.check (transport.isPlaying() && level.takePeakDb() > -60.0f,
+                              "Moved and bypassed effects while playing, still audible");
+
+                for (auto* plugin : effects::get (track.pluginList))
+                    effects::remove (*plugin);
+
+                if (masterEffect != nullptr)
+                    effects::remove (*masterEffect);
+
+                level.takePeakDb();
+                pump (800, level, transport, report);
+                report.check (effects::get (track.pluginList).isEmpty() && transport.isPlaying() && level.takePeakDb() > -60.0f,
+                              "Removed the effects while playing, still audible");
+
+                report.line ("       dropouts while changing effects: " + juce::String (device->getXRunCount() - xrunsBefore));
+                transport.stop();
+                pump (300, level, transport, report);
             }
 
             /** What happens when the user changes the audio settings and presses Play right away. */

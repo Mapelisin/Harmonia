@@ -11,13 +11,14 @@
 #include "ui/StatusBar.h"
 #include "ui/TransportBar.h"
 #include "ui/arrangement/Arrangement.h"
+#include "ui/mixer/Mixer.h"
 #include "ui/pianoroll/PianoRoll.h"
 
 namespace harmonia::ui
 {
     /** Root of the main window: header (file menu, transport, audio settings), the current
-        track's instrument, the arrangement, the piano roll of the open clip (with a draggable
-        divider between them) and the status bar. */
+        track's instrument, the arrangement and below it (a draggable divider between them)
+        the piano roll of the open clip or the mixer (F7 / F9), and the status bar. */
     class MainComponent final : public juce::Component,
                                 private pianoroll::PianoRollModel::Listener,
                                 private arrangement::ArrangementModel::Listener
@@ -46,6 +47,12 @@ namespace harmonia::ui
         pianoroll::PianoRoll& getPianoRoll() noexcept                   { return pianoRoll; }
         NoteInput& getNoteInput() noexcept                              { return noteInput; }
         audio::Transport& getTransport() noexcept                       { return transport; }
+        mixer::Mixer& getMixer() noexcept                               { return mixer; }
+
+        /** What the lower part of the window shows. */
+        enum class LowerPanel { pianoRoll, mixer };
+        void showLowerPanel (LowerPanel);
+        LowerPanel getLowerPanel() const noexcept                       { return lowerPanel; }
 
     private:
         /** Plays edited notes on the current track's instrument, but not over the playing song. */
@@ -85,11 +92,14 @@ namespace harmonia::ui
         juce::TextButton fileButton { "File" };
         juce::TextButton audioSettingsButton { "Audio settings" };
         juce::Label trackNameLabel;
+        juce::TextButton pianoRollTab { "Piano roll" }, mixerTab { "Mixer" };
         std::unique_ptr<InstrumentPanel> instrumentPanel;
         arrangement::Arrangement arrangement { arrangementModel, transport };
         juce::StretchableLayoutManager splitLayout;
         juce::StretchableLayoutResizerBar splitter { &splitLayout, 1, false };
         pianoroll::PianoRoll pianoRoll { pianoRollModel, transport };
+        mixer::Mixer mixer { session, arrangementModel };
+        LowerPanel lowerPanel = LowerPanel::pianoRoll;
         StatusBar statusBar { session };
 
         /** The arrangement's current track or open clip changed: the piano roll, the keyboards

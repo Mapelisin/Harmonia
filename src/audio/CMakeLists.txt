@@ -3,6 +3,8 @@ add_library(harmonia_audio STATIC
     DeviceStatus.cpp
     DeviceSetup.h
     DeviceSetup.cpp
+    Effects.h
+    Effects.cpp
     Export.h
     Export.cpp
     Instruments.h
@@ -13,6 +15,8 @@ add_library(harmonia_audio STATIC
     NotePreview.cpp
     PlaybackClock.h
     PlaybackClock.cpp
+    PluginControls.h
+    PluginControls.cpp
     PluginScanner.h
     PluginScanner.cpp
     Transport.h

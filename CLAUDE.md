@@ -49,7 +49,7 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   их тесты гоняют синтетические события без окна. Компоненты только рисуют и передают ввод. Время в piano roll —
   доли от начала песни; в клипе ноты хранятся от начала его содержимого (`PianoRollModel` переводит).
 - Проверка интерфейса без окна: тесты «the main window paints…» рисуют главное окно в картинку; с переменной
-  `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png` и `main-arrangement.png`
+  `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png`, `main-arrangement.png` и `main-mixer.png`
   (`harmonia_tests.exe -tc="*paints*"`). Живая проверка мышью (скрипт
   кликает по окну) захватывает настоящий курсор — только если пользователь не за компьютером или разрешил.
 - Самопроверка без звука в динамиках: `--selftest --quiet` (громкость мастера в ноль, уровни меряются на дорожке).
@@ -58,6 +58,10 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   Открытый клип и текущая дорожка живут в `ArrangementModel`; `MainComponent` переносит их в piano roll.
   Перед сменой клипа piano roll — `NoteInput::finishTake()`.
 - Несохранённые изменения считает `core::Project` (любое действие в undo); `clearUndoHistory()` и `save()` их сбрасывают.
+- Undo/redo — только через `core::Project::undo/redo` (не `UndoManager` напрямую): Tracktion после undo не
+  переносит значения в параметры плагинов, `Project` их синхронизирует.
+- Эффекты — через `audio::effects` (порядок в списке плагинов: инструмент, эффекты, громкость, индикатор).
+  Ручки плагинов — через `audio::PluginControl` (у Chorus/Phaser/времени Delay/типа фильтра нет параметров).
 - Сборки — в `build/` (не в git). Пробные программы — в `spikes/`, их выводы — в `docs/research/`.
 
 ## Git

@@ -13,6 +13,14 @@ namespace harmonia::core
             bool autoInitialiseDeviceManager() override  { return openDevices; }
             bool canScanPluginsOutOfProcess() override    { return scanOutOfProcess; }
 
+            te::EditLimits getEditLimits() override
+            {
+                // Tracktion allows only 4 master effects by default; a mastering chain needs more.
+                te::EditLimits limits;
+                limits.maxNumMasterPlugins = 16;
+                return limits;
+            }
+
         private:
             bool openDevices, scanOutOfProcess;
         };

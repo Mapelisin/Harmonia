@@ -1,4 +1,5 @@
 #include "ui/InstrumentPanel.h"
+#include "audio/Effects.h"
 #include "audio/Instruments.h"
 #include "ui/Theme.h"
 
@@ -89,7 +90,7 @@ namespace harmonia::ui
         editorButton.setEnabled (current != nullptr);
 
         if (available.isEmpty())
-            showMessage ("No plugin instruments known yet. Press \"Scan plugins\" to look for VST3 instruments.", false);
+            showMessage ("No plugins found yet: \"Scan plugins\" looks for VST3 instruments and effects.", false);
     }
 
     void InstrumentPanel::instrumentChosen()
@@ -149,7 +150,9 @@ namespace harmonia::ui
         {
             scanButton.setButtonText ("Scan plugins");
             refreshList();
-            showMessage ("Scan finished: " + juce::String (available.size()) + " instrument(s) found", false);
+            const auto effectsFound = audio::effects::getExternal (session).size();
+            showMessage ("Scan finished: " + juce::String (available.size()) + " instrument(s), "
+                         + juce::String (effectsFound) + " effect(s) found", false);
         };
 
         scanner.startScan (std::move (callbacks));
