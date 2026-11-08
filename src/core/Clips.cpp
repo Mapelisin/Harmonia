@@ -1,6 +1,7 @@
 #include "core/Clips.h"
 #include "core/Tracks.h"
 #include "core/ClipLinks.h"
+#include "core/NoteEditor.h"
 
 namespace harmonia::core::clips
 {
@@ -45,7 +46,7 @@ namespace harmonia::core::clips
 
     double getContentStartBeat (const te::Clip& clip)
     {
-        return clip.getContentStartBeat().inBeats();
+        return clip.getContentStartBeat().inBeats() - getLoopRange (clip).getStart();
     }
 
     double getStartBeat (const te::Clip& clip)
@@ -82,6 +83,20 @@ namespace harmonia::core::clips
 
         for (auto* member : clip_links::getGroup (clip))
         {
+            if (isLooping (*member))
+            {
+                // A longer loop, in whole bars from where it starts.
+                const auto loop = getLoopRange (*member);
+
+                if (contentEndBeat > loop.getEnd() + 1.0e-9)
+                {
+                    const auto bars = std::ceil ((contentEndBeat - loop.getStart()) / beatsPerBar - 1.0e-9);
+                    setLoopLengthBeats (*member, bars * beatsPerBar);
+                }
+
+                continue;
+            }
+
             const auto contentStart = getContentStartBeat (*member);
             const auto neededEnd = contentStart + contentEndBeat;
 
@@ -94,6 +109,33 @@ namespace harmonia::core::clips
             const auto newEnd = start + bars * beatsPerBar;
 
             member->setEnd (tempo.toTime (te::BeatPosition::fromBeats (newEnd)), false);
+        }
+    }
+
+    //==============================================================================
+    namespace
+    {
+        te::TimePosition toTime (const te::Edit& edit, double beat);
+
+        /** Sets a looping clip starting at `startBeat` so that a time round of its loop begins at
+            song beat `loopStart` (or a whole number of loops from it): the offset into the loop. */
+        void setLoopOffset (te::Clip& clip, double startBeat, double loopStart)
+        {
+            const auto length = getLoopRange (clip).getLength();
+
+            if (length <= 0.0)
+                return;
+
+            auto offset = std::fmod (startBeat - loopStart, length);
+
+            if (offset < 0.0)
+                offset += length;
+
+            if (offset > length - 1.0e-9)
+                offset = 0.0;
+
+            const auto start = toTime (clip.edit, startBeat);
+            clip.setOffset (start - toTime (clip.edit, startBeat - offset));
         }
     }
 
@@ -163,6 +205,16 @@ namespace harmonia::core::clips
 
     void setStart (te::Clip& clip, double startBeat, double minLengthBeats)
     {
+        if (isLooping (clip))
+        {
+            // The loop goes on before the clip too: any start, the repeats staying where they are.
+            const auto loop = getLoopSongRange (clip);
+            const auto start = juce::jlimit (0.0, std::max (0.0, getEndBeat (clip) - minLengthBeats), startBeat);
+            clip.setStart (toTime (clip.edit, start), false, false);
+            setLoopOffset (clip, start, loop.getStart());
+            return;
+        }
+
         const auto limited = juce::jlimit (getContentStartBeat (clip), std::max (getContentStartBeat (clip), getEndBeat (clip) - minLengthBeats),
                                            startBeat);
         clip.setStart (toTime (clip.edit, limited), true, false);
@@ -229,7 +281,13 @@ namespace harmonia::core::clips
         if (beat <= getStartBeat (clip) + minPartBeats || beat >= getEndBeat (clip) - minPartBeats)
             return nullptr;
 
-        return te::split (clip, toTime (clip.edit, beat));
+        auto* second = te::split (clip, toTime (clip.edit, beat));
+
+        // Each half of a looping clip still shows its first time round.
+        if (second != nullptr && isLooping (*second))
+            setLoopOffset (*second, getStartBeat (*second), getLoopSongRange (clip).getStart());
+
+        return second;
     }
 
     bool canTake (const te::AudioTrack& track, const te::ClipCopy& copy)
@@ -336,6 +394,181 @@ namespace harmonia::core::clips
     void setGainDb (te::AudioClipBase& clip, float db)
     {
         clip.setGainDB (juce::jlimit (silentGainDb, maxGainDb, db));
+    }
+
+    //==============================================================================
+    bool isLooping (const te::Clip& clip)
+    {
+        return dynamic_cast<const te::MidiClip*> (&clip) != nullptr && clip.isLooping();
+    }
+
+    juce::Range<double> getLoopRange (const te::Clip& clip)
+    {
+        if (! isLooping (clip))
+            return {};
+
+        const auto start = clip.getLoopStartBeats().inBeats();
+        return { start, start + clip.getLoopLengthBeats().inBeats() };
+    }
+
+    juce::Range<double> getLoopSongRange (const te::Clip& clip)
+    {
+        if (! isLooping (clip))
+            return {};
+
+        const auto loop = getLoopRange (clip);
+        const auto first = getContentStartBeat (clip) + loop.getStart();
+        return { first, first + loop.getLength() };
+    }
+
+    void setLooping (te::MidiClip& clip, bool shouldLoop)
+    {
+        if (shouldLoop == isLooping (clip))
+            return;
+
+        const auto start = getStartBeat (clip);
+
+        if (shouldLoop)
+        {
+            // What shows now: from the content at the clip's start, as long as the clip.
+            const auto from = std::max (0.0, start - getContentStartBeat (clip));
+            const auto length = std::max (1.0 / 16.0, getEndBeat (clip) - start);
+            clip.setLoopRangeBeats ({ te::BeatPosition::fromBeats (from), te::BeatDuration::fromBeats (length) });
+            clip.setOffset ({});
+        }
+        else
+        {
+            // The content plays once more, as it does in the loop's first time round.
+            const auto contentStart = getContentStartBeat (clip);
+            clip.setLoopRangeBeats ({});
+            clip.setOffset (clip.getPosition().getStart() - toTime (clip.edit, std::min (start, contentStart)));
+        }
+    }
+
+    void setLoopLengthBeats (te::MidiClip& clip, double lengthBeats)
+    {
+        if (! isLooping (clip))
+            return;
+
+        const auto loop = getLoopRange (clip);
+        const auto songLoop = getLoopSongRange (clip);
+        const auto length = std::max (1.0 / 16.0, lengthBeats);
+        clip.setLoopRangeBeats ({ te::BeatPosition::fromBeats (loop.getStart()), te::BeatDuration::fromBeats (length) });
+
+        // The first time round stays where it was.
+        setLoopOffset (clip, getStartBeat (clip), songLoop.getStart());
+
+        // At least one whole time round.
+        if (getEndBeat (clip) < songLoop.getStart() + length - 1.0e-9)
+            clip.setEnd (toTime (clip.edit, songLoop.getStart() + length), true);
+    }
+
+    std::vector<PlayedNote> getPlayedNotes (const te::MidiClip& clip)
+    {
+        std::vector<PlayedNote> played;
+        const auto clipStart = getStartBeat (clip), clipEnd = getEndBeat (clip);
+        const auto contentStart = getContentStartBeat (clip);
+        constexpr double tiny = 1.0e-9;
+
+        const auto add = [&] (const Note& note, double start, double end, int repeat)
+        {
+            if (end <= clipStart + tiny || start >= clipEnd - tiny)
+                return;
+
+            PlayedNote p;
+            p.note = note;
+            p.cutAtClipStart = start < clipStart - tiny;
+            p.startBeat = std::max (start, clipStart);
+            p.endBeat = std::min (end, clipEnd);
+            p.repeat = repeat;
+            played.push_back (p);
+        };
+
+        const auto& notes = clip.getSequence().getNotes();
+
+        if (! isLooping (clip))
+        {
+            for (auto* n : notes)
+            {
+                const auto note = note::read (*n);
+                add (note, contentStart + note.startBeat, contentStart + note.getEndBeat(), 0);
+            }
+
+            return played;
+        }
+
+        // As Tracktion plays a loop: a note sticking out of the loop's start begins there, one
+        // going past its end stops there, and the notes outside it don't play.
+        const auto loop = getLoopRange (clip);
+        const auto length = loop.getLength();
+        const auto first = contentStart + loop.getStart();
+        const auto firstRepeat = (int) std::floor ((clipStart - first) / length + tiny);
+        const auto lastRepeat = (int) std::ceil ((clipEnd - first) / length - tiny);
+
+        std::vector<Note> inLoop;
+
+        for (auto* n : notes)
+        {
+            auto note = note::read (*n);
+            auto start = std::max (note.startBeat, loop.getStart());
+            const auto end = std::min (note.getEndBeat(), loop.getEnd());
+
+            if (end - start > tiny && start < loop.getEnd() - tiny)
+            {
+                note.lengthBeats = end - start;
+                note.startBeat = start;
+                inLoop.push_back (note);
+            }
+        }
+
+        for (int repeat = firstRepeat; repeat < lastRepeat; ++repeat)
+        {
+            const auto shift = first + repeat * length - loop.getStart();
+
+            for (const auto& note : inLoop)
+                add (note, shift + note.startBeat, shift + note.getEndBeat(), repeat);
+        }
+
+        return played;
+    }
+
+    void bakeLoop (te::MidiClip& clip)
+    {
+        if (! isLooping (clip))
+            return;
+
+        if (clip_links::isLinked (clip))
+            clip_links::unlink (clip);
+
+        const auto played = getPlayedNotes (clip);
+        const auto start = getStartBeat (clip);
+
+        // Each note written where it plays, from the clip's start (one cut by the clip's start
+        // doesn't play).
+        std::vector<Note> notes;
+
+        for (const auto& p : played)
+        {
+            if (p.cutAtClipStart)
+                continue;
+
+            auto note = p.note;
+            note.startBeat = p.startBeat - start;
+            note.lengthBeats = p.endBeat - p.startBeat;
+            notes.push_back (note);
+        }
+
+        clip.setLoopRangeBeats ({});
+        clip.setOffset ({});
+
+        NoteEditor editor (clip);
+        juce::Array<te::MidiNote*> old;
+
+        for (auto* n : clip.getSequence().getNotes())
+            old.add (n);
+
+        editor.remove (old);
+        editor.add (notes);
     }
 
     //==============================================================================

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Note.h"
 #include "core/Project.h"
 
 namespace harmonia::core::clips
@@ -7,7 +8,8 @@ namespace harmonia::core::clips
     /** Beats per bar of the song (the first time signature). */
     double getBeatsPerBar (const te::Edit&);
 
-    /** Song beat where the clip's content beat 0 is (clip start minus its offset). */
+    /** Song beat where the clip's content beat 0 is (clip start minus its offset). For a looping
+        clip, where it is in the loop's first time round (see getLoopRange). */
     double getContentStartBeat (const te::Clip&);
 
     double getStartBeat (const te::Clip&);
@@ -20,8 +22,47 @@ namespace harmonia::core::clips
     te::MidiClip* getOrAddMainClip (Project&, te::AudioTrack&, double lengthBeats);
 
     /** Lengthens `clip` and its linked copies so that content up to `contentEndBeat` plays.
-        The new end is rounded up to a whole bar. Clips are never shortened. Undoable. */
+        The new end is rounded up to a whole bar. Clips are never shortened. Undoable.
+        A looping clip gets a longer loop instead (and is made as long as the loop if shorter). */
     void extendToCover (te::MidiClip& clip, double contentEndBeat);
+
+    //==============================================================================
+    // Looping MIDI clips: the content between the loop's start and end plays over and over for
+    // as long as the clip is; made longer, the clip repeats it. Every change is undoable.
+
+    bool isLooping (const te::Clip&);
+
+    /** On: what the clip shows now becomes the loop. Off: the content plays once, from where the
+        loop started (the clip keeps its length). */
+    void setLooping (te::MidiClip&, bool);
+
+    /** Content beats of the loop (empty if the clip doesn't loop). */
+    juce::Range<double> getLoopRange (const te::Clip&);
+
+    /** Song beats of the loop's first time round (empty if the clip doesn't loop). It may begin
+        before the clip if the clip's start was trimmed. */
+    juce::Range<double> getLoopSongRange (const te::Clip&);
+
+    /** A longer or shorter loop (at least a 1/16 beat), from the same start. */
+    void setLoopLengthBeats (te::MidiClip&, double lengthBeats);
+
+    /** Writes every time round as notes of their own: the clip stops looping and sounds the same.
+        A linked clip is made unique first (its copies don't change). */
+    void bakeLoop (te::MidiClip&);
+
+    /** A note as the clip plays it in the song. */
+    struct PlayedNote
+    {
+        Note note;                      // as written in the clip (content beats)
+        double startBeat = 0.0;         // song beats, inside the clip
+        double endBeat = 0.0;
+        int repeat = 0;                 // which time round the loop (0 if not looping)
+        bool cutAtClipStart = false;    // began before the clip: its start is hidden
+    };
+
+    /** Every note the clip plays, in song beats (looping clips: every time round), trimmed to
+        the clip. Muted notes too. */
+    std::vector<PlayedNote> getPlayedNotes (const te::MidiClip&);
 
     //==============================================================================
     // The arrangement. Positions are song beats; every change is undoable.

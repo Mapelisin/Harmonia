@@ -67,7 +67,7 @@ namespace harmonia::ui
         ComputerKeyboard computerKeyboard;
         core::NoteRecorder recorder;
         std::optional<te::Edit::UndoTransactionInhibitor> keepOneUndoStep;
-        core::note_ops::BeatRange takeLoop, takeClipRange;
+        core::note_ops::BeatRange takeLoop, takeClipRange, takeWholeClip;   // the clip's loop, the whole clip
         juce::ReferenceCountedObjectPtr<te::MidiClip> takeClip;
         double lastHeardBeat = 0.0;
 

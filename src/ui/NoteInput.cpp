@@ -1,4 +1,5 @@
 #include "ui/NoteInput.h"
+#include "core/Clips.h"
 
 namespace harmonia::ui
 {
@@ -128,6 +129,10 @@ namespace harmonia::ui
         takeLoop = { loop.getStart(), loop.getEnd() };
         takeClip = model.getClip();
         takeClipRange = { model.getClipStartBeat(), model.getClipEndBeat() };
+        takeWholeClip = takeClipRange;
+
+        if (model.isLooping())
+            takeWholeClip = { core::clips::getStartBeat (*takeClip), core::clips::getEndBeat (*takeClip) };
         recorder.start (takeLoop);
         lastHeardBeat = clock.getHeardBeat (now()).value_or (takeLoop.start);
 
@@ -184,6 +189,27 @@ namespace harmonia::ui
 
     std::vector<core::Note> NoteInput::keepInsideClip (std::vector<core::Note> notes) const
     {
+        // A looping clip: what is played in any time round goes into the loop.
+        if (const auto loopLength = takeClipRange.end - takeClipRange.start;
+            loopLength > 0.0 && (takeWholeClip.start != takeClipRange.start || takeWholeClip.end != takeClipRange.end))
+        {
+            for (auto& n : notes)
+            {
+                if (n.startBeat < takeWholeClip.start - 1.0e-9 || n.startBeat >= takeWholeClip.end - 1.0e-9)
+                    continue;
+
+                auto offset = std::fmod (n.startBeat - takeClipRange.start, loopLength);
+
+                if (offset < 0.0)
+                    offset += loopLength;
+
+                if (offset > loopLength - 1.0e-9)
+                    offset = 0.0;
+
+                n.startBeat = takeClipRange.start + offset;
+            }
+        }
+
         // In song mode the song plays past the clip: notes outside it aren't the clip's, and a
         // note held past its end stops there.
         std::erase_if (notes, [this] (const core::Note& n)

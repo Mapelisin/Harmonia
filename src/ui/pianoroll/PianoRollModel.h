@@ -81,9 +81,13 @@ namespace harmonia::ui::pianoroll
         core::NoteEditor* getEditor() noexcept          { return editor.get(); }
 
         double getContentStartBeat() const;
+        /** Song beats of the clip, or of a looping clip's loop (its first time round). */
         double getClipStartBeat() const;
         double getClipEndBeat() const;
         double getBeatsPerBar() const;
+
+        /** The clip repeats its loop (see core::clips::setLooping). */
+        bool isLooping() const;
 
         //==============================================================================
         // Notes for drawing and hit-testing (rebuilt lazily after changes)

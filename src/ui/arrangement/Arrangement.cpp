@@ -426,6 +426,17 @@ namespace harmonia::ui::arrangement
                 if (auto* m = dynamic_cast<te::MidiClip*> (target.get()); m != nullptr && isValid())
                     model.makeUnique (*m);
             });
+            const auto looping = core::clips::isLooping (clip);
+            menu.addItem ("Loop (repeats when made longer)", true, looping, [this, target, isValid]
+            {
+                if (auto* m = dynamic_cast<te::MidiClip*> (target.get()); m != nullptr && isValid())
+                    model.setLooping (*m, ! core::clips::isLooping (*m));
+            });
+            menu.addItem ("Make the repeats real notes", looping, false, [this, target, isValid]
+            {
+                if (auto* m = dynamic_cast<te::MidiClip*> (target.get()); m != nullptr && isValid())
+                    model.bakeLoop (*m);
+            });
             menu.addItem ("Export as MIDI file...", [this, target, isValid]
             {
                 if (auto* m = dynamic_cast<te::MidiClip*> (target.get()); m != nullptr && isValid())

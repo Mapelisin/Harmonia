@@ -950,6 +950,24 @@ namespace harmonia::ui::arrangement
         }
     }
 
+    void ArrangementModel::setLooping (te::MidiClip& clip, bool shouldLoop)
+    {
+        if (clips::isLooping (clip) == shouldLoop)
+            return;
+
+        project.beginGesture (shouldLoop ? "Loop clip" : "Stop looping");
+        clips::setLooping (clip, shouldLoop);
+    }
+
+    void ArrangementModel::bakeLoop (te::MidiClip& clip)
+    {
+        if (! clips::isLooping (clip))
+            return;
+
+        project.beginGesture ("Make the repeats notes");
+        clips::bakeLoop (clip);
+    }
+
     void ArrangementModel::renameClip (te::Clip& clip, const juce::String& name)
     {
         const auto trimmed = name.trim();
@@ -1014,6 +1032,13 @@ namespace harmonia::ui::arrangement
     {
         if (playMode == PlayMode::clip)
         {
+            // A looping clip: its loop, as the piano roll shows it.
+            if (auto* clip = getOpenClip(); clip != nullptr && clips::isLooping (*clip))
+            {
+                const auto loop = clips::getLoopSongRange (*clip);
+                return { std::max (0.0, loop.getStart()), loop.getEnd() };
+            }
+
             if (auto* clip = getOpenClip())
                 return { clips::getStartBeat (*clip), clips::getEndBeat (*clip) };
 

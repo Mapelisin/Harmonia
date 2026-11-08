@@ -175,7 +175,9 @@ namespace harmonia::ui::arrangement
                 text.removeFromLeft (2.0f);
             }
 
-            const auto name = (d.linked ? juce::String::fromUTF8 ("\xe2\x88\x9e ") : juce::String()) + d.clip->getName();
+            const auto name = (d.linked ? juce::String::fromUTF8 ("\xe2\x88\x9e ") : juce::String())
+                            + (core::clips::isLooping (*d.clip) ? juce::String::fromUTF8 ("\xe2\x86\xbb ") : juce::String())
+                            + d.clip->getName();
             g.setColour (colours::clipText);
             g.setFont (juce::FontOptions (theme::size::smallFontSize));
             g.drawText (name, text, juce::Justification::centredLeft, true);
@@ -207,6 +209,22 @@ namespace harmonia::ui::arrangement
     void ClipArea::paintNotes (juce::Graphics& g, te::MidiClip& clip, juce::Rectangle<float> r,
                                juce::Rectangle<float> body, juce::Colour colour)
     {
+        // A looping clip: a line where each time round begins (unless they'd crowd together).
+        if (core::clips::isLooping (clip))
+        {
+            const auto loop = core::clips::getLoopSongRange (clip);
+            const auto clipStart = core::clips::getStartBeat (clip), clipEnd = core::clips::getEndBeat (clip);
+
+            if (view.beatToX (loop.getLength()) - view.beatToX (0.0) >= 4.0f)
+            {
+                g.setColour (colour.brighter (0.4f).withAlpha (0.6f));
+                const auto rounds = std::ceil ((clipStart - loop.getStart()) / loop.getLength() + 1.0e-9);
+
+                for (auto seam = loop.getStart() + rounds * loop.getLength(); seam < clipEnd - 1.0e-9; seam += loop.getLength())
+                    g.fillRect (juce::Rectangle<float> (view.beatToX (seam), r.getY(), 1.0f, r.getHeight()));
+            }
+        }
+
         // A small picture of the notes: the clip's own pitch range fills the body.
         const auto& notes = clip.getSequence().getNotes();
 
@@ -225,20 +243,19 @@ namespace harmonia::ui::arrangement
         const auto span = std::max (1, highest - lowest);
         const auto noteHeight = juce::jlimit (1.5f, 4.0f, inner.getHeight() / (float) (span + 1));
         const auto usable = inner.getHeight() - noteHeight;
-        const auto contentStart = core::clips::getContentStartBeat (clip);
         const auto clipLeft = view.xToBeat (r.getX()), clipRight = view.xToBeat (r.getRight());
 
         g.setColour (colour.brighter (0.5f));
 
-        for (auto* n : notes)
+        // As they play: a looping clip's every time round.
+        for (const auto& played : core::clips::getPlayedNotes (clip))
         {
-            const auto start = contentStart + n->getStartBeat().inBeats();
-            const auto end = start + n->getLengthBeats().inBeats();
+            const auto start = played.startBeat, end = played.endBeat;
 
             if (end <= clipLeft || start >= clipRight)
                 continue;
 
-            const auto position = highest == lowest ? 0.5f : (float) (n->getNoteNumber() - lowest) / (float) span;
+            const auto position = highest == lowest ? 0.5f : (float) (played.note.pitch - lowest) / (float) span;
             const auto x = view.beatToX (start);
             g.fillRect (juce::Rectangle<float> (x, inner.getY() + usable * (1.0f - position),
                                                 std::max (1.0f, view.beatToX (end) - x), noteHeight));

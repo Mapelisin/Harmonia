@@ -115,12 +115,23 @@ namespace harmonia::ui::pianoroll
 
     double PianoRollModel::getClipStartBeat() const
     {
+        if (isLooping())
+            return core::clips::getLoopSongRange (*clip).getStart();
+
         return clip != nullptr ? core::clips::getStartBeat (*clip) : 0.0;
     }
 
     double PianoRollModel::getClipEndBeat() const
     {
+        if (isLooping())
+            return core::clips::getLoopSongRange (*clip).getEnd();
+
         return clip != nullptr ? core::clips::getEndBeat (*clip) : 0.0;
+    }
+
+    bool PianoRollModel::isLooping() const
+    {
+        return clip != nullptr && core::clips::isLooping (*clip);
     }
 
     double PianoRollModel::getBeatsPerBar() const
@@ -251,24 +262,24 @@ namespace harmonia::ui::pianoroll
             {
                 auto* other = dynamic_cast<te::MidiClip*> (c);
 
-                if (other == nullptr || other == clip.get())
+                if (other == nullptr)
                     continue;
 
-                const auto contentStart = core::clips::getContentStartBeat (*other);
-                const auto clipStart = core::clips::getStartBeat (*other);
-                const auto clipEnd = core::clips::getEndBeat (*other);
+                // This clip's own repeats are ghosts too: they play but are edited in the loop.
+                const auto isThis = other == clip.get();
 
-                for (auto* n : other->getSequence().getNotes())
+                if (isThis && ! core::clips::isLooping (*other))
+                    continue;
+
+                // Only the part of a note inside the clip plays.
+                for (const auto& played : core::clips::getPlayedNotes (*other))
                 {
-                    // Only the part of the note inside the clip plays.
-                    const auto start = std::max (clipStart, contentStart + n->getStartBeat().inBeats());
-                    const auto end = std::min (clipEnd, contentStart + n->getEndBeat().inBeats());
-
-                    if (end <= start)
+                    if (isThis && played.repeat == 0)
                         continue;
 
-                    ghosts.push_back ({ start, end - start, n->getNoteNumber() });
-                    longestGhost = std::max (longestGhost, end - start);
+                    const auto length = played.endBeat - played.startBeat;
+                    ghosts.push_back ({ played.startBeat, length, played.note.pitch });
+                    longestGhost = std::max (longestGhost, length);
                 }
             }
         }
@@ -1280,6 +1291,7 @@ namespace harmonia::ui::pianoroll
         if (sequenceState.isValid() && (tree == sequenceState || tree.isAChildOf (sequenceState)))
         {
             notesDirty = true;
+            ghostsDirty = ghostsDirty || isLooping();     // the repeats show the notes too
         }
         else if (clip != nullptr && tree == clip->state)
         {

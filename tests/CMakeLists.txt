@@ -18,6 +18,7 @@ add_executable(harmonia_tests
     core/NoteToolsTests.cpp
     core/ScalesTests.cpp
     core/ProgressionsTests.cpp
+    core/ClipLoopTests.cpp
     audio/DeviceStatusTests.cpp
     audio/AudioTests.cpp
     audio/EffectsTests.cpp
@@ -40,7 +41,8 @@ add_executable(harmonia_tests
     ui/NoteCommandsTests.cpp
     ui/NoteToolWindowTests.cpp
     ui/ScaleChordTests.cpp
-    ui/TrackColourTests.cpp)
+    ui/TrackColourTests.cpp
+    ui/ClipLoopUiTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)

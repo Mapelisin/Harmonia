@@ -19,25 +19,11 @@ namespace harmonia::core::midi_files
         std::vector<SongNote> getPlayedNotes (te::MidiClip& clip)
         {
             std::vector<SongNote> result;
-            const auto contentStart = clips::getContentStartBeat (clip);
-            const auto clipStart = clips::getStartBeat (clip), clipEnd = clips::getEndBeat (clip);
 
-            for (auto* midiNote : clip.getSequence().getNotes())
-            {
-                auto note = core::note::read (*midiNote);
-
-                if (note.muted)
-                    continue;
-
-                auto start = contentStart + note.startBeat;
-                auto end = start + note.lengthBeats;
-
-                if (start >= clipEnd || end <= clipStart || start < clipStart - 1.0e-9)
-                    continue;
-
-                end = std::min (end, clipEnd);
-                result.push_back ({ note, start, end });
-            }
+            // A note whose start the clip hides doesn't play.
+            for (const auto& played : clips::getPlayedNotes (clip))
+                if (! played.note.muted && ! played.cutAtClipStart)
+                    result.push_back ({ played.note, played.startBeat, played.endBeat });
 
             return result;
         }

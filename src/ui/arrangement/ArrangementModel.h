@@ -213,6 +213,12 @@ namespace harmonia::ui::arrangement
         /** Makes the clip independent of its linked copies. */
         void makeUnique (te::MidiClip&);
 
+        /** Loop the clip, or stop (core::clips::setLooping). One undo step. */
+        void setLooping (te::MidiClip&, bool);
+
+        /** Its repeats written as notes (core::clips::bakeLoop). One undo step. */
+        void bakeLoop (te::MidiClip&);
+
         void renameClip (te::Clip&, const juce::String&);
 
         void undo();
