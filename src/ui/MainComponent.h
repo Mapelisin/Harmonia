@@ -9,6 +9,7 @@
 #include "ui/FileCommands.h"
 #include "ui/InstrumentPanel.h"
 #include "ui/NoteInput.h"
+#include "ui/ShortcutsPanel.h"
 #include "ui/StatusBar.h"
 #include "ui/TransportBar.h"
 #include "ui/arrangement/Arrangement.h"
@@ -55,6 +56,11 @@ namespace harmonia::ui
         automation::AutomationPanel& getAutomationPanel() noexcept      { return automationPanel; }
         audio::AudioInputs& getAudioInputs() noexcept                   { return audioInputs; }
 
+        /** The list of every shortcut over the window (F1 or the Shortcuts button). */
+        void showShortcuts (bool shouldShow);
+        bool areShortcutsShown() const                                  { return shortcuts.isVisible(); }
+        ShortcutsPanel& getShortcutsPanel() noexcept                    { return shortcuts; }
+
         /** What the lower part of the window shows. */
         enum class LowerPanel { pianoRoll, automation, mixer };
         void showLowerPanel (LowerPanel);
@@ -97,7 +103,7 @@ namespace harmonia::ui
 
         TransportBar transportBar { transport, project.getEdit(), noteInput, arrangementModel };
         juce::TextButton fileButton { "File" };
-        juce::TextButton audioSettingsButton { "Audio settings" };
+        juce::TextButton audioSettingsButton { "Audio settings" }, shortcutsButton { "?" };
         juce::Label trackNameLabel;
         juce::TextButton pianoRollTab { "Piano roll" }, automationTab { "Automation" }, mixerTab { "Mixer" };
         std::unique_ptr<InstrumentPanel> instrumentPanel;
@@ -109,6 +115,7 @@ namespace harmonia::ui
         automation::AutomationPanel automationPanel { arrangementModel, arrangement.getView(), transport };
         LowerPanel lowerPanel = LowerPanel::pianoRoll;
         StatusBar statusBar { session };
+        ShortcutsPanel shortcuts;
         std::unique_ptr<juce::FileChooser> importChooser;
 
         /** The arrangement's current track or open clip changed: the piano roll, the keyboards

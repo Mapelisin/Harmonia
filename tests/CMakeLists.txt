@@ -43,7 +43,8 @@ add_executable(harmonia_tests
     ui/ScaleChordTests.cpp
     ui/TrackColourTests.cpp
     ui/ClipLoopUiTests.cpp
-    ui/MarkerTests.cpp)
+    ui/MarkerTests.cpp
+    ui/ShortcutsPanelTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)

@@ -11,7 +11,7 @@ namespace harmonia::ui
     namespace
     {
         constexpr int trackRowHeight = 40;
-        constexpr int appNameWidth = 90, fileButtonWidth = 50, summaryWidth = 150, tabWidth = 96;
+        constexpr int appNameWidth = 90, fileButtonWidth = 50, summaryWidth = 136, tabWidth = 96;
         constexpr int lowerPanelTabs = 1001;
     }
 
@@ -47,6 +47,10 @@ namespace harmonia::ui
 
         audioSettingsButton.setEnabled (session.devicesEnabled());
         audioSettingsButton.onClick = [this] { showAudioSettings(); };
+
+        shortcutsButton.setTooltip ("Keyboard shortcuts and mouse tricks, with a search (F1)");
+        shortcutsButton.onClick = [this] { showShortcuts (! areShortcutsShown()); };
+        shortcuts.onClose = [this] { showShortcuts (false); };
 
         // The lower part shows the piano roll, the automation or the mixer (F7 / F8 / F9).
         pianoRollTab.setTooltip ("Piano roll of the open clip (F7)");
@@ -88,7 +92,8 @@ namespace harmonia::ui
                 statusBar.setMessage (text);
         };
 
-        for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &audioSettingsButton, &pianoRollTab, &automationTab, &mixerTab })
+        for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &audioSettingsButton, &shortcutsButton,
+                                                                 &pianoRollTab, &automationTab, &mixerTab })
             c->setWantsKeyboardFocus (false);
 
         // Arrangement above, piano roll below; the bar between them can be dragged.
@@ -96,13 +101,14 @@ namespace harmonia::ui
         splitLayout.setItemLayout (1, 6.0, 6.0, 6.0);
         splitLayout.setItemLayout (2, 200.0, -1.0, -0.62);
 
-        for (auto* c : std::initializer_list<juce::Component*> { &transportBar, &fileButton, &audioSettingsButton, &trackNameLabel,
+        for (auto* c : std::initializer_list<juce::Component*> { &transportBar, &fileButton, &audioSettingsButton, &shortcutsButton, &trackNameLabel,
                                                                  &pianoRollTab, &automationTab, &mixerTab, &arrangement, &splitter, &pianoRoll,
                                                                  &statusBar })
             addAndMakeVisible (c);
 
         addChildComponent (mixer);
         addChildComponent (automationPanel);
+        addChildComponent (shortcuts);     // over everything
 
         currentChanged();
         setSize (1280, 800);
@@ -271,7 +277,10 @@ namespace harmonia::ui
         auto header = area.removeFromTop (theme::size::headerHeight).reduced (theme::size::padding, 0);
         statusBar.setBounds (area.removeFromBottom (theme::size::statusBarHeight));
 
+        shortcuts.setBounds (getLocalBounds());
         audioSettingsButton.setBounds (header.removeFromRight (120).withSizeKeepingCentre (120, theme::size::buttonHeight));
+        header.removeFromRight (4);
+        shortcutsButton.setBounds (header.removeFromRight (32).withSizeKeepingCentre (32, theme::size::buttonHeight));
         header.removeFromLeft (appNameWidth);
         fileButton.setBounds (header.removeFromLeft (fileButtonWidth).withSizeKeepingCentre (fileButtonWidth, theme::size::buttonHeight));
         header.removeFromLeft (theme::size::padding + summaryWidth);
@@ -317,8 +326,37 @@ namespace harmonia::ui
             grabKeyboardFocus();
     }
 
+    void MainComponent::showShortcuts (bool shouldShow)
+    {
+        if (shouldShow == shortcuts.isVisible())
+            return;
+
+        if (shouldShow)
+        {
+            shortcuts.setFilter ({});
+            shortcuts.toFront (false);
+            shortcuts.setVisible (true);
+        }
+        else
+        {
+            shortcuts.setVisible (false);
+
+            // Keys go back to the piano roll (or to here).
+            if (lowerPanel == LowerPanel::pianoRoll && pianoRoll.isShowing())
+                pianoRoll.grabKeyboardFocus();
+            else if (isShowing())
+                grabKeyboardFocus();
+        }
+    }
+
     bool MainComponent::keyPressed (const juce::KeyPress& key)
     {
+        if (key == juce::KeyPress::F1Key)
+        {
+            showShortcuts (! areShortcutsShown());
+            return true;
+        }
+
         if (key == juce::KeyPress::spaceKey)
         {
             transport.togglePlayStop();

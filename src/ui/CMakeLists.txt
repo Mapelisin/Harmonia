@@ -3,6 +3,8 @@ add_library(harmonia_ui STATIC
     Theme.cpp
     TrackColours.h
     TrackColours.cpp
+    ShortcutsPanel.h
+    ShortcutsPanel.cpp
     RenderingPolicy.h
     RenderingPolicy.cpp
     StatusBar.h
