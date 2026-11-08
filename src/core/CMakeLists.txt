@@ -18,6 +18,8 @@ add_library(harmonia_core STATIC
     Snap.cpp
     Tempo.h
     Tempo.cpp
+    MidiFiles.h
+    MidiFiles.cpp
     NoteOps.h
     NoteOps.cpp
     NoteRecorder.h

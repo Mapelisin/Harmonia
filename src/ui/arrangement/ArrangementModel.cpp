@@ -2,6 +2,8 @@
 #include "audio/Instruments.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
+#include "core/MidiFiles.h"
+#include "core/NoteEditor.h"
 #include "core/Tracks.h"
 
 namespace harmonia::ui::arrangement
@@ -390,6 +392,122 @@ namespace harmonia::ui::arrangement
 
         clipsDirty = true;
         changed();
+        return problems.joinIntoString ("; ");
+    }
+
+    bool ArrangementModel::isSongEmpty() const
+    {
+        for (auto* track : getTracks())
+            for (auto* clip : clips::getClips (*track))
+                if (clips::isAudio (*clip) || ! dynamic_cast<te::MidiClip*> (clip)->getSequence().getNotes().isEmpty())
+                    return false;
+
+        return true;
+    }
+
+    juce::String ArrangementModel::importMidi (const juce::Array<juce::File>& files, int trackIndex, double beat)
+    {
+        if (files.isEmpty())
+            return {};
+
+        const auto start = std::max (0.0, snap::snapFloor (beat, snapMode, getSnapContext()));
+        auto* target = getTrack (trackIndex);
+        te::Track* previous = target != nullptr ? target : getTracks().getLast();
+        auto useTarget = target != nullptr && ! core::tracks::isAudio (*target);
+        auto adoptTempo = isSongEmpty();
+
+        project.beginGesture (files.size() == 1 ? "Import MIDI" : "Import MIDI files");
+        juce::StringArray problems;
+        juce::Array<te::Clip*> added;
+
+        for (const auto& file : files)
+        {
+            juce::String error;
+            const auto contents = core::midi_files::read (file, error);
+
+            if (! contents.has_value())
+            {
+                problems.add (error);
+                continue;
+            }
+
+            // A song started from a MIDI file plays at the file's tempo.
+            if (std::exchange (adoptTempo, false))
+            {
+                if (contents->bpm.has_value())
+                    project.setTempoBpm (*contents->bpm);
+
+                if (contents->beatsPerBar.has_value())
+                    project.setBeatsPerBar (*contents->beatsPerBar);
+            }
+
+            const auto& parts = contents->parts;
+            const auto single = parts.size() == 1;
+            const auto beatsPerBar = getBeatsPerBar();
+            const auto baseName = file.getFileNameWithoutExtension();
+
+            for (size_t i = 0; i < parts.size(); ++i)
+            {
+                const auto& part = parts[i];
+                const auto name = single ? baseName
+                                         : part.name.isNotEmpty() ? part.name : baseName + " " + juce::String ((int) i + 1);
+                te::AudioTrack* track = nullptr;
+
+                if (useTarget && single)
+                {
+                    track = target;
+                }
+                else if ((track = project.addTrack (name, previous)) != nullptr)
+                {
+                    audio::instruments::useBuiltInSynth (*track);
+                }
+
+                useTarget = false;
+
+                if (track == nullptr)
+                    continue;
+
+                const auto bars = std::max (1.0, std::ceil (part.endBeat / beatsPerBar - 1.0e-9));
+
+                if (auto* clip = project.addMidiClip (*track, start, bars * beatsPerBar, name))
+                {
+                    core::NoteEditor (*clip).add (part.notes);
+                    added.add (clip);
+                }
+
+                previous = track;
+            }
+
+            useTarget = false;
+        }
+
+        if (! added.isEmpty())
+        {
+            setSelection (added);
+
+            if (auto* first = dynamic_cast<te::MidiClip*> (added.getFirst()))
+                openClip (first);
+
+            if (added.size() > 1)
+                setPlayMode (PlayMode::song);
+        }
+
+        clipsDirty = true;
+        changed();
+        return problems.joinIntoString ("; ");
+    }
+
+    juce::String ArrangementModel::importFiles (const juce::Array<juce::File>& files, int trackIndex, double beat)
+    {
+        juce::Array<juce::File> audioFiles, midiFiles;
+
+        for (const auto& file : files)
+            (core::midi_files::isMidiFile (file) ? midiFiles : audioFiles).add (file);
+
+        juce::StringArray problems;
+        problems.add (importAudio (audioFiles, trackIndex, beat));
+        problems.add (importMidi (midiFiles, trackIndex, beat));
+        problems.removeEmptyStrings();
         return problems.joinIntoString ("; ");
     }
 

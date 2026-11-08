@@ -1,0 +1,42 @@
+#pragma once
+
+#include "core/Note.h"
+#include "core/Project.h"
+
+/** Standard MIDI Files (.mid): reading them into notes, and writing a clip or the whole song.
+    Positions are beats (quarter notes), so a file plays the same at any tempo. */
+namespace harmonia::core::midi_files
+{
+    /** .mid / .midi by its extension. */
+    bool isMidiFile (const juce::File&);
+
+    /** One track of a MIDI file. */
+    struct Part
+    {
+        juce::String name;              // the track's name in the file (may be empty)
+        std::vector<Note> notes;        // from the file's start; the MIDI channel is the colour
+        double endBeat = 0.0;           // where its last note ends
+    };
+
+    struct Contents
+    {
+        std::vector<Part> parts;                // the tracks that have notes, in file order
+        std::optional<double> bpm;              // the file's first tempo
+        std::optional<int> beatsPerBar;         // its first time signature, if it is over 4
+    };
+
+    /** Reads a MIDI file. Fails (nullopt, the reason in `error`) if it can't be read, uses SMPTE
+        time instead of beats, or has no notes. */
+    std::optional<Contents> read (const juce::File&, juce::String& error);
+
+    /** Writes the clip's notes as it plays them (from its start to its end; muted notes left out)
+        with the song's tempo. Returns what went wrong, or an empty string. */
+    juce::String writeClip (te::MidiClip&, const juce::File&);
+
+    /** Writes the song: a MIDI track for each instrument track with notes, named after it, its
+        clips' notes where they play in the song; the tempo and the time signature. Returns what went
+        wrong ("Nothing to export..." without notes), or an empty string. */
+    juce::String writeSong (Project&, const juce::File&);
+
+    inline constexpr int ticksPerBeat = 960;
+}

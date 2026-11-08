@@ -1,4 +1,5 @@
 #include "ui/MainComponent.h"
+#include "core/MidiFiles.h"
 #include "core/Tracks.h"
 #include "audio/DeviceStatus.h"
 #include "ui/ComputerKeyboard.h"
@@ -452,17 +453,19 @@ namespace harmonia::ui
         menu.addItem ("Save  (Ctrl+S)", hasCommands, false, run (&FileCommands::saveProject));
         menu.addItem ("Save as...  (Ctrl+Shift+S)", hasCommands, false, run (&FileCommands::saveProjectAs));
         menu.addSeparator();
-        menu.addItem ("Import audio...", [safe] { if (safe != nullptr) safe->chooseAudioToImport(); });
+        menu.addItem ("Import audio or MIDI...", [safe] { if (safe != nullptr) safe->chooseFilesToImport(); });
         menu.addItem ("Export WAV...  (Ctrl+R)", hasCommands, false, run (&FileCommands::exportWav));
+        menu.addItem ("Export MIDI...", [safe] { if (safe != nullptr) safe->chooseMidiExport(); });
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fileButton));
     }
 
-    void MainComponent::chooseAudioToImport()
+    void MainComponent::chooseFilesToImport()
     {
         auto& formats = session.getEngine().getAudioFileFormatManager().readFormatManager;
         const auto folder = juce::File::getSpecialLocation (juce::File::userMusicDirectory);
 
-        importChooser = std::make_unique<juce::FileChooser> ("Import audio", folder, formats.getWildcardForAllFormats());
+        importChooser = std::make_unique<juce::FileChooser> ("Import audio or MIDI", folder,
+                                                             formats.getWildcardForAllFormats() + ";*.mid;*.midi");
         importChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles
                                         | juce::FileBrowserComponent::canSelectMultipleItems,
                                     [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::FileChooser& fc)
@@ -475,13 +478,40 @@ namespace harmonia::ui
             // Onto the current track if it is an audio track (else new tracks), at the playhead.
             auto& model = safe->arrangementModel;
             const auto beat = model.getEdit().tempoSequence.toBeats (te::TimePosition::fromSeconds (safe->transport.getPositionSeconds())).inBeats();
-            const auto error = model.importAudio (files, model.indexOf (model.getCurrentTrack()), beat);
+            const auto error = model.importFiles (files, model.indexOf (model.getCurrentTrack()), beat);
 
             if (error.isNotEmpty())
                 safe->showWarning (error);
             else
                 safe->showMessage (files.size() == 1 ? "Added " + files.getFirst().getFileName()
-                                                     : "Added " + juce::String (files.size()) + " audio files");
+                                                     : "Added " + juce::String (files.size()) + " files");
+        });
+    }
+
+    void MainComponent::chooseMidiExport()
+    {
+        const auto name = juce::File::createLegalFileName (fileCommands != nullptr ? fileCommands->getProjectName() : juce::String ("Song"));
+        const auto folder = juce::File::getSpecialLocation (juce::File::userMusicDirectory);
+
+        importChooser = std::make_unique<juce::FileChooser> ("Export MIDI", folder.getChildFile (name + ".mid"), "*.mid");
+        importChooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
+                                        | juce::FileBrowserComponent::warnAboutOverwriting,
+                                    [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::FileChooser& fc)
+        {
+            auto file = fc.getResult();
+
+            if (safe == nullptr || file == juce::File())
+                return;
+
+            if (! core::midi_files::isMidiFile (file))
+                file = file.withFileExtension ("mid");
+
+            const auto error = core::midi_files::writeSong (safe->project, file);
+
+            if (error.isNotEmpty())
+                safe->showWarning (error);
+            else
+                safe->showMessage ("Exported " + file.getFileName());
         });
     }
 

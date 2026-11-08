@@ -121,7 +121,8 @@ namespace harmonia::ui
         void playFrom (double beat);
 
         void showFileMenu();
-        void chooseAudioToImport();
+        void chooseFilesToImport();
+        void chooseMidiExport();
         void showAudioSettings();
         juce::String getProjectSummary() const;
 

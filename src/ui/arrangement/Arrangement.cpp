@@ -2,6 +2,7 @@
 #include "audio/AudioInputs.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
+#include "core/MidiFiles.h"
 #include "core/Tracks.h"
 #include "ui/ComputerKeyboard.h"
 #include "ui/Theme.h"
@@ -304,13 +305,22 @@ namespace harmonia::ui::arrangement
     bool Arrangement::isInterestedInFileDrag (const juce::StringArray& files)
     {
         for (const auto& path : files)
-            if (model.getProject().canImport (juce::File (path)))
+            if (model.getProject().canImport (juce::File (path)) || core::midi_files::isMidiFile (juce::File (path)))
                 return true;
 
         return false;
     }
 
-    ClipArea::DropMarker Arrangement::getDropTarget (juce::Point<int> position) const
+    bool Arrangement::areAllMidi (const juce::StringArray& files)
+    {
+        for (const auto& path : files)
+            if (! core::midi_files::isMidiFile (juce::File (path)))
+                return false;
+
+        return ! files.isEmpty();
+    }
+
+    ClipArea::DropMarker Arrangement::getDropTarget (juce::Point<int> position, bool midi) const
     {
         const auto local = clipArea.getLocalPoint (this, position).toFloat();
         const auto numTracks = model.getNumTracks();
@@ -322,18 +332,19 @@ namespace harmonia::ui::arrangement
         ClipArea::DropMarker marker;
         marker.trackIndex = track;
         marker.beat = std::max (0.0, snap::snapFloor (view.xToBeat (std::max (0.0f, local.x)), model.getSnap(), model.getSnapContext()));
-        marker.newTrack = track < 0 || ! core::tracks::isAudio (*model.getTrack (track));
+        marker.newTrack = track < 0 || core::tracks::isAudio (*model.getTrack (track)) != ! midi;
+        marker.midi = midi;
         return marker;
     }
 
-    void Arrangement::fileDragEnter (const juce::StringArray&, int x, int y)
+    void Arrangement::fileDragEnter (const juce::StringArray& files, int x, int y)
     {
-        clipArea.setDropMarker (getDropTarget ({ x, y }));
+        clipArea.setDropMarker (getDropTarget ({ x, y }, areAllMidi (files)));
     }
 
-    void Arrangement::fileDragMove (const juce::StringArray&, int x, int y)
+    void Arrangement::fileDragMove (const juce::StringArray& files, int x, int y)
     {
-        clipArea.setDropMarker (getDropTarget ({ x, y }));
+        clipArea.setDropMarker (getDropTarget ({ x, y }, areAllMidi (files)));
     }
 
     void Arrangement::fileDragExit (const juce::StringArray&)
@@ -344,14 +355,14 @@ namespace harmonia::ui::arrangement
     void Arrangement::filesDropped (const juce::StringArray& paths, int x, int y)
     {
         clipArea.setDropMarker (std::nullopt);
-        const auto target = getDropTarget ({ x, y });
+        const auto target = getDropTarget ({ x, y }, areAllMidi (paths));
 
         juce::Array<juce::File> files;
 
         for (const auto& path : paths)
             files.add (juce::File (path));
 
-        const auto error = model.importAudio (files, target.trackIndex, target.beat);
+        const auto error = model.importFiles (files, target.trackIndex, target.beat);
 
         // Delete, Ctrl+B... act on the dropped clips straight away.
         if (isShowing())
@@ -364,7 +375,7 @@ namespace harmonia::ui::arrangement
             onMessage (error, true);
         else
             onMessage (files.size() == 1 ? "Added " + files.getFirst().getFileName()
-                                         : "Added " + juce::String (files.size()) + " audio files", false);
+                                         : "Added " + juce::String (files.size()) + " files", false);
     }
 
     //==============================================================================
@@ -384,6 +395,11 @@ namespace harmonia::ui::arrangement
             {
                 if (auto* m = dynamic_cast<te::MidiClip*> (target.get()); m != nullptr && isValid())
                     model.makeUnique (*m);
+            });
+            menu.addItem ("Export as MIDI file...", [this, target, isValid]
+            {
+                if (auto* m = dynamic_cast<te::MidiClip*> (target.get()); m != nullptr && isValid())
+                    exportClipAsMidi (*m);
             });
             menu.addSeparator();
             menu.addItem ("Duplicate, linked (Ctrl+B)", [this] { model.duplicateSelected (true); });
@@ -449,6 +465,33 @@ namespace harmonia::ui::arrangement
 
         const auto screen = clipArea.localPointToGlobal (position.toInt());
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea ({ screen.x, screen.y, 1, 1 }));
+    }
+
+    void Arrangement::exportClipAsMidi (te::MidiClip& clip)
+    {
+        const auto folder = juce::File::getSpecialLocation (juce::File::userMusicDirectory);
+        const auto name = juce::File::createLegalFileName (clip.getName().isNotEmpty() ? clip.getName() : juce::String ("Clip"));
+        midiChooser = std::make_unique<juce::FileChooser> ("Export clip as MIDI", folder.getChildFile (name + ".mid"), "*.mid");
+
+        const te::Clip::Ptr target (&clip);
+        juce::Component::SafePointer<Arrangement> safe (this);
+
+        midiChooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
+                                      | juce::FileBrowserComponent::warnAboutOverwriting,
+                                  [safe, target] (const juce::FileChooser& chooser)
+        {
+            auto file = chooser.getResult();
+            auto* midi = dynamic_cast<te::MidiClip*> (target.get());
+
+            if (safe == nullptr || file == juce::File() || midi == nullptr || ! core::clips::isInEdit (*midi))
+                return;
+
+            if (! core::midi_files::isMidiFile (file))
+                file = file.withFileExtension ("mid");
+
+            const auto error = core::midi_files::writeClip (*midi, file);
+            safe->tell (error.isNotEmpty() ? error : "Exported " + file.getFileName(), error.isNotEmpty());
+        });
     }
 
     void Arrangement::askToRename (te::Clip& clip)

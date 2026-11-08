@@ -127,6 +127,20 @@ namespace harmonia::ui::arrangement
             Returns what went wrong (empty if nothing did). */
         juce::String importAudio (const juce::Array<juce::File>&, int trackIndex, double beat);
 
+        /** Imports MIDI files at `beat` (snapped down to the grid): a file with one part onto the
+            track at `trackIndex` if that is an instrument track; other parts and files onto new
+            instrument tracks (the built-in synth) below it, named after the file or its parts.
+            Into a song without notes or audio yet, the first file's tempo and time signature come
+            along. Selects the new clips and opens the first. One undo step. Returns what went
+            wrong (empty if nothing did). */
+        juce::String importMidi (const juce::Array<juce::File>&, int trackIndex, double beat);
+
+        /** Audio and MIDI files together: each kind as above. */
+        juce::String importFiles (const juce::Array<juce::File>&, int trackIndex, double beat);
+
+        /** No notes and no audio clips anywhere (empty clips don't count). */
+        bool isSongEmpty() const;
+
         void deleteTrack (te::AudioTrack&);
 
         /** Clips still named after the track get the new name too. */

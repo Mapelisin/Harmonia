@@ -444,7 +444,8 @@ namespace harmonia::ui::arrangement
             g.fillRect (lane);
             g.setColour (theme::colour::textSecondary);
             g.setFont (juce::FontOptions (theme::size::smallFontSize));
-            g.drawText ("New audio track", lane.withTrimmedLeft (x + 6.0f).toNearestInt(), juce::Justification::centredLeft, true);
+            g.drawText (dropMarker->midi ? "New instrument track" : "New audio track",
+                        lane.withTrimmedLeft (x + 6.0f).toNearestInt(), juce::Justification::centredLeft, true);
         }
         else
         {

@@ -52,8 +52,12 @@ namespace harmonia::ui::arrangement
         void fileDragExit (const juce::StringArray&) override;
         void filesDropped (const juce::StringArray&, int x, int y) override;
 
-        /** Where files dropped at this point (in the arrangement's coordinates) would go. */
-        ClipArea::DropMarker getDropTarget (juce::Point<int>) const;
+        /** Where files dropped at this point (in the arrangement's coordinates) would go: MIDI
+            files onto instrument tracks, audio files onto audio tracks (else onto new ones). */
+        ClipArea::DropMarker getDropTarget (juce::Point<int>, bool midi = false) const;
+
+        /** Asks where to save the clip's notes as a MIDI file. */
+        void exportClipAsMidi (te::MidiClip&);
 
         static constexpr int headerWidth = 200, rulerHeight = 22, scrollBarSize = 10;
 
@@ -82,5 +86,7 @@ namespace harmonia::ui::arrangement
         void askToRename (te::Clip&);
         double getPlayheadBeat() const;
         void tell (const juce::String&, bool isProblem);
+        static bool areAllMidi (const juce::StringArray&);
+        std::unique_ptr<juce::FileChooser> midiChooser;
     };
 }

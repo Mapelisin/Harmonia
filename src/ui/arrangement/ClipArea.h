@@ -35,10 +35,11 @@ namespace harmonia::ui::arrangement
             int trackIndex = -1;
             double beat = 0.0;
             bool newTrack = false;
+            bool midi = false;      // MIDI files: a new track is an instrument track
 
             bool operator== (const DropMarker& other) const
             {
-                return trackIndex == other.trackIndex && beat == other.beat && newTrack == other.newTrack;
+                return trackIndex == other.trackIndex && beat == other.beat && newTrack == other.newTrack && midi == other.midi;
             }
         };
 
