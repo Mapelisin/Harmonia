@@ -21,6 +21,8 @@ add_library(harmonia_audio STATIC
     MixCheck.cpp
     Limiter.h
     Limiter.cpp
+    Pump.h
+    Pump.cpp
     Instruments.h
     Instruments.cpp
     MidiInputs.h

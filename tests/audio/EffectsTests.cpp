@@ -131,7 +131,7 @@ TEST_SUITE ("audio::effects")
     {
         SynthTrack t;
         const auto all = effects::getBuiltIn();
-        CHECK (all.size() == 8);
+        CHECK (all.size() == 9);
 
         for (const auto& type : all)
             t.add (type.name);

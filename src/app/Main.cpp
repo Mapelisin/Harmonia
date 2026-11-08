@@ -2,6 +2,7 @@
 #include "app/SelfTest.h"
 #include "audio/DeviceSetup.h"
 #include "audio/Limiter.h"
+#include "audio/Pump.h"
 #include "ui/PluginWindow.h"
 #include "ui/Theme.h"
 
@@ -23,6 +24,7 @@ namespace harmonia::app
             options.scanPluginsOutOfProcess = true;
             auto session = std::make_unique<core::Session> (std::move (options));
             audio::limiter::registerType (session->getEngine());
+            audio::pump::registerType (session->getEngine());
             return session;
         }
     }

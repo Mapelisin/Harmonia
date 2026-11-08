@@ -1,6 +1,7 @@
 #include "audio/Effects.h"
 
 #include "audio/Limiter.h"
+#include "audio/Pump.h"
 
 namespace harmonia::audio::effects
 {
@@ -62,7 +63,8 @@ namespace harmonia::audio::effects
                                           { "Delay",      te::DelayPlugin::xmlTypeName },
                                           { "Chorus",     te::ChorusPlugin::xmlTypeName },
                                           { "Phaser",     te::PhaserPlugin::xmlTypeName },
-                                          { "Filter",     te::LowPassPlugin::xmlTypeName } })
+                                          { "Filter",     te::LowPassPlugin::xmlTypeName },
+                                          { "Pump",       pump::Plugin::xmlTypeName } })
             result.add ({ name, type, {} });
 
         return result;
