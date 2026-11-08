@@ -3,53 +3,193 @@
 
 namespace harmonia::audio
 {
-    juce::String exportWav (te::Edit& edit, const juce::File& file)
+    namespace
     {
-        const auto songEnd = edit.getLength();
-
-        if (songEnd <= te::TimeDuration())
-            return "Nothing to export: the song has no clips";
-
-        if (! file.getParentDirectory().createDirectory())
-            return "Cannot create folder: " + file.getParentDirectory().getFullPathName();
-
-        if (file.existsAsFile() && ! file.deleteFile())
-            return "Cannot overwrite " + file.getFullPathName() + " (is it open in another program?)";
-
-        // What you hear is what you get: Tracktion unmutes the tracks it renders, so muted ones
-        // (and, while some are soloed, the others) are left out here.
-        const auto anySolo = edit.areAnyTracksSolo();
-        juce::Array<te::Track*> audible;
-        auto anyAudioTrack = false;
-
-        for (auto* track : te::getAllTracks (edit))
+        /** The tracks exportWav plays: song and return tracks as they're heard (muted ones left out;
+            while some are soloed, only those and the solo-safe ones), and the edit's other tracks
+            (tempo, master...). */
+        struct Audible
         {
-            if (dynamic_cast<te::AudioTrack*> (track) == nullptr)
+            juce::Array<te::Track*> others;
+            juce::Array<te::AudioTrack*> songTracks, returnTracks;
+        };
+
+        Audible findAudible (te::Edit& edit)
+        {
+            Audible result;
+            const auto anySolo = edit.areAnyTracksSolo();
+
+            for (auto* track : te::getAllTracks (edit))
             {
-                audible.add (track);
-                continue;
+                auto* audioTrack = dynamic_cast<te::AudioTrack*> (track);
+
+                if (audioTrack == nullptr)
+                {
+                    result.others.add (track);
+                    continue;
+                }
+
+                if (track->isMuted (true) || (anySolo && ! (track->isSolo (true) || track->isSoloIsolate (true))))
+                    continue;
+
+                (core::tracks::isReturn (*audioTrack) ? result.returnTracks : result.songTracks).add (audioTrack);
             }
 
-            if (track->isMuted (true) || (anySolo && ! (track->isSolo (true) || track->isSoloIsolate (true))))
-                continue;
-
-            audible.add (track);
-
-            // Return tracks only play what the song's tracks send them.
-            if (! core::tracks::isReturn (*dynamic_cast<te::AudioTrack*> (track)))
-                anyAudioTrack = true;
+            return result;
         }
 
-        if (! anyAudioTrack)
+        te::TimeRange getRange (te::Edit& edit)
+        {
+            return { te::TimePosition(), te::TimePosition() + edit.getLength() + te::TimeDuration::fromSeconds (exportTailSeconds) };
+        }
+
+        juce::String prepare (const juce::File& file)
+        {
+            if (! file.getParentDirectory().createDirectory())
+                return "Cannot create folder: " + file.getParentDirectory().getFullPathName();
+
+            if (file.existsAsFile() && ! file.deleteFile())
+                return "Cannot overwrite " + file.getFullPathName() + " (is it open in another program?)";
+
+            return {};
+        }
+
+        /** Renders these tracks right here (no progress window). Unlike Renderer::renderToFile,
+            changes nothing in the edit: that one solo-isolates and unmutes the rendered tracks for
+            the time being as undoable steps, which left an export as a step Ctrl+Z took back, with
+            nothing to see. The tracks given here are all heard anyway. */
+        juce::String render (te::Edit& edit, const juce::File& file, const juce::Array<te::Track*>& tracks,
+                             te::TimeRange range, bool withMaster)
+        {
+            if (const auto error = prepare (file); error.isNotEmpty())
+                return error;
+
+            const te::Edit::ScopedRenderStatus renderStatus (edit, true);
+            te::TransportControl::stopAllTransports (edit.engine, false, true);
+
+            te::Renderer::Parameters parameters (edit);
+            parameters.destFile = file;
+            parameters.audioFormat = edit.engine.getAudioFileFormatManager().getWavFormat();
+            parameters.bitDepth = 24;
+            parameters.sampleRateForAudio = edit.engine.getDeviceManager().getSampleRate();
+            parameters.blockSizeForAudio = edit.engine.getDeviceManager().getBlockSize();
+            parameters.time = range;
+            parameters.usePlugins = true;
+            parameters.useMasterPlugins = withMaster;
+            parameters.tracksToDo = te::toBitSet (tracks);
+
+            juce::String taskError;
+
+            if (auto task = te::render_utils::createRenderTask (parameters, "Export", nullptr, nullptr))
+            {
+                while (task->runJob() == juce::ThreadPoolJob::jobNeedsRunningAgain)
+                {}
+
+                taskError = task->errorMessage;
+            }
+
+            if (taskError.isNotEmpty() || ! file.existsAsFile())
+            {
+                file.deleteFile();
+                return "Export failed: " + file.getFullPathName() + (taskError.isNotEmpty() ? " (" + taskError + ")" : juce::String());
+            }
+
+            return {};
+        }
+    }
+
+    juce::String exportWav (te::Edit& edit, const juce::File& file)
+    {
+        if (edit.getLength() <= te::TimeDuration())
+            return "Nothing to export: the song has no clips";
+
+        // What you hear is what you get.
+        const auto audible = findAudible (edit);
+
+        if (audible.songTracks.isEmpty())
             return "Nothing to export: every track is muted";
 
-        const te::TimeRange range (te::TimePosition(), te::TimePosition() + songEnd + te::TimeDuration::fromSeconds (exportTailSeconds));
-        const auto tracks = te::toBitSet (audible);
+        auto tracks = audible.others;
 
-        // useThread = false: renders right here, without Tracktion's progress window.
-        if (! te::Renderer::renderToFile ("Export", file, edit, range, tracks, true, false, {}, false))
-            return "Export failed: " + file.getFullPathName();
+        for (auto* track : audible.songTracks)
+            tracks.add (track);
 
-        return {};
+        for (auto* track : audible.returnTracks)
+            tracks.add (track);
+
+        return render (edit, file, tracks, getRange (edit), true);
+    }
+
+    juce::String getStemFileName (const juce::String& prefix, int number, const juce::String& trackName)
+    {
+        const auto name = trackName.trim().isNotEmpty() ? trackName.trim() : juce::String ("Track");
+        return juce::File::createLegalFileName (prefix + " - " + juce::String (number).paddedLeft ('0', 2) + " " + name + ".wav");
+    }
+
+    StemsResult exportStems (te::Edit& edit, const juce::File& folder, const juce::String& prefix,
+                             const std::function<void (int, int)>& progress)
+    {
+        StemsResult result;
+
+        if (edit.getLength() <= te::TimeDuration())
+        {
+            result.error = "Nothing to export: the song has no clips";
+            return result;
+        }
+
+        const auto audible = findAudible (edit);
+        juce::Array<te::AudioTrack*> withClips;
+
+        for (auto* track : audible.songTracks)
+            if (! track->getClips().isEmpty())
+                withClips.add (track);
+
+        if (withClips.isEmpty())
+        {
+            result.error = "Nothing to export: no track that is heard has clips";
+            return result;
+        }
+
+        const auto range = getRange (edit);
+        const auto allSongTracks = [&]
+        {
+            juce::Array<te::AudioTrack*> all;
+
+            for (auto* track : te::getAudioTracks (edit))
+                if (! core::tracks::isReturn (*track))
+                    all.add (track);
+
+            return all;
+        }();
+
+        for (int i = 0; i < withClips.size(); ++i)
+        {
+            if (progress != nullptr)
+                progress (i, withClips.size());
+
+            auto* track = withClips[i];
+
+            // The track and the return tracks: only this track sends to them here.
+            auto tracks = audible.others;
+            tracks.add (track);
+
+            for (auto* returnTrack : audible.returnTracks)
+                tracks.add (returnTrack);
+
+            const auto file = folder.getChildFile (getStemFileName (prefix, allSongTracks.indexOf (track) + 1, track->getName()));
+
+            if (const auto error = render (edit, file, tracks, range, false); error.isNotEmpty())
+            {
+                result.error = error;
+                return result;
+            }
+
+            result.files.add (file);
+        }
+
+        if (progress != nullptr)
+            progress (withClips.size(), withClips.size());
+
+        return result;
     }
 }

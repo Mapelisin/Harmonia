@@ -15,6 +15,7 @@ namespace harmonia::ui
         virtual void saveProject() = 0;     // Ctrl+S
         virtual void saveProjectAs() = 0;   // Ctrl+Shift+S
         virtual void exportWav() = 0;       // Ctrl+R, as in FL Studio
+        virtual void exportStems() = 0;     // a WAV per track
 
         /** The project's file name without extension, or "Untitled". */
         virtual juce::String getProjectName() const = 0;

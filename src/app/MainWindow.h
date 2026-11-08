@@ -44,6 +44,7 @@ namespace harmonia::app
         void saveProject() override;
         void saveProjectAs() override;
         void exportWav() override;
+        void exportStems() override;
         juce::String getProjectName() const override;
 
         /** Opens a project file (also used for a file given on the command line). */

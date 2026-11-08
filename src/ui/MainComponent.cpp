@@ -455,6 +455,7 @@ namespace harmonia::ui
         menu.addSeparator();
         menu.addItem ("Import audio or MIDI...", [safe] { if (safe != nullptr) safe->chooseFilesToImport(); });
         menu.addItem ("Export WAV...  (Ctrl+R)", hasCommands, false, run (&FileCommands::exportWav));
+        menu.addItem ("Export stems (WAV per track)...", hasCommands, false, run (&FileCommands::exportStems));
         menu.addItem ("Export MIDI...", [safe] { if (safe != nullptr) safe->chooseMidiExport(); });
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fileButton));
     }

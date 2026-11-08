@@ -345,6 +345,55 @@ namespace harmonia::app
         });
     }
 
+    void MainWindow::exportStems()
+    {
+        const auto folder = file != juce::File() ? file.getParentDirectory() : getDefaultFolder();
+        folder.createDirectory();
+
+        chooser = std::make_unique<juce::FileChooser> ("Export stems into folder", folder);
+        chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                              [this] (const juce::FileChooser& fc)
+        {
+            const auto target = fc.getResult();
+
+            if (target == juce::File())
+                return;
+
+            auto* content = getMainComponent();
+
+            if (content != nullptr)
+                content->getTransport().stop();
+
+            // Rendering holds the window up: say how far it got.
+            juce::MouseCursor::showWaitCursor();
+
+            const auto result = audio::exportStems (project->getEdit(), target, getProjectName(), [this] (int done, int total)
+            {
+                if (done < total)
+                    if (auto* c = getMainComponent())
+                    {
+                        c->showMessage ("Exporting stem " + juce::String (done + 1) + " of " + juce::String (total) + "...");
+
+                        if (auto* peer = getPeer())
+                            peer->performAnyPendingRepaintsNow();
+                    }
+            });
+
+            juce::MouseCursor::hideWaitCursor();
+
+            if (result.error.isNotEmpty())
+            {
+                showError ("Export failed", result.error);
+                return;
+            }
+
+            if (auto* c = getMainComponent())
+                c->showMessage ("Exported " + juce::String (result.files.size()) + " stems to " + target.getFullPathName());
+
+            result.files.getFirst().revealToUser();
+        });
+    }
+
     juce::String MainWindow::getProjectName() const
     {
         return file != juce::File() ? file.getFileNameWithoutExtension() : juce::String ("Untitled");
