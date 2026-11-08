@@ -108,6 +108,33 @@ TEST_SUITE ("audio::loudness")
         CHECK (advice.text.contains ("crackle"));
     }
 
+    TEST_CASE ("a file is measured a piece at a time, the same as whole")
+    {
+        const auto buffer = sine ({ { 20.0, -23.0 } });
+        const juce::TemporaryFile file (".wav");
+
+        {
+            std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (file.getFile());
+            juce::WavAudioFormat wav;
+            auto writer = wav.createWriterFor (stream, juce::AudioFormatWriterOptions {}
+                                                           .withSampleRate (rate)
+                                                           .withNumChannels (2)
+                                                           .withBitsPerSample (24));
+            REQUIRE (writer != nullptr);
+            REQUIRE (writer->writeFromAudioSampleBuffer (buffer, 0, buffer.getNumSamples()));
+        }
+
+        const auto whole = loudness::measure (buffer, rate);
+        const auto inPieces = loudness::measureFile (file.getFile());
+        REQUIRE (whole.has_value());
+        REQUIRE (inPieces.has_value());
+        CHECK (inPieces->lufs == doctest::Approx (whole->lufs).epsilon (0.001));
+        CHECK (inPieces->lufs == doctest::Approx (-23.0).epsilon (0.005));
+        CHECK (inPieces->seconds == doctest::Approx (20.0));
+
+        CHECK_FALSE (loudness::measureFile (file.getFile().getSiblingFile ("no such file.wav")).has_value());
+    }
+
     TEST_CASE ("the song is measured as it is heard, master volume included; the advice goes onto the master fader")
     {
         auto project = core::Project::createEmpty (test::session());

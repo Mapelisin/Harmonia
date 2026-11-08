@@ -16,6 +16,29 @@ namespace harmonia::audio::loudness
     /** Measures sound (1 or 2 channels). Nothing if it is shorter than 0.4 s or silent. */
     std::optional<Measurement> measure (const juce::AudioBuffer<float>&, double sampleRate);
 
+    /** Measures sound handed over a block at a time (a song too long to hold in memory). */
+    class Meter
+    {
+    public:
+        Meter (double sampleRate, int numChannels);
+        ~Meter();
+
+        void process (const juce::AudioBuffer<float>&, int numSamples);
+
+        /** What it heard so far. Nothing if that is shorter than 0.4 s or silent. */
+        std::optional<Measurement> finish() const;
+
+    private:
+        struct State;
+        std::unique_ptr<State> state;
+
+        JUCE_DECLARE_NON_COPYABLE (Meter)
+    };
+
+    /** Measures a sound file, reading it a piece at a time. Nothing if it can't be read or is
+        silent. */
+    std::optional<Measurement> measureFile (const juce::File&);
+
     /** Renders the song as it is heard (as Export WAV does) and measures it. Blocks until done.
         Nothing, with the reason in `error`, if there is nothing to hear. */
     std::optional<Measurement> measureSong (te::Edit&, juce::String& error);

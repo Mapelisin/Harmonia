@@ -4,6 +4,7 @@
 #include "core/Tracks.h"
 #include "audio/DeviceStatus.h"
 #include "audio/Loudness.h"
+#include "audio/MixCheck.h"
 #include "ui/ComputerKeyboard.h"
 #include "ui/Theme.h"
 
@@ -561,6 +562,7 @@ namespace harmonia::ui
         menu.addItem ("Export MIDI...", [safe] { if (safe != nullptr) safe->chooseMidiExport(); });
         menu.addSeparator();
         menu.addItem ("Check loudness for streaming...", [safe] { if (safe != nullptr) safe->checkLoudness(); });
+        menu.addItem ("Check the mix (Mix Doctor)...", [safe] { if (safe != nullptr) safe->checkMix(); });
         return menu;
     }
 
@@ -656,6 +658,43 @@ namespace harmonia::ui
             text << " (as far as its fader goes)";
 
         showMessage (text);
+    }
+
+    void MainComponent::checkMix()
+    {
+        // Rendering takes over the engine: stop first, or playback would resume over it.
+        transport.stop();
+
+        // It holds the window up for a while (the song, then each track): say how far it got.
+        juce::MouseCursor::showWaitCursor();
+        juce::String error;
+        const auto report = audio::mix_check::check (project.getEdit(), error, [this] (const juce::String& step)
+        {
+            showMessage (step);
+
+            if (auto* peer = getPeer())
+                peer->performAnyPendingRepaintsNow();
+        });
+
+        juce::MouseCursor::hideWaitCursor();
+
+        if (! report.has_value())
+        {
+            showWarning (error);
+            return;
+        }
+
+        const auto problems = audio::mix_check::findProblems (*report).size();
+        showMessage (problems == 0 ? juce::String ("Mix Doctor: nothing stands out")
+                                   : "Mix Doctor: " + juce::String (problems) + (problems == 1 ? " thing" : " things") + " to look at");
+
+        juce::AlertWindow::showAsync (juce::MessageBoxOptions().withIconType (problems == 0 ? juce::MessageBoxIconType::InfoIcon
+                                                                                            : juce::MessageBoxIconType::WarningIcon)
+                                                               .withTitle ("Mix Doctor")
+                                                               .withMessage (audio::mix_check::describe (*report))
+                                                               .withButton ("Close", 0)
+                                                               .withAssociatedComponent (this),
+                                      [] (int) {});
     }
 
     void MainComponent::chooseMidiExport()

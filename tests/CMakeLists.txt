@@ -28,6 +28,7 @@ add_executable(harmonia_tests
     audio/StemsTests.cpp
     audio/MidiRenderTests.cpp
     audio/LoudnessTests.cpp
+    audio/MixCheckTests.cpp
     ui/PianoRollTests.cpp
     ui/PianoRollViewTests.cpp
     ui/NoteInputTests.cpp
@@ -54,6 +55,7 @@ add_executable(harmonia_tests
     ui/AudioClipToolsTests.cpp
     ui/ChordNameTests.cpp
     ui/LoopExportTests.cpp
+    ui/MixDoctorMenuTests.cpp
     ui/ChordLaneTests.cpp)
 
 harmonia_configure_target(harmonia_tests)

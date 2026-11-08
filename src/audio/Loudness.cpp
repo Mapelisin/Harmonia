@@ -70,10 +70,10 @@ namespace harmonia::audio::loudness
         }
 
         /** Takes sound a block at a time; the gating is done at the end. */
-        class Meter
+        class Gauge
         {
         public:
-            Meter (double rate, int numChannels)
+            Gauge (double rate, int numChannels)
                 : sampleRate (rate),
                   stepLength (std::max (1, juce::roundToInt (rate * stepSeconds))),
                   filters ((size_t) juce::jlimit (1, 2, numChannels), makeKWeighting (rate))
@@ -167,6 +167,28 @@ namespace harmonia::audio::loudness
         }
     }
 
+    struct Meter::State : Gauge
+    {
+        using Gauge::Gauge;
+    };
+
+    Meter::Meter (double sampleRate, int numChannels)
+        : state (std::make_unique<State> (sampleRate, numChannels))
+    {
+    }
+
+    Meter::~Meter() = default;
+
+    void Meter::process (const juce::AudioBuffer<float>& buffer, int numSamples)
+    {
+        state->process (buffer, numSamples);
+    }
+
+    std::optional<Measurement> Meter::finish() const
+    {
+        return state->finish();
+    }
+
     std::optional<Measurement> measure (const juce::AudioBuffer<float>& buffer, double sampleRate)
     {
         if (sampleRate <= 0.0 || buffer.getNumChannels() == 0)
@@ -177,22 +199,14 @@ namespace harmonia::audio::loudness
         return meter.finish();
     }
 
-    std::optional<Measurement> measureSong (te::Edit& edit, juce::String& error)
+    std::optional<Measurement> measureFile (const juce::File& file)
     {
-        const juce::TemporaryFile temp (".wav");
-
-        if (error = exportWav (edit, temp.getFile()); error.isNotEmpty())
-            return std::nullopt;
-
         juce::AudioFormatManager formats;
         formats.registerBasicFormats();
-        std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (temp.getFile()));
+        std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
 
-        if (reader == nullptr || reader->sampleRate <= 0.0)
-        {
-            error = "Can't read the rendered song back";
+        if (reader == nullptr || reader->sampleRate <= 0.0 || reader->numChannels == 0)
             return std::nullopt;
-        }
 
         Meter meter (reader->sampleRate, (int) reader->numChannels);
         juce::AudioBuffer<float> block ((int) reader->numChannels, 65536);
@@ -204,8 +218,17 @@ namespace harmonia::audio::loudness
             meter.process (block, count);
         }
 
-        reader.reset();     // let go of the file before it is deleted
-        auto result = meter.finish();
+        return meter.finish();
+    }
+
+    std::optional<Measurement> measureSong (te::Edit& edit, juce::String& error)
+    {
+        const juce::TemporaryFile temp (".wav");
+
+        if (error = exportWav (edit, temp.getFile()); error.isNotEmpty())
+            return std::nullopt;
+
+        auto result = measureFile (temp.getFile());     // done with the file before it is deleted
 
         if (! result.has_value())
             error = "Nothing to measure: the song is silent";
