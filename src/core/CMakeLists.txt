@@ -34,6 +34,8 @@ add_library(harmonia_core STATIC
     DrumPatterns.cpp
     BassLines.h
     BassLines.cpp
+    Melodies.h
+    Melodies.cpp
     Markers.h
     Markers.cpp
     Sections.h

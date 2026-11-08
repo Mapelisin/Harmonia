@@ -1,6 +1,7 @@
 #include "ui/pianoroll/NoteToolWindow.h"
 #include "core/BassLines.h"
 #include "core/DrumPatterns.h"
+#include "core/Melodies.h"
 #include "core/Progressions.h"
 #include "ui/Theme.h"
 
@@ -30,13 +31,14 @@ namespace harmonia::ui::pianoroll
     {
         static const std::vector<NoteTool> all { NoteTool::strum, NoteTool::arpeggiate, NoteTool::humanize,
                                                  NoteTool::scaleLevels, NoteTool::chordProgression, NoteTool::drumPattern,
-                                                 NoteTool::bassLine };
+                                                 NoteTool::bassLine, NoteTool::melody };
         return all;
     }
 
     bool writesNewNotes (NoteTool tool)
     {
-        return tool == NoteTool::chordProgression || tool == NoteTool::drumPattern || tool == NoteTool::bassLine;
+        return tool == NoteTool::chordProgression || tool == NoteTool::drumPattern || tool == NoteTool::bassLine
+            || tool == NoteTool::melody;
     }
 
     juce::String getName (NoteTool tool)
@@ -50,6 +52,7 @@ namespace harmonia::ui::pianoroll
             case NoteTool::chordProgression: return "Chord progression";
             case NoteTool::drumPattern: return "Drum pattern";
             case NoteTool::bassLine:    return "Bass line";
+            case NoteTool::melody:      return "Melody";
         }
 
         return {};
@@ -66,6 +69,7 @@ namespace harmonia::ui::pianoroll
             case NoteTool::chordProgression: return "Alt+P";
             case NoteTool::drumPattern: return "Alt+D";
             case NoteTool::bassLine:    return "Alt+B";
+            case NoteTool::melody:      return "Alt+L";
         }
 
         return {};
@@ -260,6 +264,9 @@ namespace harmonia::ui::pianoroll
         if (tool == NoteTool::bassLine)
             return createBassLine (model);
 
+        if (tool == NoteTool::melody)
+            return createMelody (model);
+
         const auto targets = model.getSelectedOrAll();
 
         if (targets.isEmpty())
@@ -357,6 +364,7 @@ namespace harmonia::ui::pianoroll
             case NoteTool::chordProgression:
             case NoteTool::drumPattern:
             case NoteTool::bassLine:
+            case NoteTool::melody:
                 break;
         }
 
@@ -427,8 +435,9 @@ namespace harmonia::ui::pianoroll
         if (model.getClip() == nullptr)
             return "Open a clip first (click one in the arrangement)";
 
-        if (tool == NoteTool::bassLine)
-            return "Bass line follows the chords the other tracks play here, and they play none (drum tracks don't count)";
+        if (tool == NoteTool::bassLine || tool == NoteTool::melody)
+            return pianoroll::getName (tool)
+                 + " follows the chords the other tracks play here, and they play none (drum tracks don't count)";
 
         if (writesNewNotes (tool))
             return {};
@@ -474,6 +483,53 @@ namespace harmonia::ui::pianoroll
                 s.gate = v[3] / 100.0;
                 s.velocity = juce::roundToInt (v[4]);
                 return tools::Result { {}, {}, bass::generate (chords, s) };
+            }, juce::Array<te::MidiNote*>());
+    }
+
+    std::unique_ptr<NoteToolWindow> NoteToolWindow::createMelody (PianoRollModel& model)
+    {
+        namespace melodies = core::melodies;
+        auto* clip = model.getClip();
+
+        if (clip == nullptr)
+            return nullptr;
+
+        // Over the chords the other tracks play over the time selection, or else the clip.
+        const auto selection = model.getTimeSelection();
+        const auto start = selection.has_value() ? std::max (model.getMinBeat(), selection->start) : model.getClipStartBeat();
+        const auto end = selection.has_value() ? selection->end : model.getClipEndBeat();
+        const auto harmony = core::bass_lines::getHarmony (model.getEdit(), clip->getTrack(), start, end);
+        const auto chords = melodies::getChords (core::chords::findChords (harmony), harmony);
+
+        if (chords.empty())
+            return nullptr;
+
+        const auto scale = melodies::fitScale (chords, model.getScale());
+        const auto beatsPerBar = model.getBeatsPerBar();
+        juce::StringArray rhythms;
+
+        for (auto r : melodies::getRhythms())
+            rhythms.add (melodies::getName (r));
+
+        return std::make_unique<NoteToolWindow> (model, pianoroll::getName (NoteTool::melody), std::vector<Setting> {
+            { "Rhythm", 0.0, 0.0, 0.0, 1.0, {}, rhythms },
+            { "Variation", 1.0, 99.0, 1.0, 1.0, {}, {} },
+            { "Octave", 3.0, 6.0, 1.0, 5.0, {}, {} },
+            { "Phrases", 0.0, 0.0, 0.0, 0.0, {}, { "Answer themselves (bar 3 as bar 1)", "Free" } },
+            { "Velocity", 40.0, 127.0, 1.0, 96.0, {}, {} } },
+            [chords, scale, start, end, beatsPerBar] (const std::vector<core::Note>&, const std::vector<double>& v)
+            {
+                const auto& all = melodies::getRhythms();
+                melodies::Settings s;
+                s.rhythm = all[(size_t) juce::jlimit (0, (int) all.size() - 1, juce::roundToInt (v[0]))];
+                s.variation = juce::roundToInt (v[1]);
+                s.octave = juce::roundToInt (v[2]);
+                s.answer = juce::roundToInt (v[3]) == 0;
+                s.velocity = juce::roundToInt (v[4]);
+                s.beatsPerBar = beatsPerBar;
+                s.startBeat = start;
+                s.endBeat = end;
+                return tools::Result { {}, {}, melodies::generate (chords, scale, s) };
             }, juce::Array<te::MidiNote*>());
     }
 

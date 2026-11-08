@@ -13,7 +13,8 @@ namespace harmonia::ui::pianoroll
         scaleLevels,    // Alt+X
         chordProgression, // Alt+P: writes chords, needs no notes
         drumPattern,    // Alt+D: writes a groove, needs no notes
-        bassLine        // Alt+B: writes a bass under the other tracks' chords
+        bassLine,       // Alt+B: writes a bass under the other tracks' chords
+        melody          // Alt+L: writes a melody over the other tracks' chords
     };
 
     const std::vector<NoteTool>& getAllNoteTools();
@@ -95,6 +96,7 @@ namespace harmonia::ui::pianoroll
         static std::unique_ptr<NoteToolWindow> createChordProgression (PianoRollModel&);
         static std::unique_ptr<NoteToolWindow> createDrumPattern (PianoRollModel&);
         static std::unique_ptr<NoteToolWindow> createBassLine (PianoRollModel&);
+        static std::unique_ptr<NoteToolWindow> createMelody (PianoRollModel&);
         std::vector<double> getValues() const;
         void update();
         void close();

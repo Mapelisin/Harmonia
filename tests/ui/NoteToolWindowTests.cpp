@@ -242,6 +242,54 @@ TEST_SUITE ("piano roll: tool windows")
 
         CHECK (NoteToolWindow::getUnavailableReason (f.model, NoteTool::strum) == "The clip has no notes for Strum to work on");
         CHECK (NoteToolWindow::getUnavailableReason (f.model, NoteTool::bassLine).contains ("chords"));
+        CHECK (NoteToolWindow::getUnavailableReason (f.model, NoteTool::melody).startsWith ("Melody follows the chords"));
+    }
+
+    TEST_CASE ("the melody goes over the other tracks' chords in their key, live, as one undo step")
+    {
+        ToolsFixture f;
+        auto& keys = *f.project->addTrack ("Keys");
+        auto* chords = f.project->addMidiClip (keys, 0.0, 16.0, "Chords");
+        REQUIRE (chords != nullptr);
+
+        // C, A minor, F, G: a bar each.
+        const std::array<std::array<int, 3>, 4> progression { { { 60, 64, 67 }, { 57, 60, 64 }, { 53, 57, 60 }, { 55, 59, 62 } } };
+
+        for (int bar = 0; bar < 4; ++bar)
+            for (int pitch : progression[(size_t) bar])
+                chords->getSequence().addNote (pitch, te::BeatPosition::fromBeats (bar * 4.0), te::BeatDuration::fromBeats (4.0),
+                                               90, 0, nullptr);
+
+        const core::scales::Scale cMajor { 0, core::scales::ScaleType::major };
+
+        {
+            auto window = NoteToolWindow::create (f.model, NoteTool::melody);
+            REQUIRE (window != nullptr);
+            CHECK (window->getToolName() == "Melody");
+
+            const auto first = f.notes();
+            REQUIRE (first.size() >= 4);
+            CHECK (first.front().startBeat == doctest::Approx (0.0));
+            CHECK (first.back().pitch % 12 == 7);           // home on the G chord's root
+            CHECK (f.model.getNumSelected() == (int) first.size());
+
+            for (const auto& n : first)
+                CHECK (cMajor.contains (n.pitch));
+
+            window->setValue (indexOf (*window, "Variation"), 2.0);
+            CHECK (f.notes() != first);
+
+            window->setValue (indexOf (*window, "Octave"), 4.0);
+
+            for (const auto& n : f.notes())
+                CHECK (n.pitch <= 72);
+
+            window->accept();
+        }
+
+        CHECK_FALSE (f.notes().empty());
+        f.project->undo();
+        CHECK (f.notes().empty());
     }
 
     TEST_CASE ("the bass line follows the chords of the other tracks, live, as one undo step")
@@ -444,7 +492,8 @@ TEST_SUITE ("piano roll: tool windows")
                                                 std::tuple { 'R', 0x043a, "Humanize" }, std::tuple { 'X', 0x0447, "Scale levels" },
                                                 std::tuple { 'P', 0x0437, "Chord progression" },
                                                 std::tuple { 'D', 0x0432, "Drum pattern" },
-                                                std::tuple { 'B', 0x0438, "Bass line" } })
+                                                std::tuple { 'B', 0x0438, "Bass line" },
+                                                std::tuple { 'L', 0x0434, "Melody" } })
         {
             CHECK (main.keyPressed (juce::KeyPress (code, juce::ModifierKeys::altModifier, (juce::juce_wchar) text)));
             REQUIRE (opened != nullptr);
@@ -467,6 +516,7 @@ TEST_SUITE ("piano roll: tool windows")
         CHECK (items.contains ("Chord progression... Alt+P"));
         CHECK (items.contains ("Drum pattern... Alt+D"));
         CHECK (items.contains ("Bass line... Alt+B"));
+        CHECK (items.contains ("Melody... Alt+L"));
     }
 
     TEST_CASE ("the Strum window over the piano roll draws")
