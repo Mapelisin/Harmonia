@@ -85,26 +85,44 @@ namespace harmonia::ui::browser
             return {};
 
         const auto text = filter.trim();
+        const auto searching = text.isNotEmpty();
         const auto types = juce::File::findFilesAndDirectories | juce::File::ignoreHiddenFiles;
+        int scanned = 0;
 
-        for (const auto& item : juce::RangedDirectoryIterator (folder, false, "*", types))
+        // A search goes down into the subfolders too.
+        for (const auto& item : juce::RangedDirectoryIterator (folder, searching, "*", types))
         {
-            const auto file = item.getFile();
+            if (++scanned > maxSearchScanned || (int) files.size() >= maxSearchResults)
+                break;
 
-            if (text.isNotEmpty() && ! file.getFileName().containsIgnoreCase (text))
+            const auto file = item.getFile();
+            const auto inFolder = file.getParentDirectory() == folder;
+
+            if (searching && ! file.getFileName().containsIgnoreCase (text))
                 continue;
 
             if (item.isDirectory())
-                folders.push_back ({ file, Entry::Kind::folder });
+            {
+                if (inFolder)
+                    folders.push_back ({ file, Entry::Kind::folder });
+            }
             else if (core::midi_files::isMidiFile (file))
                 files.push_back ({ file, Entry::Kind::midi });
             else if (isSound != nullptr && isSound (file))
                 files.push_back ({ file, Entry::Kind::sound });
         }
 
-        const auto byName = [] (const Entry& a, const Entry& b)
+        const auto byName = [&folder] (const Entry& a, const Entry& b)
         {
-            return a.file.getFileName().compareNatural (b.file.getFileName()) < 0;
+            const auto aHere = a.file.getParentDirectory() == folder, bHere = b.file.getParentDirectory() == folder;
+
+            if (aHere != bHere)
+                return aHere;
+
+            if (const auto order = a.file.getFileName().compareNatural (b.file.getFileName()); order != 0)
+                return order < 0;
+
+            return a.file.getFullPathName().compareNatural (b.file.getFullPathName()) < 0;
         };
 
         std::sort (folders.begin(), folders.end(), byName);
@@ -185,9 +203,24 @@ namespace harmonia::ui::browser
                             area.removeFromRight (90), juce::Justification::centredRight, false);
             }
 
+            // Found in a subfolder: which one, after the name.
+            const auto parent = entry.file.getParentDirectory();
+            const auto where = parent != owner.folder ? parent.getRelativePathFrom (owner.folder).replaceCharacter ('\\', '/')
+                                                      : juce::String();
+            const juce::Font nameFont { juce::FontOptions (theme::size::fontSize) };
+            const auto nameWidth = juce::jmin ((float) area.getWidth(),
+                                               juce::GlyphArrangement::getStringWidth (nameFont, entry.file.getFileName()) + 2.0f);
+
             g.setColour (playing ? theme::colour::accent : theme::colour::textPrimary);
-            g.setFont (juce::FontOptions (theme::size::fontSize));
-            g.drawText (entry.file.getFileName(), area, juce::Justification::centredLeft, true);
+            g.setFont (nameFont);
+            g.drawText (entry.file.getFileName(), area.removeFromLeft (juce::roundToInt (nameWidth)), juce::Justification::centredLeft, true);
+
+            if (where.isNotEmpty() && area.getWidth() > 30)
+            {
+                g.setColour (theme::colour::textSecondary);
+                g.setFont (juce::FontOptions (theme::size::smallFontSize));
+                g.drawText (juce::String::fromUTF8 ("  \xc2\xb7  ") + where, area, juce::Justification::centredLeft, true);
+            }
         }
 
         void listBoxItemClicked (int row, const juce::MouseEvent& e) override
@@ -382,7 +415,7 @@ namespace harmonia::ui::browser
         stopButton.onClick = [this] { preview.stop(); };
         addAndMakeVisible (stopButton);
 
-        search.setTextToShowWhenEmpty ("Search in this folder", theme::colour::textSecondary);
+        search.setTextToShowWhenEmpty ("Search here and in subfolders", theme::colour::textSecondary);
         search.onTextChange = [this] { refresh(); };
         search.onEscapeKey = [this] { setFilter ({}); fileList->grabKeyboardFocus(); };
         search.onReturnKey = [this] { fileList->grabKeyboardFocus(); };

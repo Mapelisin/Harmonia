@@ -14,9 +14,17 @@ namespace harmonia::ui::browser
     };
 
     /** What a folder shows: its folders, then its sounds and MIDI files, each by name; other files
-        and hidden ones are left out. `filter` keeps the names that contain it (any case). */
+        and hidden ones are left out. `filter` keeps the names that contain it (any case), and then
+        the sounds and MIDI files in its subfolders are searched too (at most maxSearchResults, by
+        name, those right in the folder first). */
     std::vector<Entry> listFolder (const juce::File& folder, const juce::String& filter,
                                    const std::function<bool (const juce::File&)>& isSound);
+
+    inline constexpr int maxSearchResults = 500;
+
+    /** How many files and folders a search looks at, at most (a search from a drive's root
+        mustn't take forever). */
+    inline constexpr int maxSearchScanned = 50000;
 
     /** A place on the left: one of the user's usual folders, a drive, or a folder they added. */
     struct Place
@@ -29,7 +37,8 @@ namespace harmonia::ui::browser
     /** The sound browser (lower panel, F6): places on the left, a folder's sounds on the right.
         A click on a sound plays it (again: stops); Up / Down move and play; double-click or Enter
         puts it into the song at the playhead; or drag it onto a track. A click opens a folder;
-        Backspace or the Up button goes back up. The places added and the last folder are kept
+        Backspace or the Up button goes back up. The search looks in the subfolders too (each
+        found file says which subfolder it is in). The places added and the last folder are kept
         in the settings. */
     class SoundBrowser final : public juce::Component
     {

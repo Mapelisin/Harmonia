@@ -151,6 +151,38 @@ TEST_SUITE ("sound browser")
         preview.stop();
     }
 
+    TEST_CASE ("the search looks in the subfolders too: what's right in the folder first, then by name")
+    {
+        SoundFolder f;
+        audio::FilePreview preview (test::session());
+        const auto isSound = [&preview] (const juce::File& file) { return preview.canPlay (file); };
+        const auto hat = f.temp.getFile ("Drums").getChildFile ("hat.wav");
+
+        const auto found = browser::listFolder (f.temp.folder, "HAT", isSound);
+        REQUIRE (found.size() == 1);
+        CHECK (found[0].file == hat);
+        CHECK (found[0].kind == Entry::Kind::sound);
+
+        // Folders are found only right in the folder; files anywhere below.
+        f.temp.getFile ("Drums").getChildFile ("Wav kit").createDirectory();
+        CHECK (namesOf (browser::listFolder (f.temp.folder, "wav", isSound))
+               == juce::StringArray { "kick.wav", "Snare 2.wav", "snare 10.wav", "hat.wav" });
+
+        // Without a search, only the folder itself.
+        const auto plain = browser::listFolder (f.temp.folder, {}, isSound);
+        CHECK (std::none_of (plain.begin(), plain.end(), [&hat] (const Entry& e) { return e.file == hat; }));
+
+        SoundBrowser browser (test::session(), preview);
+        browser.setBounds (0, 0, 1000, 300);
+        browser.setFolder (f.temp.folder);
+        browser.setFilter ("hat");
+        REQUIRE (browser.getEntries().size() == 1);
+        browser.clickEntry (0);
+        CHECK (preview.getFile() == hat);
+        CHECK (browser.createComponentSnapshot (browser.getLocalBounds()).isValid());
+        preview.stop();
+    }
+
     TEST_CASE ("places: the usual folders, and the ones added are kept (as is the last folder)")
     {
         SoundFolder f;

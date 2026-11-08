@@ -105,7 +105,8 @@ namespace harmonia::ui
                 { "In the window", "Space: listen; Enter: accept; Esc: cancel" } } },
 
             { "Sounds (F6)", {
-                { "Click a sound", "Listen (click it again: stop)" },
+                { "Click a sound", "Listen (click it again: stop); MIDI files too" },
+                { "Search box", "Finds sounds here and in the subfolders" },
                 { "Up / Down", "The next / previous sound, and listen to it" },
                 { "Double-click, Enter", "Put it into the song: on the current track, at the playhead" },
                 { "Drag onto a track", "Put it there (Ctrl+click or Shift+click first: several)" },
