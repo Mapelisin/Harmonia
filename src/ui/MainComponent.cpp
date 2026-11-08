@@ -11,7 +11,7 @@ namespace harmonia::ui
     namespace
     {
         constexpr int trackRowHeight = 40;
-        constexpr int appNameWidth = 90, fileButtonWidth = 50, summaryWidth = 136, tabWidth = 96;
+        constexpr int appNameWidth = 90, fileButtonWidth = 50, summaryWidth = 136, tabWidth = 86;
         constexpr int lowerPanelTabs = 1001;
     }
 
@@ -52,12 +52,13 @@ namespace harmonia::ui
         shortcutsButton.onClick = [this] { showShortcuts (! areShortcutsShown()); };
         shortcuts.onClose = [this] { showShortcuts (false); };
 
-        // The lower part shows the piano roll, the automation or the mixer (F7 / F8 / F9).
+        // The lower part shows the sounds, the piano roll, the automation or the mixer (F6 / F7 / F8 / F9).
+        soundsTab.setTooltip ("Sounds: your folders of samples and loops; listen, then drag them onto the tracks (F6)");
         pianoRollTab.setTooltip ("Piano roll of the open clip (F7)");
         automationTab.setTooltip ("Automation: lines that change volume, pan, sends or effects over the song (F8)");
         mixerTab.setTooltip ("Mixer: effects, volume, pan (F9)");
 
-        for (auto* tab : { &pianoRollTab, &automationTab, &mixerTab })
+        for (auto* tab : { &soundsTab, &pianoRollTab, &automationTab, &mixerTab })
         {
             tab->setClickingTogglesState (true);
             tab->setRadioGroupId (lowerPanelTabs);
@@ -68,6 +69,8 @@ namespace harmonia::ui
         pianoRollTab.onClick = [this] { showLowerPanel (LowerPanel::pianoRoll); };
         automationTab.onClick = [this] { showLowerPanel (LowerPanel::automation); };
         mixerTab.onClick = [this] { showLowerPanel (LowerPanel::mixer); };
+        soundsTab.onClick = [this] { showLowerPanel (LowerPanel::sounds); };
+        soundBrowser.onAddToSong = [this] (const juce::File& file) { addFilesAtPlayhead ({ file }); };
 
         // The automation lane scrolls and zooms with the arrangement.
         arrangement.onViewChanged = [this] { automationPanel.getLane().repaint(); };
@@ -93,7 +96,7 @@ namespace harmonia::ui
         };
 
         for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &audioSettingsButton, &shortcutsButton,
-                                                                 &pianoRollTab, &automationTab, &mixerTab })
+                                                                 &soundsTab, &pianoRollTab, &automationTab, &mixerTab })
             c->setWantsKeyboardFocus (false);
 
         // Arrangement above, piano roll below; the bar between them can be dragged.
@@ -102,12 +105,13 @@ namespace harmonia::ui
         splitLayout.setItemLayout (2, 200.0, -1.0, -0.62);
 
         for (auto* c : std::initializer_list<juce::Component*> { &transportBar, &fileButton, &audioSettingsButton, &shortcutsButton, &trackNameLabel,
-                                                                 &pianoRollTab, &automationTab, &mixerTab, &arrangement, &splitter, &pianoRoll,
+                                                                 &soundsTab, &pianoRollTab, &automationTab, &mixerTab, &arrangement, &splitter, &pianoRoll,
                                                                  &statusBar })
             addAndMakeVisible (c);
 
         addChildComponent (mixer);
         addChildComponent (automationPanel);
+        addChildComponent (soundBrowser);
         addChildComponent (shortcuts);     // over everything
 
         currentChanged();
@@ -289,10 +293,11 @@ namespace harmonia::ui
         auto trackRow = area.removeFromTop (trackRowHeight);
         trackNameLabel.setBounds (trackRow.removeFromLeft (arrangement::Arrangement::headerWidth).reduced (theme::size::padding / 2, 0));
 
-        auto tabs = trackRow.removeFromRight (3 * tabWidth + theme::size::padding).withTrimmedRight (theme::size::padding);
+        auto tabs = trackRow.removeFromRight (4 * tabWidth + theme::size::padding).withTrimmedRight (theme::size::padding);
         mixerTab.setBounds (tabs.removeFromRight (tabWidth).withSizeKeepingCentre (tabWidth, theme::size::buttonHeight));
         automationTab.setBounds (tabs.removeFromRight (tabWidth).withSizeKeepingCentre (tabWidth, theme::size::buttonHeight));
         pianoRollTab.setBounds (tabs.removeFromRight (tabWidth).withSizeKeepingCentre (tabWidth, theme::size::buttonHeight));
+        soundsTab.setBounds (tabs.removeFromRight (tabWidth).withSizeKeepingCentre (tabWidth, theme::size::buttonHeight));
 
         if (instrumentPanel != nullptr)
             instrumentPanel->setBounds (trackRow.reduced (theme::size::padding / 2, 4));
@@ -301,20 +306,26 @@ namespace harmonia::ui
         splitLayout.layOutComponents (parts, 3, area.getX(), area.getY(), area.getWidth(), area.getHeight(), true, true);
         mixer.setBounds (pianoRoll.getBounds());
         automationPanel.setBounds (pianoRoll.getBounds());
+        soundBrowser.setBounds (pianoRoll.getBounds());
     }
 
     void MainComponent::showLowerPanel (LowerPanel panel)
     {
         const auto hadFocus = pianoRoll.hasKeyboardFocus (true) || mixer.hasKeyboardFocus (true)
-                           || automationPanel.hasKeyboardFocus (true);
+                           || automationPanel.hasKeyboardFocus (true) || soundBrowser.hasKeyboardFocus (true);
 
         lowerPanel = panel;
         pianoRollTab.setToggleState (panel == LowerPanel::pianoRoll, juce::dontSendNotification);
         automationTab.setToggleState (panel == LowerPanel::automation, juce::dontSendNotification);
         mixerTab.setToggleState (panel == LowerPanel::mixer, juce::dontSendNotification);
+        soundsTab.setToggleState (panel == LowerPanel::sounds, juce::dontSendNotification);
         pianoRoll.setVisible (panel == LowerPanel::pianoRoll);
         automationPanel.setVisible (panel == LowerPanel::automation);
         mixer.setVisible (panel == LowerPanel::mixer);
+        soundBrowser.setVisible (panel == LowerPanel::sounds);
+
+        if (panel != LowerPanel::sounds)
+            filePreview.stop();
 
         if (panel == LowerPanel::automation)
             automationPanel.refresh();
@@ -322,6 +333,8 @@ namespace harmonia::ui
         // Keys keep working: the piano roll takes them back, or this component does.
         if (panel == LowerPanel::pianoRoll && (hadFocus || ! hasKeyboardFocus (true)) && pianoRoll.isShowing())
             pianoRoll.grabKeyboardFocus();
+        else if (panel == LowerPanel::sounds && soundBrowser.isShowing())
+            soundBrowser.getList().grabKeyboardFocus();     // Up / Down go through the sounds
         else if (panel != LowerPanel::pianoRoll && hadFocus && isShowing())
             grabKeyboardFocus();
     }
@@ -385,9 +398,11 @@ namespace harmonia::ui
         }
 
         if (! mods.isAnyModifierKeyDown()
-            && (code == juce::KeyPress::F7Key || code == juce::KeyPress::F8Key || code == juce::KeyPress::F9Key))
+            && (code == juce::KeyPress::F6Key || code == juce::KeyPress::F7Key || code == juce::KeyPress::F8Key
+                || code == juce::KeyPress::F9Key))
         {
-            showLowerPanel (code == juce::KeyPress::F7Key ? LowerPanel::pianoRoll
+            showLowerPanel (code == juce::KeyPress::F6Key   ? LowerPanel::sounds
+                            : code == juce::KeyPress::F7Key ? LowerPanel::pianoRoll
                             : code == juce::KeyPress::F8Key ? LowerPanel::automation
                                                             : LowerPanel::mixer);
             return true;
@@ -526,22 +541,26 @@ namespace harmonia::ui
                                         | juce::FileBrowserComponent::canSelectMultipleItems,
                                     [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::FileChooser& fc)
         {
-            const auto files = fc.getResults();
-
-            if (safe == nullptr || files.isEmpty())
-                return;
-
-            // Onto the current track if it is an audio track (else new tracks), at the playhead.
-            auto& model = safe->arrangementModel;
-            const auto beat = model.getEdit().tempoSequence.toBeats (te::TimePosition::fromSeconds (safe->transport.getPositionSeconds())).inBeats();
-            const auto error = model.importFiles (files, model.indexOf (model.getCurrentTrack()), beat);
-
-            if (error.isNotEmpty())
-                safe->showWarning (error);
-            else
-                safe->showMessage (files.size() == 1 ? "Added " + files.getFirst().getFileName()
-                                                     : "Added " + juce::String (files.size()) + " files");
+            if (safe != nullptr)
+                safe->addFilesAtPlayhead (fc.getResults());
         });
+    }
+
+    void MainComponent::addFilesAtPlayhead (const juce::Array<juce::File>& files)
+    {
+        if (files.isEmpty())
+            return;
+
+        // Onto the current track if it suits them (else new tracks), at the playhead.
+        auto& model = arrangementModel;
+        const auto beat = model.getEdit().tempoSequence.toBeats (te::TimePosition::fromSeconds (transport.getPositionSeconds())).inBeats();
+        const auto error = model.importFiles (files, model.indexOf (model.getCurrentTrack()), beat);
+
+        if (error.isNotEmpty())
+            showWarning (error);
+        else
+            showMessage (files.size() == 1 ? "Added " + files.getFirst().getFileName()
+                                           : "Added " + juce::String (files.size()) + " files");
     }
 
     void MainComponent::chooseMidiExport()

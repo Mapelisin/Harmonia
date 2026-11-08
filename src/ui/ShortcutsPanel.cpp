@@ -26,7 +26,7 @@ namespace harmonia::ui
                 { "Ctrl+N / Ctrl+O", "New project / open a project" },
                 { "Ctrl+S / Ctrl+Shift+S", "Save / save as" },
                 { "Ctrl+R", "Export the song as a WAV file" },
-                { "F7 / F8 / F9", "Piano roll / automation / mixer below" },
+                { "F6 / F7 / F8 / F9", "Sounds / piano roll / automation / mixer below" },
                 { "Ctrl+Left / Ctrl+Right", "Play from the previous / next marker" },
                 { "F1", "This list" } } },
 
@@ -100,6 +100,15 @@ namespace harmonia::ui
                 { "Alt+X", "Scale levels: velocity (or another property) all at once" },
                 { "Alt+P", "Chord progression: writes chords, even into an empty clip" },
                 { "In the window", "Space: listen; Enter: accept; Esc: cancel" } } },
+
+            { "Sounds (F6)", {
+                { "Click a sound", "Listen (click it again: stop)" },
+                { "Up / Down", "The next / previous sound, and listen to it" },
+                { "Double-click, Enter", "Put it into the song: on the current track, at the playhead" },
+                { "Drag onto a track", "Put it there (Ctrl+click or Shift+click first: several)" },
+                { "Click a folder / Backspace", "Open it / the folder above" },
+                { "+ Folder", "Add a folder with your sounds to the places (right button: remove)" },
+                { "Esc", "Stop listening" } } },
 
             { "Mixer (F9)", {
                 { "+ on a strip", "Add an effect: built-in or a plugin" },

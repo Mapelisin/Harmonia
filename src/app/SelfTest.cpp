@@ -7,6 +7,7 @@
 #include "audio/Effects.h"
 #include "audio/Instruments.h"
 #include "audio/Export.h"
+#include "audio/FilePreview.h"
 #include "audio/NotePreview.h"
 #include "audio/PlaybackClock.h"
 #include "audio/PluginScanner.h"
@@ -273,7 +274,10 @@ namespace harmonia::app
                     checkExternalInstrument (*project, track, transport, level);
 
                 if (options.useDevice)
+                {
                     checkNotePreview (track, transport, level);
+                    checkFilePreview (transport, level);
+                }
 
                 transport.stop();
                 pump (300, level, transport, report);
@@ -955,6 +959,32 @@ namespace harmonia::app
                 report.check (peak > -60.0f, "Note preview is audible with the transport stopped (peak "
                                                  + juce::String (peak, 1) + " dB)");
                 pump (300, level, transport, report);
+            }
+
+            /** The sound browser's preview: a short file plays through the device to its end
+                (silently with --quiet: it doesn't go through the master). */
+            void checkFilePreview (audio::Transport& transport, TrackLevel& level)
+            {
+                options.renderDirectory.createDirectory();
+                const auto file = options.renderDirectory.getChildFile ("preview.wav");
+                writeTone (file, 0.5);
+
+                audio::FilePreview preview (session);
+                preview.setVolume (options.quiet ? 0.0f : 0.4f);
+                bool finished = false;
+                preview.onStateChanged = [&preview, &finished] { finished = finished || ! preview.isPlaying(); };
+
+                const auto start = juce::Time::getMillisecondCounterHiRes();
+                const auto started = preview.play (file);
+
+                while (started && ! finished && juce::Time::getMillisecondCounterHiRes() - start < 3000.0)
+                    pump (20, level, transport, report);
+
+                const auto ms = juce::Time::getMillisecondCounterHiRes() - start;
+                report.check (started && finished && ms > 400.0 && ms < 1500.0,
+                              "Sound browser preview plays a 0.5 s file to its end through the device ("
+                                  + juce::String (juce::roundToInt (ms)) + " ms)");
+                preview.onStateChanged = nullptr;
             }
         };
     }

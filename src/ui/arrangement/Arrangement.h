@@ -12,6 +12,7 @@ namespace harmonia::ui::arrangement
         dragged in from Explorer become audio clips where they are dropped. */
     class Arrangement final : public juce::Component,
                               public juce::FileDragAndDropTarget,
+                              public juce::DragAndDropTarget,
                               private ArrangementModel::Listener,
                               private juce::ScrollBar::Listener
     {
@@ -51,6 +52,13 @@ namespace harmonia::ui::arrangement
         void fileDragMove (const juce::StringArray&, int x, int y) override;
         void fileDragExit (const juce::StringArray&) override;
         void filesDropped (const juce::StringArray&, int x, int y) override;
+
+        /** Sounds dragged from the sound browser: dropped like files from the file explorer. */
+        bool isInterestedInDragSource (const SourceDetails&) override;
+        void itemDragEnter (const SourceDetails&) override;
+        void itemDragMove (const SourceDetails&) override;
+        void itemDragExit (const SourceDetails&) override;
+        void itemDropped (const SourceDetails&) override;
 
         /** Where files dropped at this point (in the arrangement's coordinates) would go: MIDI
             files onto instrument tracks, audio files onto audio tracks (else onto new ones). */

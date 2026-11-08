@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/AudioInputs.h"
+#include "audio/FilePreview.h"
 #include "audio/MidiInputs.h"
 #include "audio/NotePreview.h"
 #include "audio/PlaybackClock.h"
@@ -14,6 +15,7 @@
 #include "ui/TransportBar.h"
 #include "ui/arrangement/Arrangement.h"
 #include "ui/automation/AutomationPanel.h"
+#include "ui/browser/SoundBrowser.h"
 #include "ui/mixer/Mixer.h"
 #include "ui/pianoroll/PianoRoll.h"
 
@@ -21,9 +23,10 @@ namespace harmonia::ui
 {
     /** Root of the main window: header (file menu, transport, audio settings), the current
         track's instrument, the arrangement and below it (a draggable divider between them)
-        the piano roll of the open clip, the automation of the current track or the mixer
-        (F7 / F8 / F9), and the status bar. */
+        the sound browser, the piano roll of the open clip, the automation of the current track
+        or the mixer (F6 / F7 / F8 / F9), and the status bar. */
     class MainComponent final : public juce::Component,
+                                public juce::DragAndDropContainer,
                                 private pianoroll::PianoRollModel::Listener,
                                 private arrangement::ArrangementModel::Listener
     {
@@ -55,6 +58,12 @@ namespace harmonia::ui
         mixer::Mixer& getMixer() noexcept                               { return mixer; }
         automation::AutomationPanel& getAutomationPanel() noexcept      { return automationPanel; }
         audio::AudioInputs& getAudioInputs() noexcept                   { return audioInputs; }
+        browser::SoundBrowser& getSoundBrowser() noexcept               { return soundBrowser; }
+        audio::FilePreview& getFilePreview() noexcept                   { return filePreview; }
+
+        /** Puts sound or MIDI files into the song at the playhead: onto the current track if it
+            suits them, else onto new tracks. Says in the status bar what happened. */
+        void addFilesAtPlayhead (const juce::Array<juce::File>&);
 
         /** The list of every shortcut over the window (F1 or the Shortcuts button). */
         void showShortcuts (bool shouldShow);
@@ -62,7 +71,7 @@ namespace harmonia::ui
         ShortcutsPanel& getShortcutsPanel() noexcept                    { return shortcuts; }
 
         /** What the lower part of the window shows. */
-        enum class LowerPanel { pianoRoll, automation, mixer };
+        enum class LowerPanel { pianoRoll, automation, mixer, sounds };
         void showLowerPanel (LowerPanel);
         LowerPanel getLowerPanel() const noexcept                       { return lowerPanel; }
 
@@ -89,6 +98,7 @@ namespace harmonia::ui
 
         audio::Transport transport { project.getEdit() };
         audio::NotePreview notePreview;
+        audio::FilePreview filePreview { session };
         PreviewAuditioner auditioner { notePreview, transport };
         pianoroll::PianoRollModel pianoRollModel { project };
         arrangement::ArrangementModel arrangementModel { project };
@@ -105,7 +115,7 @@ namespace harmonia::ui
         juce::TextButton fileButton { "File" };
         juce::TextButton audioSettingsButton { "Audio settings" }, shortcutsButton { "?" };
         juce::Label trackNameLabel;
-        juce::TextButton pianoRollTab { "Piano roll" }, automationTab { "Automation" }, mixerTab { "Mixer" };
+        juce::TextButton soundsTab { "Sounds" }, pianoRollTab { "Piano roll" }, automationTab { "Automation" }, mixerTab { "Mixer" };
         std::unique_ptr<InstrumentPanel> instrumentPanel;
         arrangement::Arrangement arrangement { arrangementModel, transport };
         juce::StretchableLayoutManager splitLayout;
@@ -113,6 +123,7 @@ namespace harmonia::ui
         pianoroll::PianoRoll pianoRoll { pianoRollModel, transport };
         mixer::Mixer mixer { session, arrangementModel };
         automation::AutomationPanel automationPanel { arrangementModel, arrangement.getView(), transport };
+        browser::SoundBrowser soundBrowser { session, filePreview };
         LowerPanel lowerPanel = LowerPanel::pianoRoll;
         StatusBar statusBar { session };
         ShortcutsPanel shortcuts;

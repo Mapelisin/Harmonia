@@ -6,6 +6,7 @@
 #include "core/MidiFiles.h"
 #include "core/Tracks.h"
 #include "ui/ComputerKeyboard.h"
+#include "ui/FileDrag.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui::arrangement
@@ -392,6 +393,32 @@ namespace harmonia::ui::arrangement
         else
             onMessage (files.size() == 1 ? "Added " + files.getFirst().getFileName()
                                          : "Added " + juce::String (files.size()) + " files", false);
+    }
+
+    bool Arrangement::isInterestedInDragSource (const SourceDetails& details)
+    {
+        const auto files = file_drag::read (details.description);
+        return ! files.isEmpty() && isInterestedInFileDrag (files);
+    }
+
+    void Arrangement::itemDragEnter (const SourceDetails& details)
+    {
+        fileDragEnter (file_drag::read (details.description), details.localPosition.x, details.localPosition.y);
+    }
+
+    void Arrangement::itemDragMove (const SourceDetails& details)
+    {
+        fileDragMove (file_drag::read (details.description), details.localPosition.x, details.localPosition.y);
+    }
+
+    void Arrangement::itemDragExit (const SourceDetails& details)
+    {
+        fileDragExit (file_drag::read (details.description));
+    }
+
+    void Arrangement::itemDropped (const SourceDetails& details)
+    {
+        filesDropped (file_drag::read (details.description), details.localPosition.x, details.localPosition.y);
     }
 
     //==============================================================================

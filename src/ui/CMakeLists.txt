@@ -22,6 +22,7 @@ add_library(harmonia_ui STATIC
     NoteInput.h
     NoteInput.cpp
     FileCommands.h
+    FileDrag.h
     TransportBar.h
     TransportBar.cpp
     InstrumentPanel.h
@@ -73,6 +74,8 @@ add_library(harmonia_ui STATIC
     automation/AutomationLane.cpp
     automation/AutomationPanel.h
     automation/AutomationPanel.cpp
+    browser/SoundBrowser.h
+    browser/SoundBrowser.cpp
     MainComponent.h
     MainComponent.cpp)
 

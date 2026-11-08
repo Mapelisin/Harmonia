@@ -11,6 +11,8 @@ add_library(harmonia_audio STATIC
     Effects.cpp
     Export.h
     Export.cpp
+    FilePreview.h
+    FilePreview.cpp
     Instruments.h
     Instruments.cpp
     MidiInputs.h
