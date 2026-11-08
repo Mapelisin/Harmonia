@@ -17,6 +17,7 @@ namespace harmonia::ui::theme
         inline const juce::Colour textSecondary { 0xff8a919b };
         inline const juce::Colour accent        { 0xff4f9fe0 };
         inline const juce::Colour warning       { 0xffe0a64f };
+        inline const juce::Colour record        { 0xffd9483f };
     }
 
     /** Piano roll colours. Notes use a 16-colour palette (one per note colour group / MIDI channel). */
@@ -42,6 +43,7 @@ namespace harmonia::ui::theme
         inline const juce::Colour whiteKeyText    { 0xff6b717a };
         inline const juce::Colour blackKey        { 0xff23262b };
         inline const juce::Colour clipRange       { 0xff3f6f99 };
+        inline const juce::Colour recordingNote   { 0xffe0605a };
 
         /** Fill colour of a note in colour group 0..15. */
         juce::Colour getNoteColour (int colourGroup);

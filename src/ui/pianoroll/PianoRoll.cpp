@@ -1,5 +1,6 @@
 #include "ui/pianoroll/PianoRoll.h"
 #include "ui/pianoroll/NotePropertiesPanel.h"
+#include "ui/ComputerKeyboard.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui::pianoroll
@@ -209,9 +210,12 @@ namespace harmonia::ui::pianoroll
     //==============================================================================
     bool PianoRoll::keyPressed (const juce::KeyPress& key)
     {
+        if (! letterShortcutsEnabled && keys::isTypingKey (key))
+            return false;
+
         const auto mods = key.getModifiers();
         const auto code = key.getKeyCode();
-        const auto letter = juce::CharacterFunctions::toUpperCase ((juce::juce_wchar) code);
+        const auto letter = keys::getLetter (key);   // the same keys with any layout (Russian too)
         const auto isUp = code == juce::KeyPress::upKey, isDown = code == juce::KeyPress::downKey;
         const auto isLeft = code == juce::KeyPress::leftKey, isRight = code == juce::KeyPress::rightKey;
 

@@ -3,6 +3,7 @@
 #include "audio/DeviceStatus.h"
 #include "audio/Instruments.h"
 #include "audio/NotePreview.h"
+#include "audio/PlaybackClock.h"
 #include "audio/PluginScanner.h"
 #include "audio/Transport.h"
 #include "core/NoteEditor.h"
@@ -223,6 +224,7 @@ namespace harmonia::app
 
                 auto project = core::Project::createEmpty (session);
                 auto& track = *project->getTracks().getFirst();
+                setQuiet (*project, options.quiet);
 
                 // Same order as the app: the transport exists as soon as the project is open.
                 const auto xrunsBeforeOpen = xrunCount();
@@ -245,6 +247,7 @@ namespace harmonia::app
                 if (options.useDevice)
                 {
                     checkLivePlayback (transport, level);
+                    checkPlaybackClock (project->getEdit(), transport, level);
                     checkPlayAfterDeviceRestart (transport, level);
                 }
 
@@ -338,12 +341,121 @@ namespace harmonia::app
                 pump (500, level, transport, report);
             }
 
+            static void setQuiet (core::Project& project, bool quiet)
+            {
+                if (auto master = project.getEdit().getMasterVolumePlugin())
+                    master->setVolumeDb (quiet ? -100.0f : 0.0f);
+            }
+
+            /** Where played notes land: the clock behind recording must run smoothly with the
+                song, without the per-buffer steps of the engine's position, and lag the
+                rendered position by the audio latency. */
+            void checkPlaybackClock (te::Edit& edit, audio::Transport& transport, TrackLevel& level)
+            {
+                if (! transport.isPlaying())
+                {
+                    report.check (false, "Playback clock: the song should be playing");
+                    return;
+                }
+
+                audio::PlaybackClock clock (edit);
+                pump (500, level, transport, report);   // lets the clock settle on the callbacks
+
+                struct Sample { double wall, heard, rendered; };
+                std::vector<Sample> samples;
+                const auto loopSeconds = edit.tempoSequence.toTime (te::BeatPosition::fromBeats (songBeats)).inSeconds();
+                const auto end = juce::Time::getMillisecondCounterHiRes() + 2000.0;
+
+                while (juce::Time::getMillisecondCounterHiRes() < end)
+                {
+                    juce::MessageManager::getInstance()->runDispatchLoopUntil (2);
+                    const auto now = juce::Time::getMillisecondCounterHiRes();
+
+                    if (const auto beat = clock.getHeardBeat (now))
+                        samples.push_back ({ now * 0.001,
+                                             edit.tempoSequence.toTime (te::BeatPosition::fromBeats (*beat)).inSeconds(),
+                                             transport.getPositionSeconds() });
+                }
+
+                if (samples.size() < 100)
+                {
+                    report.check (false, "Playback clock: only " + juce::String ((int) samples.size()) + " readings");
+                    return;
+                }
+
+                // The song loops: unwrap both positions into straight lines.
+                const auto unwrap = [&samples, loopSeconds] (double Sample::* value)
+                {
+                    auto offset = 0.0, previous = samples.front().*value;
+
+                    for (auto& s : samples)
+                    {
+                        if (s.*value < previous - loopSeconds * 0.5)
+                            offset += loopSeconds;
+
+                        previous = s.*value;
+                        s.*value += offset;
+                    }
+                };
+
+                unwrap (&Sample::heard);
+                unwrap (&Sample::rendered);
+
+                // Least-squares line through (wall, position); the jitter is the worst distance from it.
+                const auto fit = [&samples] (double Sample::* value)
+                {
+                    double n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+                    const auto x0 = samples.front().wall;
+
+                    for (const auto& s : samples)
+                    {
+                        const auto x = s.wall - x0, y = s.*value;
+                        n += 1; sx += x; sy += y; sxx += x * x; sxy += x * y;
+                    }
+
+                    const auto slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+                    const auto intercept = (sy - slope * sx) / n;
+                    auto worst = 0.0;
+
+                    for (const auto& s : samples)
+                        worst = std::max (worst, std::abs (s.*value - (intercept + slope * (s.wall - x0))));
+
+                    return std::pair { slope, worst * 1000.0 };
+                };
+
+                const auto [heardSpeed, heardJitterMs] = fit (&Sample::heard);
+                const auto renderedJitterMs = fit (&Sample::rendered).second;
+
+                auto lag = 0.0;
+
+                for (const auto& s : samples)
+                    lag += s.rendered - s.heard;
+
+                lag /= (double) samples.size();
+
+                auto* device = audio::getDeviceManager (session).getCurrentAudioDevice();
+                const auto bufferMs = device != nullptr ? 1000.0 * device->getCurrentBufferSizeSamples() / device->getCurrentSampleRate() : 0.0;
+                const auto latencyMs = clock.getLatencySeconds() * 1000.0;
+
+                report.line ("       " + juce::String ((int) samples.size()) + " readings over 2 s; the engine position steps by up to "
+                             + juce::String (renderedJitterMs, 1) + " ms (buffer " + juce::String (bufferMs, 1) + " ms)");
+                report.check (std::abs (heardSpeed - 1.0) < 0.01 && heardJitterMs < 2.0,
+                              "Played notes are timed smoothly: jitter " + juce::String (heardJitterMs, 2)
+                                  + " ms, speed " + juce::String (heardSpeed, 4));
+                report.check (std::abs (lag * 1000.0 - latencyMs) < bufferMs + 2.0,
+                              "Notes go where they were heard: " + juce::String (lag * 1000.0, 1)
+                                  + " ms before the rendered position (audio latency " + juce::String (latencyMs, 1) + " ms)");
+            }
+
             void checkRender (core::Project& project, const juce::String& fileName)
             {
                 const auto file = options.renderDirectory.getChildFile (fileName);
                 file.deleteFile();
 
+                // The file must not be silent even when the speakers are.
+                setQuiet (project, false);
                 const auto ok = te::Renderer::renderToFile (project.getEdit(), file, false) && file.existsAsFile();
+                setQuiet (project, options.quiet);
                 report.check (ok, "Offline render -> " + file.getFullPathName());
 
                 if (! ok)
@@ -488,6 +600,7 @@ namespace harmonia::app
 
         options.pluginPath = argumentValue (args, "--plugin");
         options.useDevice = ! args.contains ("--no-device");
+        options.quiet = args.contains ("--quiet");
         return options;
     }
 

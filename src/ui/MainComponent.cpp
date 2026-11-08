@@ -2,6 +2,7 @@
 #include "audio/DeviceStatus.h"
 #include "audio/Instruments.h"
 #include "core/Clips.h"
+#include "ui/ComputerKeyboard.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui
@@ -22,6 +23,15 @@ namespace harmonia::ui
         pianoRollModel.setAuditioner (&auditioner);
         pianoRollModel.addListener (this);
         project.getEdit().state.addListener (this);
+
+        midiInputs.onMessage = [this] (const juce::MidiMessage& m, double wallMs) { noteInput.handleMidiMessage (m, wallMs); };
+        midiInputs.onDevicesChanged = [this] { updateMidiStatus(); };
+        noteInput.onStateChanged = [this]
+        {
+            pianoRoll.setLetterShortcutsEnabled (! noteInput.getComputerKeyboard().isEnabled());
+            transportBar.refresh();
+        };
+        updateMidiStatus();
 
         trackLabel.setText ("Track", juce::dontSendNotification);
         trackLabel.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
@@ -64,15 +74,23 @@ namespace harmonia::ui
         project.getEdit().state.removeListener (this);
         pianoRollModel.removeListener (this);
         pianoRollModel.setAuditioner (nullptr);
+        noteInput.onStateChanged = nullptr;
+        midiInputs.onMessage = nullptr;
+        midiInputs.onDevicesChanged = nullptr;
         transport.stop();
+        noteInput.finishTake();
         notePreview.setTrack (nullptr);
     }
 
     //==============================================================================
     void MainComponent::selectTrack (te::AudioTrack* track)
     {
+        // A take belongs to the clip it was recorded into.
+        noteInput.finishTake();
+
         currentTrack = track;
         notePreview.setTrack (track);
+        midiInputs.setTrack (track);
         instrumentPanel.reset();
 
         te::MidiClip* clip = nullptr;
@@ -134,6 +152,13 @@ namespace harmonia::ui
             transport.setLoopBeats (pianoRollModel.getClipStartBeat(), pianoRollModel.getClipEndBeat());
         else
             transport.setLoopBeats (0.0, 0.0);
+    }
+
+    void MainComponent::updateMidiStatus()
+    {
+        const auto names = midiInputs.getDeviceNames();
+        statusBar.setMidiText (names.isEmpty() ? juce::String ("No MIDI keyboard")
+                                               : "MIDI: " + names.joinIntoString (", "));
     }
 
     void MainComponent::pianoRollChanged()
@@ -206,7 +231,7 @@ namespace harmonia::ui
 
         audioSettingsButton.setBounds (header.removeFromRight (120).withSizeKeepingCentre (120, theme::size::buttonHeight));
         header.removeFromLeft (90 + 260);
-        transportBar.setBounds (header.removeFromLeft (260));
+        transportBar.setBounds (header.removeFromLeft (std::min (600, header.getWidth() - theme::size::padding)));
 
         auto trackRow = area.removeFromTop (trackRowHeight);
 
@@ -232,8 +257,63 @@ namespace harmonia::ui
             return true;
         }
 
+        auto& keyboard = noteInput.getComputerKeyboard();
+        const auto mods = key.getModifiers();
+        const auto letter = keys::getLetter (key);
+        const auto code = key.getKeyCode();
+
+        if (mods.isCommandDown() && ! mods.isAltDown() && ! mods.isShiftDown())
+        {
+            switch (letter)
+            {
+                case 'T': keyboard.setEnabled (! keyboard.isEnabled()); return true;
+                case 'R': noteInput.setRecordArmed (! noteInput.isRecordArmed()); return true;
+                case 'M': toggleMetronome(); return true;
+                default:  break;
+            }
+        }
+
+        if (keyboard.isEnabled())
+        {
+            if (! mods.isAnyModifierKeyDown() && (code == juce::KeyPress::upKey || code == juce::KeyPress::downKey))
+            {
+                keyboard.setOctave (keyboard.getOctave() + (code == juce::KeyPress::upKey ? 1 : -1));
+                return true;
+            }
+
+            // Letters, digits and punctuation are piano keys now (played in keyStateChanged),
+            // so they must not trigger the one-letter shortcuts.
+            if (keys::isTypingKey (key))
+                return true;
+        }
+        else if (! mods.isAnyModifierKeyDown() && letter == 'R')
+        {
+            noteInput.setRecordArmed (! noteInput.isRecordArmed());
+            return true;
+        }
+
         // Editing shortcuts work even when the piano roll itself doesn't have focus.
         return pianoRoll.keyPressed (key);
+    }
+
+    bool MainComponent::keyStateChanged (bool)
+    {
+        auto& keyboard = noteInput.getComputerKeyboard();
+
+        if (! keyboard.isEnabled())
+            return false;
+
+        // With Ctrl or Alt held the keys are shortcuts (Ctrl+Z...), not notes.
+        const auto mods = juce::ModifierKeys::getCurrentModifiersRealtime();
+        keyboard.update (! (mods.isCtrlDown() || mods.isAltDown() || mods.isCommandDown()));
+        return false;
+    }
+
+    void MainComponent::toggleMetronome()
+    {
+        auto& edit = project.getEdit();
+        edit.clickTrackEnabled = ! edit.clickTrackEnabled.get();
+        transportBar.refresh();
     }
 
     void MainComponent::showWarning (const juce::String& text)

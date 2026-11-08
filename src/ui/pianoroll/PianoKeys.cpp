@@ -32,14 +32,16 @@ namespace harmonia::ui::pianoroll
             const juce::Rectangle<float> row { 0.0f, y, width, view.rowHeight };
             const auto note = pitch % 12;
 
+            const auto lit = pitch == pressedPitch || model.isPitchHeld (pitch);
+
             if (juce::MidiMessage::isMidiNoteBlack (pitch))
             {
-                g.setColour (pitch == pressedPitch ? theme::colour::accent : colours::blackKey);
+                g.setColour (lit ? theme::colour::accent : colours::blackKey);
                 g.fillRect (row.withWidth (blackWidth));
                 continue;
             }
 
-            if (pitch == pressedPitch)
+            if (lit)
             {
                 g.setColour (theme::colour::accent.withAlpha (0.6f));
                 g.fillRect (row);

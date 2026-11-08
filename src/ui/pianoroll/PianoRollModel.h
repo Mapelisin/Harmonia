@@ -203,6 +203,23 @@ namespace harmonia::ui::pianoroll
         double getMinBeat() const                       { return getContentStartBeat(); }
 
         //==============================================================================
+        // Live input (see ui::NoteInput)
+
+        /** Notes being recorded whose keys are still down, in song beats: drawn over the notes,
+            not in the clip yet. */
+        void setLiveNotes (std::vector<core::Note>);
+        const std::vector<core::Note>& getLiveNotes() const noexcept    { return liveNotes; }
+
+        /** Pitches being played right now, lit on the keyboard at the left. */
+        void setHeldPitches (const std::array<bool, 128>&);
+        bool isPitchHeld (int pitch) const noexcept     { return pitch >= 0 && pitch < 128 && heldPitches[(size_t) pitch]; }
+
+        /** Adds recorded notes (song beats) in the current undo transaction. A note that repeats
+            one already in the clip (same pitch and start) is skipped, so playing the same part
+            again on the next loop pass doesn't stack copies. Returns the notes added. */
+        juce::Array<te::MidiNote*> addRecordedNotes (const std::vector<core::Note>&);
+
+        //==============================================================================
         // Hearing notes while editing
 
         void setAuditioner (Auditioner* a) noexcept     { auditioner = a; }
@@ -245,6 +262,9 @@ namespace harmonia::ui::pianoroll
 
         Auditioner* auditioner = nullptr;
         int auditionPitch = -1;
+
+        std::vector<core::Note> liveNotes;
+        std::array<bool, 128> heldPitches {};
 
         juce::ListenerList<Listener> listeners;
 

@@ -837,6 +837,51 @@ namespace harmonia::ui::pianoroll
     }
 
     //==============================================================================
+    void PianoRollModel::setLiveNotes (std::vector<core::Note> notes)
+    {
+        if (notes != liveNotes)
+        {
+            liveNotes = std::move (notes);
+            notifyChanged();
+        }
+    }
+
+    void PianoRollModel::setHeldPitches (const std::array<bool, 128>& pitches)
+    {
+        if (pitches != heldPitches)
+        {
+            heldPitches = pitches;
+            notifyChanged();
+        }
+    }
+
+    juce::Array<te::MidiNote*> PianoRollModel::addRecordedNotes (const std::vector<core::Note>& songValues)
+    {
+        if (! canEdit())
+            return {};
+
+        constexpr auto sameStart = 1.0 / core::snap::ticksPerBeat;
+        std::vector<core::Note> fresh;
+
+        for (const auto& n : songValues)
+        {
+            const auto [first, last] = getNotesInRange (n.startBeat - sameStart, n.startBeat + sameStart);
+            auto repeated = false;
+
+            for (auto i = first; i < last && ! repeated; ++i)
+                repeated = drawn[i].values.pitch == n.pitch && std::abs (drawn[i].values.startBeat - n.startBeat) < sameStart;
+
+            const auto inThisBatch = std::any_of (fresh.begin(), fresh.end(), [&] (const core::Note& f)
+                                                  { return f.pitch == n.pitch && std::abs (f.startBeat - n.startBeat) < sameStart; });
+
+            if (! repeated && ! inThisBatch)
+                fresh.push_back (n);
+        }
+
+        return addNotes (fresh);
+    }
+
+    //==============================================================================
     void PianoRollModel::auditionStart (int pitch, int velocity)
     {
         if (auditioner == nullptr || pitch == auditionPitch)

@@ -48,6 +48,7 @@ namespace harmonia::ui
         g.setColour (theme::colour::textSecondary);
         g.drawText (rendererText, area.removeFromRight (160), juce::Justification::centredRight, true);
         g.drawText (cpuText, area.removeFromRight (110), juce::Justification::centredRight, true);
+        g.drawText (midiText, area.removeFromRight (260), juce::Justification::centredRight, true);
 
         if (warningText.isNotEmpty())
         {
@@ -57,6 +58,12 @@ namespace harmonia::ui
 
         g.setColour (deviceOpen ? theme::colour::textSecondary : theme::colour::warning);
         g.drawText (deviceText, area, juce::Justification::centredLeft, true);
+    }
+
+    void StatusBar::setMidiText (const juce::String& text)
+    {
+        midiText = text;
+        repaint();
     }
 
     void StatusBar::setWarning (const juce::String& text)

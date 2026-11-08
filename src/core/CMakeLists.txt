@@ -15,7 +15,9 @@ add_library(harmonia_core STATIC
     Snap.h
     Snap.cpp
     NoteOps.h
-    NoteOps.cpp)
+    NoteOps.cpp
+    NoteRecorder.h
+    NoteRecorder.cpp)
 
 harmonia_configure_target(harmonia_core)
 target_link_libraries(harmonia_core PUBLIC harmonia_juce)

@@ -248,6 +248,16 @@ namespace harmonia::ui::pianoroll
 
     void NoteGrid::paintOverlays (juce::Graphics& g)
     {
+        // Notes being recorded, keys still down.
+        for (const auto& n : model.getLiveNotes())
+        {
+            const auto bounds = view.getNoteBounds (n.startBeat, n.lengthBeats, n.pitch).reduced (0.0f, 1.0f);
+            g.setColour (colours::recordingNote);
+            g.fillRect (bounds);
+            g.setColour (colours::noteBorder);
+            g.drawRect (bounds, 1.0f);
+        }
+
         if (auto rect = gestures.getSelectionRectangle())
         {
             g.setColour (colours::selectionFill);

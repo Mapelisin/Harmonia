@@ -3,7 +3,9 @@
 #include "TestSession.h"
 #include "audio/DeviceSetup.h"
 #include "audio/Instruments.h"
+#include "audio/MidiInputs.h"
 #include "audio/NotePreview.h"
+#include "audio/PlaybackClock.h"
 #include "audio/PluginScanner.h"
 #include "audio/Transport.h"
 #include "core/Project.h"
@@ -122,5 +124,47 @@ TEST_SUITE ("audio without a device")
         REQUIRE (notAPlugin.getFile().replaceWithText ("not a plugin"));
 
         CHECK (scanner.scanFile (notAPlugin.getFile().getFullPathName()).isEmpty());
+    }
+}
+
+TEST_SUITE ("audio::PlaybackClock")
+{
+    TEST_CASE ("a note belongs where the listener heard the song: the latency earlier, wrapped into the loop")
+    {
+        using audio::PlaybackClock;
+        const juce::Range<double> loop { 2.0, 10.0 };
+
+        // 46 ms of output plus plugin latency.
+        CHECK (PlaybackClock::toHeardSeconds (5.0, 0.046, {}) == doctest::Approx (4.954));
+        CHECK (PlaybackClock::toHeardSeconds (5.0, 0.046, loop) == doctest::Approx (4.954));
+
+        // Rendering already wrapped to the loop start, the speakers still play its end.
+        CHECK (PlaybackClock::toHeardSeconds (2.01, 0.046, loop) == doctest::Approx (9.964));
+
+        // Never before the song start.
+        CHECK (PlaybackClock::toHeardSeconds (0.01, 0.046, {}) == doctest::Approx (0.0));
+    }
+
+    TEST_CASE ("a stopped transport has no heard position")
+    {
+        auto project = core::Project::createEmpty (test::session());
+        audio::PlaybackClock clock (project->getEdit());
+
+        CHECK_FALSE (clock.isPlaying());
+        CHECK_FALSE (clock.getHeardBeat (juce::Time::getMillisecondCounterHiRes()).has_value());
+        CHECK (clock.getLatencySeconds() >= 0.0);
+    }
+}
+
+TEST_SUITE ("audio::MidiInputs")
+{
+    TEST_CASE ("without MIDI keyboards routing is a no-op")
+    {
+        auto project = core::Project::createEmpty (test::session());
+        audio::MidiInputs inputs (project->getEdit());
+
+        inputs.setTrack (project->getTracks().getFirst());
+        inputs.setTrack (nullptr);
+        CHECK (inputs.getDeviceNames().isEmpty());
     }
 }

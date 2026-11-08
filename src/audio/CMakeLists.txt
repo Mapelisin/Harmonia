@@ -5,8 +5,12 @@ add_library(harmonia_audio STATIC
     DeviceSetup.cpp
     Instruments.h
     Instruments.cpp
+    MidiInputs.h
+    MidiInputs.cpp
     NotePreview.h
     NotePreview.cpp
+    PlaybackClock.h
+    PlaybackClock.cpp
     PluginScanner.h
     PluginScanner.cpp
     Transport.h

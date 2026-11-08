@@ -28,6 +28,10 @@ namespace harmonia::ui::pianoroll
         /** Scrolls so that the clip's start and the notes (or middle C) are in view. */
         void showClip();
 
+        /** Off while the computer keyboard plays notes: letters, digits and punctuation are left
+            to it (keyPressed returns false for them). */
+        void setLetterShortcutsEnabled (bool shouldBeEnabled) noexcept   { letterShortcutsEnabled = shouldBeEnabled; }
+
     private:
         PianoRollModel& model;
         audio::Transport& transport;
@@ -47,6 +51,7 @@ namespace harmonia::ui::pianoroll
         juce::VBlankAttachment vblank { this, [this] { updatePlayhead(); } };
         std::optional<double> lastPlayheadBeat;
         bool showClipWhenSized = false;
+        bool letterShortcutsEnabled = true;
 
         void pianoRollChanged() override;
         void scrollBarMoved (juce::ScrollBar*, double newRangeStart) override;

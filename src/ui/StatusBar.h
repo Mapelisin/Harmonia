@@ -19,9 +19,12 @@ namespace harmonia::ui
             Shown until replaced; an empty string clears it. */
         void setWarning (const juce::String&);
 
+        /** Which MIDI keyboards are connected, e.g. "MIDI: KeyLab 61". */
+        void setMidiText (const juce::String&);
+
     private:
         core::Session& session;
-        juce::String deviceText, cpuText, rendererText, warningText;
+        juce::String deviceText, cpuText, rendererText, warningText, midiText;
         bool deviceOpen = false;
 
         void timerCallback() override;

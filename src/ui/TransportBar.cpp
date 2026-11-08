@@ -3,22 +3,57 @@
 
 namespace harmonia::ui
 {
-    TransportBar::TransportBar (audio::Transport& t, te::Edit& e)
-        : transport (t), edit (e)
+    TransportBar::TransportBar (audio::Transport& t, te::Edit& e, NoteInput& n)
+        : transport (t), edit (e), noteInput (n)
     {
-        playButton.setClickingTogglesState (false);
+        playButton.setTooltip ("Play / stop (Space)");
         playButton.onClick = [this]
         {
             transport.togglePlayStop();
             refresh();
         };
 
+        recordButton.setTooltip ("Record: notes played while the song plays go into the clip (R, Ctrl+R)");
+        recordButton.onClick = [this] { noteInput.setRecordArmed (! noteInput.isRecordArmed()); };
+
+        clickButton.setTooltip ("Metronome (Ctrl+M)");
+        clickButton.onClick = [this]
+        {
+            edit.clickTrackEnabled = ! edit.clickTrackEnabled.get();
+            refresh();
+        };
+
+        keysButton.setTooltip ("Play notes on the computer keyboard (Ctrl+T).\n"
+                               "Z S X D C V ... and Q 2 W 3 E R ... like piano keys; Up / Down: octave.\n"
+                               "Works with any keyboard layout. One-letter shortcuts are off while it is on.");
+        keysButton.onClick = [this]
+        {
+            auto& keyboard = noteInput.getComputerKeyboard();
+            keyboard.setEnabled (! keyboard.isEnabled());
+        };
+
+        const auto& modes = core::getAllInputQuantizeModes();
+
+        for (size_t i = 0; i < modes.size(); ++i)
+            quantizeBox.addItem (core::getName (modes[i]), (int) i + 1);
+
+        quantizeBox.setTooltip ("How recorded notes are put on the grid (the grid is the piano roll's Snap)");
+        quantizeBox.onChange = [this, &modes]
+        {
+            if (const auto index = quantizeBox.getSelectedId() - 1; index >= 0)
+                noteInput.setQuantize (modes[(size_t) index]);
+        };
+
         positionLabel.setColour (juce::Label::textColourId, theme::colour::textPrimary);
         positionLabel.setFont (juce::FontOptions (theme::size::fontSize));
         positionLabel.setJustificationType (juce::Justification::centredLeft);
 
-        addAndMakeVisible (playButton);
-        addAndMakeVisible (positionLabel);
+        for (auto* c : std::initializer_list<juce::Component*> { &playButton, &recordButton, &clickButton, &positionLabel,
+                                                                 &keysButton, &quantizeBox })
+        {
+            c->setWantsKeyboardFocus (false);
+            addAndMakeVisible (c);
+        }
 
         refresh();
         startTimerHz (20);
@@ -32,9 +67,19 @@ namespace harmonia::ui
     void TransportBar::resized()
     {
         auto area = getLocalBounds();
-        playButton.setBounds (area.removeFromLeft (70).withSizeKeepingCentre (70, theme::size::buttonHeight));
+        const auto place = [&area] (juce::Component& c, int width)
+        {
+            c.setBounds (area.removeFromLeft (width).withSizeKeepingCentre (width, theme::size::buttonHeight));
+            area.removeFromLeft (4);
+        };
+
+        place (playButton, 60);
+        place (recordButton, 50);
+        place (clickButton, 54);
         area.removeFromLeft (theme::size::padding);
-        positionLabel.setBounds (area);
+        place (positionLabel, 110);
+        place (keysButton, 78);
+        place (quantizeBox, 190);
     }
 
     void TransportBar::timerCallback()
@@ -48,6 +93,23 @@ namespace harmonia::ui
         playButton.setButtonText (active ? "Stop" : "Play");
         playButton.setColour (juce::TextButton::buttonColourId,
                               active ? theme::colour::accent.withAlpha (0.35f) : theme::colour::surfaceRaised);
+
+        const auto recordColour = noteInput.isRecording() ? theme::colour::record
+                                : noteInput.isRecordArmed() ? theme::colour::record.withAlpha (0.45f)
+                                                            : theme::colour::surfaceRaised;
+        recordButton.setColour (juce::TextButton::buttonColourId, recordColour);
+
+        clickButton.setColour (juce::TextButton::buttonColourId,
+                               edit.clickTrackEnabled.get() ? theme::colour::accent.withAlpha (0.35f) : theme::colour::surfaceRaised);
+
+        const auto& keyboard = noteInput.getComputerKeyboard();
+        keysButton.setButtonText ("Keys  C" + juce::String (keyboard.getOctave()));
+        keysButton.setColour (juce::TextButton::buttonColourId,
+                              keyboard.isEnabled() ? theme::colour::accent.withAlpha (0.35f) : theme::colour::surfaceRaised);
+
+        const auto& modes = core::getAllInputQuantizeModes();
+        const auto modeIndex = (int) (std::find (modes.begin(), modes.end(), noteInput.getQuantize()) - modes.begin());
+        quantizeBox.setSelectedId (modeIndex + 1, juce::dontSendNotification);
 
         const auto seconds = transport.getPositionSeconds();
         const auto barsAndBeats = edit.tempoSequence.toBarsAndBeats (te::TimePosition::fromSeconds (seconds));

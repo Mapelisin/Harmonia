@@ -7,6 +7,12 @@ add_library(harmonia_ui STATIC
     StatusBar.cpp
     PluginWindow.h
     PluginWindow.cpp
+    PhysicalKeys.h
+    PhysicalKeys.cpp
+    ComputerKeyboard.h
+    ComputerKeyboard.cpp
+    NoteInput.h
+    NoteInput.cpp
     TransportBar.h
     TransportBar.cpp
     InstrumentPanel.h
