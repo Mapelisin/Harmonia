@@ -23,6 +23,7 @@ namespace harmonia::ui::pianoroll
         const auto topPitch = view.yToPitch ((float) area.getY());
         const auto bottomPitch = view.yToPitch ((float) area.getBottom());
         const auto showLabels = view.rowHeight >= 9.0f;
+        const auto drumNames = showLabels && model.areDrumNamesShown();
 
         g.setFont (juce::FontOptions (std::min (theme::size::smallFontSize, view.rowHeight)));
 
@@ -34,10 +35,19 @@ namespace harmonia::ui::pianoroll
 
             const auto lit = pitch == pressedPitch || model.isPitchHeld (pitch);
 
+            const auto drum = drumNames ? model.getDrumName (pitch) : juce::String();
+
             if (juce::MidiMessage::isMidiNoteBlack (pitch))
             {
                 g.setColour (lit ? theme::colour::accent : colours::blackKey);
                 g.fillRect (row.withWidth (blackWidth));
+
+                if (drum.isNotEmpty())
+                {
+                    g.setColour (theme::colour::textPrimary.withAlpha (0.9f));
+                    g.drawText (drum, row.withWidth (blackWidth).withTrimmedLeft (4.0f), juce::Justification::centredLeft, true);
+                }
+
                 continue;
             }
 
@@ -59,6 +69,13 @@ namespace harmonia::ui::pianoroll
                 g.setColour (colours::whiteKeyText);
                 g.drawText (juce::MidiMessage::getMidiNoteName (pitch, true, true, 4),
                             row.withTrimmedRight (4.0f), juce::Justification::centredRight, false);
+            }
+
+            if (drum.isNotEmpty())
+            {
+                g.setColour (colours::blackKey);
+                g.drawText (drum, row.withTrimmedLeft (4.0f).withTrimmedRight (note == 0 ? 30.0f : 4.0f),
+                            juce::Justification::centredLeft, true);
             }
         }
 
@@ -92,9 +109,24 @@ namespace harmonia::ui::pianoroll
         }
     }
 
+    juce::PopupMenu PianoKeys::createMenu()
+    {
+        juce::PopupMenu menu;
+        const auto shown = model.areDrumNamesShown();
+        menu.addItem ("Drum names (General MIDI)", model.getClip() != nullptr, shown,
+                      [this, shown] { model.setDrumNamesShown (! shown); });
+        return menu;
+    }
+
     void PianoKeys::mouseDown (const juce::MouseEvent& e)
     {
         lastZoomY = e.position.y;
+
+        if (e.mods.isPopupMenu())
+        {
+            createMenu().showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMousePosition());
+            return;
+        }
 
         if (e.mods.isLeftButtonDown())
             press (e);

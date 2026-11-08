@@ -32,6 +32,8 @@ add_library(harmonia_core STATIC
     Progressions.cpp
     Markers.h
     Markers.cpp
+    Drums.h
+    Drums.cpp
     NoteRecorder.h
     NoteRecorder.cpp)
 

@@ -66,6 +66,7 @@ namespace harmonia::ui
                 { "Double-click a note", "Its properties (all selected ones)" },
                 { "Wheel / Shift+wheel / Ctrl+wheel", "Scroll up-down / left-right / zoom" },
                 { "Middle button", "Move the view" },
+                { "Keyboard: right button", "Drum names on the keys (General MIDI) on / off" },
                 { "Ctrl+drag on the ruler", "Select time (for rotate, insert / delete space)" },
                 { "Click a marker on the ruler", "Play from it (markers are added in the arrangement)" },
                 { "Drag the bracket on the ruler", "A looping clip: make its loop longer or shorter" },

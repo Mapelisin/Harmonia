@@ -33,6 +33,7 @@ namespace harmonia::ui::pianoroll
         void zoomToFit();
 
         TimeRuler& getRuler() noexcept              { return ruler; }
+        PianoKeys& getKeys() noexcept               { return keys; }
 
         /** The Tools button's menu: the note commands with their shortcuts. */
         juce::PopupMenu createToolsMenu();

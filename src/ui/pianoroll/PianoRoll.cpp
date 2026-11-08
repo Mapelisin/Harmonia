@@ -400,6 +400,11 @@ namespace harmonia::ui::pianoroll
                       [this] { model.setSnapToScale (! model.isSnappingToScale()); });
         menu.addItem ("Fit notes to the scale", ! scale.isChromatic(), false, [this] { model.fitToScale(); });
         menu.addItem ("Detect from the notes", ! model.getNotes().empty(), false, [this] { model.detectScale(); });
+        menu.addSeparator();
+
+        const auto drums = model.areDrumNamesShown();
+        menu.addItem ("Drum names on the keys (General MIDI)", model.getClip() != nullptr, drums,
+                      [this, drums] { model.setDrumNamesShown (! drums); });
         return menu;
     }
 

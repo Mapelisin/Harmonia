@@ -322,7 +322,8 @@ namespace harmonia::ui::pianoroll
             if (bounds.getX() < areaLeft + 4.0f && bounds.getRight() > areaLeft + minLabelWidth)
                 bounds.setLeft (std::max (bounds.getX(), 4.0f));
 
-            g.drawText (juce::MidiMessage::getMidiNoteName (v.pitch, true, true, 4), bounds,
+            const auto drum = model.getDrumName (v.pitch);
+            g.drawText (drum.isNotEmpty() ? drum : juce::MidiMessage::getMidiNoteName (v.pitch, true, true, 4), bounds,
                         juce::Justification::centredLeft, false);
         }
     }

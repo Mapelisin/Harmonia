@@ -100,6 +100,14 @@ namespace harmonia::ui::pianoroll
         /** The song's markers (added in the arrangement), in time order. */
         std::vector<core::markers::Marker> getMarkers() const;
 
+        /** Drum names (General MIDI) on the keys and notes, for the open clip's track: on by
+            itself for a track called "Drums", "Beat"... Turning them on or off is undoable. */
+        bool areDrumNamesShown() const;
+        void setDrumNamesShown (bool);
+
+        /** The drum a key plays when drum names are shown (else, or for other keys, empty). */
+        juce::String getDrumName (int pitch) const;
+
         //==============================================================================
         // Notes for drawing and hit-testing (rebuilt lazily after changes)
 

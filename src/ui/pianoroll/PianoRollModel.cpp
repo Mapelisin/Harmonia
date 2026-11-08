@@ -1,4 +1,5 @@
 #include "ui/pianoroll/PianoRollModel.h"
+#include "core/Drums.h"
 #include "core/Clips.h"
 #include "core/Progressions.h"
 
@@ -151,6 +152,28 @@ namespace harmonia::ui::pianoroll
     std::vector<core::markers::Marker> PianoRollModel::getMarkers() const
     {
         return core::markers::getAll (project.getEdit());
+    }
+
+    bool PianoRollModel::areDrumNamesShown() const
+    {
+        auto* track = clip != nullptr ? clip->getTrack() : nullptr;
+        return track != nullptr && core::drums::showsNames (*track);
+    }
+
+    void PianoRollModel::setDrumNamesShown (bool shouldShow)
+    {
+        auto* track = clip != nullptr ? clip->getTrack() : nullptr;
+
+        if (track == nullptr || shouldShow == areDrumNamesShown())
+            return;
+
+        beginGesture (shouldShow ? "Show drum names" : "Hide drum names");
+        core::drums::setShowsNames (*track, shouldShow);
+    }
+
+    juce::String PianoRollModel::getDrumName (int pitch) const
+    {
+        return areDrumNamesShown() ? core::drums::getName (pitch) : juce::String();
     }
 
     double PianoRollModel::getBeatsPerBar() const
