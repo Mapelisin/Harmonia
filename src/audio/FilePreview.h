@@ -5,15 +5,16 @@
 namespace harmonia::audio
 {
     /** Plays a sound file once, outside the song: what the sound browser lets you hear before
-        the sound goes into the song. Mixed into the output next to the song (it is its own
-        callback on the audio device). Message thread only. */
+        the sound goes into the song. A MIDI file plays with a simple built-in sound (its first
+        minute). Mixed into the output next to the song (it is its own callback on the audio
+        device). Message thread only. */
     class FilePreview final : private juce::ChangeListener
     {
     public:
         explicit FilePreview (core::Session&);
         ~FilePreview() override;
 
-        /** True for files it can play (the formats the song can use too). */
+        /** True for files it can play (the sound formats the song can use too, and MIDI files). */
         bool canPlay (const juce::File&) const;
 
         /** Plays `file` from its start (stopping what was playing); false if it can't be read. */
@@ -39,7 +40,8 @@ namespace harmonia::audio
         juce::TimeSliceThread readAheadThread { "Harmonia file preview" };
         juce::AudioTransportSource transportSource;
         juce::AudioSourcePlayer player;
-        std::unique_ptr<juce::AudioFormatReaderSource> readerSource;
+        juce::AudioBuffer<float> renderedMidi;                     // what a MIDI file sounds like
+        std::unique_ptr<juce::PositionableAudioSource> source;     // the file, or renderedMidi
         juce::File file;
         double lengthSeconds = 0.0;
         bool attached = false;

@@ -1,5 +1,8 @@
 #include "audio/FilePreview.h"
 
+#include "audio/MidiRender.h"
+#include "core/MidiFiles.h"
+
 namespace harmonia::audio
 {
     namespace
@@ -36,32 +39,60 @@ namespace harmonia::audio
 
     bool FilePreview::canPlay (const juce::File& f) const
     {
+        if (! f.existsAsFile())
+            return false;
+
         auto& formats = session.getEngine().getAudioFileFormatManager().readFormatManager;
-        return f.existsAsFile() && formats.findFormatForFileExtension (f.getFileExtension()) != nullptr;
+        return core::midi_files::isMidiFile (f) || formats.findFormatForFileExtension (f.getFileExtension()) != nullptr;
     }
 
     bool FilePreview::play (const juce::File& f)
     {
-        const auto wasPlaying = readerSource != nullptr;
+        const auto wasPlaying = source != nullptr;
         release();
 
-        std::unique_ptr<juce::AudioFormatReader> reader;
+        auto sampleRate = 0.0;
+        auto readAhead = 0;
+        juce::TimeSliceThread* thread = nullptr;
 
-        if (canPlay (f))
-            reader.reset (session.getEngine().getAudioFileFormatManager().readFormatManager.createReaderFor (f));
+        auto& formats = session.getEngine().getAudioFileFormatManager().readFormatManager;
 
-        if (reader == nullptr || reader->lengthInSamples <= 0)
+        if (! canPlay (f))
         {
+            // Nothing to play.
+        }
+        else if (core::midi_files::isMidiFile (f))
+        {
+            renderedMidi = midi_render::render (f);
+
+            if (renderedMidi.getNumSamples() > 0)
+            {
+                sampleRate = midi_render::defaultSampleRate;
+                lengthSeconds = renderedMidi.getNumSamples() / sampleRate;
+                source = std::make_unique<juce::MemoryAudioSource> (renderedMidi, false);
+            }
+        }
+        else if (std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (f));
+                 reader != nullptr && reader->lengthInSamples > 0)
+        {
+            sampleRate = reader->sampleRate;
+            lengthSeconds = sampleRate > 0.0 ? (double) reader->lengthInSamples / sampleRate : 0.0;
+            source = std::make_unique<juce::AudioFormatReaderSource> (reader.release(), true);
+            readAhead = readAheadSamples;
+            thread = &readAheadThread;
+        }
+
+        if (source == nullptr)
+        {
+            renderedMidi = {};
+
             if (wasPlaying && onStateChanged != nullptr)
                 onStateChanged();
 
             return false;
         }
 
-        const auto sampleRate = reader->sampleRate;
-        lengthSeconds = sampleRate > 0.0 ? (double) reader->lengthInSamples / sampleRate : 0.0;
-        readerSource = std::make_unique<juce::AudioFormatReaderSource> (reader.release(), true);
-        transportSource.setSource (readerSource.get(), readAheadSamples, &readAheadThread, sampleRate, 2);
+        transportSource.setSource (source.get(), readAhead, thread, sampleRate, 2);
         transportSource.setPosition (0.0);
         transportSource.start();
         file = f;
@@ -74,7 +105,7 @@ namespace harmonia::audio
 
     void FilePreview::stop()
     {
-        if (readerSource == nullptr)
+        if (source == nullptr)
             return;
 
         release();
@@ -85,19 +116,20 @@ namespace harmonia::audio
 
     bool FilePreview::isPlaying() const
     {
-        return readerSource != nullptr && transportSource.isPlaying();
+        return source != nullptr && transportSource.isPlaying();
     }
 
     double FilePreview::getLengthSeconds() const
     {
-        return readerSource != nullptr ? lengthSeconds : 0.0;
+        return source != nullptr ? lengthSeconds : 0.0;
     }
 
     void FilePreview::release()
     {
         transportSource.stop();
         transportSource.setSource (nullptr);
-        readerSource.reset();
+        source.reset();
+        renderedMidi = {};
         file = juce::File();
         lengthSeconds = 0.0;
     }
@@ -105,7 +137,7 @@ namespace harmonia::audio
     void FilePreview::changeListenerCallback (juce::ChangeBroadcaster*)
     {
         // Played to its end.
-        if (readerSource != nullptr && ! transportSource.isPlaying())
+        if (source != nullptr && ! transportSource.isPlaying())
             stop();
     }
 }

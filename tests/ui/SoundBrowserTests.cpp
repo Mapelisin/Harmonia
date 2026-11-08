@@ -113,7 +113,11 @@ TEST_SUITE ("sound browser")
         CHECK_FALSE (preview.isPlaying());
         CHECK_FALSE (browser.keyPressed (juce::KeyPress (juce::KeyPress::escapeKey)));
 
-        // A MIDI file doesn't play (it goes into the song like a sound).
+        // A MIDI file plays with the built-in sound: its one note for a second, then a second to ring out.
+        browser.clickEntry (browser.indexOf (f.temp.getFile ("bass.mid")));
+        CHECK (preview.isPlaying());
+        CHECK (preview.getFile() == f.temp.getFile ("bass.mid"));
+        CHECK (preview.getLengthSeconds() == doctest::Approx (2.0).epsilon (0.01));
         browser.clickEntry (browser.indexOf (f.temp.getFile ("bass.mid")));
         CHECK_FALSE (preview.isPlaying());
 

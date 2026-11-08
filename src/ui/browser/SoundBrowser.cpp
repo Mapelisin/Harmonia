@@ -259,8 +259,7 @@ namespace harmonia::ui::browser
             }
             else
             {
-                if (entry.kind == Entry::Kind::sound)
-                    menu.addItem ("Listen", [safe, entry] { if (safe != nullptr) safe->preview.play (entry.file); });
+                menu.addItem ("Listen", [safe, entry] { if (safe != nullptr) safe->preview.play (entry.file); });
 
                 menu.addItem ("Add to the song (at the playhead)", [safe, entry]
                 {
@@ -558,9 +557,6 @@ namespace harmonia::ui::browser
             return;
         }
 
-        if (entry.kind != Entry::Kind::sound)
-            return;
-
         if (preview.isPlaying() && preview.getFile() == entry.file)
             preview.stop();
         else
@@ -569,7 +565,7 @@ namespace harmonia::ui::browser
 
     void SoundBrowser::previewIfSound (int index)
     {
-        if (juce::isPositiveAndBelow (index, (int) entries.size()) && entries[(size_t) index].kind == Entry::Kind::sound)
+        if (juce::isPositiveAndBelow (index, (int) entries.size()) && entries[(size_t) index].kind != Entry::Kind::folder)
             preview.play (entries[(size_t) index].file);
     }
 

@@ -984,6 +984,32 @@ namespace harmonia::app
                 report.check (started && finished && ms > 400.0 && ms < 1500.0,
                               "Sound browser preview plays a 0.5 s file to its end through the device ("
                                   + juce::String (juce::roundToInt (ms)) + " ms)");
+
+                // A MIDI file: half a second of one note, then a second to ring out.
+                const auto midiFile = options.renderDirectory.getChildFile ("preview.mid");
+                {
+                    juce::MidiMessageSequence notes;
+                    notes.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100), 0.0);
+                    notes.addEvent (juce::MidiMessage::noteOff (1, 60), 480.0);
+                    juce::MidiFile midi;
+                    midi.setTicksPerQuarterNote (480);
+                    midi.addTrack (notes);
+                    midiFile.deleteFile();
+                    juce::FileOutputStream out (midiFile);
+                    midi.writeTo (out);
+                }
+
+                finished = false;
+                const auto midiStart = juce::Time::getMillisecondCounterHiRes();
+                const auto midiStarted = preview.play (midiFile);
+
+                while (midiStarted && ! finished && juce::Time::getMillisecondCounterHiRes() - midiStart < 4000.0)
+                    pump (20, level, transport, report);
+
+                const auto midiMs = juce::Time::getMillisecondCounterHiRes() - midiStart;
+                report.check (midiStarted && finished && midiMs > 1300.0 && midiMs < 2500.0,
+                              "Sound browser preview plays a MIDI file with the built-in sound to its end ("
+                                  + juce::String (juce::roundToInt (midiMs)) + " ms)");
                 preview.onStateChanged = nullptr;
             }
         };
