@@ -111,6 +111,9 @@ namespace harmonia::ui::arrangement
         /** The menu a right-click on the clip's mark shows. */
         juce::PopupMenu createClipMenu (te::Clip&);
     private:
+        /** A sound clip's tempo and pitch: following the song's tempo, the loop's tempo, higher / lower. */
+        void addTempoAndPitchItems (juce::PopupMenu&, te::AudioClipBase&);
+        void askForLoopBpm (te::WaveAudioClip&);
         void askToRename (te::Clip&);
         double getPlayheadBeat() const;
         void tell (const juce::String&, bool isProblem);

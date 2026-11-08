@@ -13,6 +13,7 @@
 #include "audio/PlaybackClock.h"
 #include "audio/PluginScanner.h"
 #include "audio/Transport.h"
+#include "core/AudioTempo.h"
 #include "core/Clips.h"
 #include "core/NoteEditor.h"
 #include "core/Project.h"
@@ -628,6 +629,21 @@ namespace harmonia::app
                                                  + juce::String (peak, 1) + " dBFS)");
                 transport.stop();
                 pump (200, audioLevel, transport, report);
+
+                // Taken as a loop slower than the song and three semitones up: stretched and re-pitched
+                // while it plays (a different way of playing it), heard as well. Then as it was.
+                project.beginGesture ("Follow the tempo");
+                core::audio_tempo::setFollowsTempo (*clip, project.getTempoBpm() * 0.8);
+                core::audio_tempo::setPitch (*clip, 3.0f);
+                transport.setPositionSeconds (0.0);
+                transport.play();
+                pump (1500, audioLevel, transport, report);
+                const auto stretchedPeak = audioLevel.takePeakDb();
+                report.check (stretchedPeak > -30.0f, "The audio clip following the tempo, three semitones up, is heard (peak "
+                                                          + juce::String (stretchedPeak, 1) + " dBFS)");
+                transport.stop();
+                pump (200, audioLevel, transport, report);
+                project.undo();
             }
 
             /** A drum track (the built-in drum machine) is heard while the song plays, and changing

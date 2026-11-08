@@ -21,6 +21,8 @@ if (NOT EXISTS "${HARMONIA_TE_DIR}/modules/juce/CMakeLists.txt")
         "  git -c url.\"https://github.com/\".insteadOf=\"git@github.com:\" submodule update --init --recursive")
 endif()
 
+include(cmake/HarmoniaEnginePatches.cmake)
+
 add_subdirectory("${HARMONIA_TE_DIR}/modules/juce" "${CMAKE_BINARY_DIR}/external/juce" EXCLUDE_FROM_ALL)
 add_subdirectory("${HARMONIA_TE_DIR}/modules" "${CMAKE_BINARY_DIR}/external/tracktion" EXCLUDE_FROM_ALL)
 

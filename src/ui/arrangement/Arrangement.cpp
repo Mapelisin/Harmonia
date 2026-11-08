@@ -1,6 +1,7 @@
 #include "ui/arrangement/Arrangement.h"
 #include "ui/TrackColours.h"
 #include "audio/AudioInputs.h"
+#include "core/AudioTempo.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
 #include "core/MidiFiles.h"
@@ -588,6 +589,8 @@ namespace harmonia::ui::arrangement
                               core::clips::setReversed (a, ! reversed);
                           }));
             menu.addSeparator();
+            addTempoAndPitchItems (menu, *audio);
+            menu.addSeparator();
             menu.addItem ("Duplicate (Ctrl+B)", [this] { model.duplicateSelected (false); });
         }
 
@@ -608,6 +611,99 @@ namespace harmonia::ui::arrangement
         menu.addSeparator();
         menu.addItem ("Delete (Del)", [this] { model.deleteSelected(); });
         return menu;
+    }
+
+    void Arrangement::addTempoAndPitchItems (juce::PopupMenu& menu, te::AudioClipBase& clip)
+    {
+        namespace audio_tempo = core::audio_tempo;
+        const te::Clip::Ptr target (&clip);
+        const auto withWave = [target] (std::function<void (te::WaveAudioClip&)> change)
+        {
+            return [target, change]
+            {
+                if (auto* wave = dynamic_cast<te::WaveAudioClip*> (target.get()); wave != nullptr && core::clips::isInEdit (*wave))
+                    change (*wave);
+            };
+        };
+
+        const auto loopBpm = audio_tempo::getLoopBpm (clip);
+        const auto isWave = dynamic_cast<te::WaveAudioClip*> (&clip) != nullptr;
+        menu.addItem (loopBpm.has_value() ? "Follow the song tempo (a loop at " + audio_tempo::formatBpm (*loopBpm) + " BPM)"
+                                          : juce::String ("Follow the song tempo"),
+                      isWave, loopBpm.has_value(), withWave ([this, follows = loopBpm.has_value()] (te::WaveAudioClip& w)
+                      {
+                          model.setFollowsTempo (w, ! follows);
+                      }));
+
+        juce::PopupMenu loopTempo;
+        const auto current = loopBpm.value_or (0.0);
+
+        loopTempo.addItem ("Set...", withWave ([this] (te::WaveAudioClip& w) { askForLoopBpm (w); }));
+        loopTempo.addItem ("Half (" + audio_tempo::formatBpm (current / 2.0) + " BPM: plays twice as fast)",
+                           current / 2.0 >= audio_tempo::minLoopBpm - 0.05, false,
+                           withWave ([this, current] (te::WaveAudioClip& w) { model.setLoopBpm (w, current / 2.0); }));
+        loopTempo.addItem ("Double (" + audio_tempo::formatBpm (current * 2.0) + " BPM: plays half as fast)",
+                           current * 2.0 <= audio_tempo::maxLoopBpm + 0.05, false,
+                           withWave ([this, current] (te::WaveAudioClip& w) { model.setLoopBpm (w, current * 2.0); }));
+        menu.addSubMenu ("Loop tempo", loopTempo, loopBpm.has_value());
+
+        juce::PopupMenu pitch;
+        const auto semitones = juce::roundToInt (audio_tempo::getPitch (clip));
+        const auto maxSemitones = juce::roundToInt (audio_tempo::maxPitchSemitones);
+        const auto withPitch = [this, target] (int newPitch)
+        {
+            return [this, target, newPitch]
+            {
+                if (auto* a = dynamic_cast<te::AudioClipBase*> (target.get()); a != nullptr && core::clips::isInEdit (*a))
+                    model.setPitch (*a, (float) newPitch);
+            };
+        };
+
+        pitch.addItem ("Up a semitone", semitones < maxSemitones, false, withPitch (semitones + 1));
+        pitch.addItem ("Down a semitone", semitones > -maxSemitones, false, withPitch (semitones - 1));
+        pitch.addItem ("Up an octave", semitones + 12 <= maxSemitones, false, withPitch (semitones + 12));
+        pitch.addItem ("Down an octave", semitones - 12 >= -maxSemitones, false, withPitch (semitones - 12));
+        pitch.addSeparator();
+        pitch.addItem ("Original pitch", semitones != 0, false, withPitch (0));
+        menu.addSubMenu (semitones == 0 ? juce::String ("Pitch")
+                                        : "Pitch (" + juce::String (semitones > 0 ? "+" : "") + juce::String (semitones) + " semitones)",
+                         pitch);
+    }
+
+    void Arrangement::askForLoopBpm (te::WaveAudioClip& clip)
+    {
+        const auto current = core::audio_tempo::getLoopBpm (clip).value_or (model.getProject().getTempoBpm());
+        auto* window = new juce::AlertWindow ("Loop tempo", "The tempo this sound was recorded at, in BPM. "
+                                                            "It is played faster or slower to fit the song.",
+                                              juce::MessageBoxIconType::NoIcon, this);
+        window->addTextEditor ("bpm", core::audio_tempo::formatBpm (current));
+        window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
+        window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+        const te::Clip::Ptr target (&clip);
+        juce::Component::SafePointer<juce::AlertWindow> safeWindow (window);
+        juce::Component::SafePointer<Arrangement> safeThis (this);
+
+        window->enterModalState (true, juce::ModalCallbackFunction::create ([safeThis, target, safeWindow] (int result)
+        {
+            auto* wave = dynamic_cast<te::WaveAudioClip*> (target.get());
+
+            if (result != 1 || safeThis == nullptr || safeWindow == nullptr || wave == nullptr || ! core::clips::isInEdit (*wave))
+                return;
+
+            namespace audio_tempo = core::audio_tempo;
+            const auto bpm = safeWindow->getTextEditorContents ("bpm").trim().getDoubleValue();
+
+            if (bpm < audio_tempo::minLoopBpm || bpm > audio_tempo::maxLoopBpm)
+            {
+                safeThis->tell ("A loop's tempo is between " + audio_tempo::formatBpm (audio_tempo::minLoopBpm) + " and "
+                                    + audio_tempo::formatBpm (audio_tempo::maxLoopBpm) + " BPM",
+                                true);
+                return;
+            }
+
+            safeThis->model.setLoopBpm (*wave, bpm);
+        }), true);
     }
 
     void Arrangement::exportClipAsMidi (te::MidiClip& clip)

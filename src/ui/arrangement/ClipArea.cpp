@@ -1,5 +1,6 @@
 #include "ui/arrangement/ClipArea.h"
 #include "ui/TrackColours.h"
+#include "core/AudioTempo.h"
 #include "core/Clips.h"
 #include "ui/Theme.h"
 #include <set>
@@ -12,6 +13,27 @@ namespace harmonia::ui::arrangement
     {
         constexpr float headerHeight = ArrangementGestures::menuMarkSize;
         constexpr float minBarPixels = 6.0f;
+
+        /** After a sound clip's name, what it does to its file: " · 95 BPM" when it follows the
+            song's tempo, " · +3 st" when it is higher. */
+        juce::String getAudioTag (const te::Clip& clip)
+        {
+            const auto* audio = dynamic_cast<const te::AudioClipBase*> (&clip);
+
+            if (audio == nullptr)
+                return {};
+
+            const auto dot = juce::String::fromUTF8 (" \xc2\xb7 ");
+            juce::String tag;
+
+            if (const auto bpm = core::audio_tempo::getLoopBpm (*audio))
+                tag << dot << core::audio_tempo::formatBpm (*bpm) << " BPM";
+
+            if (const auto pitch = juce::roundToInt (core::audio_tempo::getPitch (*audio)); pitch != 0)
+                tag << dot << (pitch > 0 ? "+" : "") << pitch << " st";
+
+            return tag;
+        }
     }
 
     ClipArea::ClipArea (ArrangementModel& m, ArrangementView& v)
@@ -183,7 +205,7 @@ namespace harmonia::ui::arrangement
 
             const auto name = (d.linked ? juce::String::fromUTF8 ("\xe2\x88\x9e ") : juce::String())
                             + (core::clips::isLooping (*d.clip) ? juce::String::fromUTF8 ("\xe2\x86\xbb ") : juce::String())
-                            + d.clip->getName();
+                            + d.clip->getName() + getAudioTag (*d.clip);
             g.setColour (colours::clipText);
             g.setFont (juce::FontOptions (theme::size::smallFontSize));
             g.drawText (name, text, juce::Justification::centredLeft, true);
@@ -299,13 +321,14 @@ namespace harmonia::ui::arrangement
         if (visible.isEmpty())
             return;
 
-        // Which stretch of the file plays there (clips play their file at its own speed).
+        // Which stretch of the file plays there (faster or slower when a loop follows the tempo).
         const auto& tempo = model.getEdit().tempoSequence;
         const auto sourceStart = clip.getPosition().getStartOfSource();
+        const auto speed = core::audio_tempo::getPlaybackSpeed (clip);
         const auto fileTimeAt = [&] (int x)
         {
             const auto songTime = tempo.toTime (te::BeatPosition::fromBeats (view.xToBeat ((float) x)));
-            return te::TimePosition::fromSeconds ((songTime - sourceStart).inSeconds());
+            return te::TimePosition::fromSeconds ((songTime - sourceStart).inSeconds() * speed);
         };
 
         auto& thumbnail = getWaveform (clip);

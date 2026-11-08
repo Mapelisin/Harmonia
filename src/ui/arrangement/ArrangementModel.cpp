@@ -2,6 +2,7 @@
 #include "audio/Export.h"
 #include "audio/Instruments.h"
 #include "audio/Sends.h"
+#include "core/AudioTempo.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
 #include "core/MidiFiles.h"
@@ -399,9 +400,17 @@ namespace harmonia::ui::arrangement
             juce::String error;
 
             if (auto* clip = project.addAudioClip (*track, file, start, error))
+            {
+                // A loop plays in time with the song; anything else at its own speed.
+                if (const auto bpm = core::audio_tempo::findLoopBpm (getEdit().engine, file, project.getTempoBpm()))
+                    core::audio_tempo::setFollowsTempo (*clip, bpm);
+
                 added.add (clip);
+            }
             else
+            {
                 problems.add (error);
+            }
 
             previous = track;
         }
@@ -1038,6 +1047,44 @@ namespace harmonia::ui::arrangement
 
         project.beginGesture (shouldLoop ? "Loop clip" : "Stop looping");
         clips::setLooping (clip, shouldLoop);
+    }
+
+    void ArrangementModel::setFollowsTempo (te::WaveAudioClip& clip, bool shouldFollow)
+    {
+        if (core::audio_tempo::followsTempo (clip) == shouldFollow)
+            return;
+
+        project.beginGesture (shouldFollow ? "Follow the song tempo" : "Play at its own speed");
+
+        if (! shouldFollow)
+        {
+            core::audio_tempo::setFollowsTempo (clip, std::nullopt);
+            return;
+        }
+
+        const auto songBpm = project.getTempoBpm();
+        const auto found = core::audio_tempo::findLoopBpm (getEdit().engine, clip.getOriginalFile(), songBpm);
+        core::audio_tempo::setFollowsTempo (clip, found.value_or (songBpm));
+    }
+
+    void ArrangementModel::setLoopBpm (te::WaveAudioClip& clip, double bpm)
+    {
+        const auto current = core::audio_tempo::getLoopBpm (clip);
+
+        if (! current.has_value() || std::abs (*current - bpm) < 0.001)
+            return;
+
+        project.beginGesture ("Loop tempo");
+        core::audio_tempo::setFollowsTempo (clip, bpm);
+    }
+
+    void ArrangementModel::setPitch (te::AudioClipBase& clip, float semitones)
+    {
+        if (std::abs (core::audio_tempo::getPitch (clip) - semitones) < 0.001f)
+            return;
+
+        project.beginGesture ("Pitch");
+        core::audio_tempo::setPitch (clip, semitones);
     }
 
     void ArrangementModel::bakeLoop (te::MidiClip& clip)

@@ -1,3 +1,5 @@
 [submodule "external/tracktion_engine"]
 	path = external/tracktion_engine
 	url = https://github.com/Tracktion/tracktion_engine.git
+	# The engine is patched when the build is configured (external/patches): not a change of ours there.
+	ignore = dirty

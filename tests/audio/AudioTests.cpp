@@ -9,7 +9,11 @@
 #include "audio/PlaybackClock.h"
 #include "audio/PluginScanner.h"
 #include "audio/Transport.h"
+#include "core/AudioTempo.h"
+#include "core/Clips.h"
 #include "core/Project.h"
+#include "core/Tracks.h"
+#include "TestAudioFiles.h"
 
 using namespace harmonia;
 namespace instruments = audio::instruments;
@@ -202,6 +206,67 @@ TEST_SUITE ("audio::exportWav")
         juce::AudioBuffer<float> buffer ((int) reader->numChannels, (int) reader->lengthInSamples);
         reader->read (&buffer, 0, (int) reader->lengthInSamples, 0, true, true);
         CHECK (buffer.getMagnitude (0, (int) reader->sampleRate) > 0.01f);
+    }
+
+    TEST_CASE ("a song with FLAC and Ogg sounds is exported with them, stretched to the tempo too")
+    {
+        // The engine plays such files from a WAV copy it makes in the background: the export has to
+        // have them all the same, not wait for the copy forever or leave them out.
+        test::TempFolder temp;
+        auto project = core::Project::createEmpty (test::session());
+        auto& track = *project->getTracks().getFirst();
+        core::tracks::setKind (track, core::tracks::Kind::audio);
+        REQUIRE (project->save (temp.getFile ("Song.harmonia")).isEmpty());     // its sound files go next to it
+
+        const auto wav = test::writeTone (temp.getFile ("Tone.wav"), 2.0, 0.5f);
+        juce::AudioFormatManager formats;
+        formats.registerBasicFormats();
+
+        for (const auto* extension : { ".flac", ".ogg" })
+        {
+            CAPTURE (extension);
+            const auto file = temp.getFile (juce::String ("Tone") + extension);
+            {
+                std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (wav));
+                REQUIRE (reader != nullptr);
+                auto* format = formats.findFormatForFileExtension (extension);
+                REQUIRE (format != nullptr);
+                std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (file);
+                auto writer = format->createWriterFor (stream, juce::AudioFormatWriterOptions {}
+                                                                   .withSampleRate (reader->sampleRate)
+                                                                   .withNumChannels (1)
+                                                                   .withBitsPerSample (16)
+                                                                   .withQualityOptionIndex (format->getQualityOptions().isEmpty() ? 0 : 5));
+                REQUIRE (writer != nullptr);
+                REQUIRE (writer->writeFromAudioReader (*reader, 0, reader->lengthInSamples));
+            }
+
+            for (auto* clip : core::clips::getClips (track))
+                clip->removeFromParent();
+
+            juce::String error;
+            auto* clip = project->addAudioClip (track, file, 0.0, error);
+            REQUIRE_MESSAGE (clip != nullptr, error.toStdString());
+
+            const auto exportedLevel = [&]
+            {
+                juce::TemporaryFile out (".wav");
+                REQUIRE (audio::exportWav (project->getEdit(), out.getFile()).isEmpty());
+                std::unique_ptr<juce::AudioFormatReader> result (formats.createReaderFor (out.getFile()));
+                REQUIRE (result != nullptr);
+                juce::AudioBuffer<float> buffer ((int) result->numChannels, (int) result->lengthInSamples);
+                result->read (&buffer, 0, buffer.getNumSamples(), 0, true, true);
+                return buffer.getRMSLevel (0, (int) (0.2 * result->sampleRate), (int) (1.2 * result->sampleRate));
+            };
+
+            CHECK (exportedLevel() > 0.1f);
+
+            // Stretched while it plays, it's read from a WAV of it next to the song.
+            core::audio_tempo::setFollowsTempo (*clip, 100.0);
+            CHECK (clip->getAudioFile().getFile().hasFileExtension ("wav"));
+            CHECK (clip->getAudioFile().getFile().isAChildOf (temp.getFile ("Song Audio")));
+            CHECK (exportedLevel() > 0.1f);
+        }
     }
 
     TEST_CASE ("an empty song is not exported")

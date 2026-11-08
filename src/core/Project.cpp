@@ -1,4 +1,5 @@
 #include "core/Project.h"
+#include "core/AudioClips.h"
 #include "core/Tempo.h"
 #include "core/Tracks.h"
 
@@ -92,6 +93,12 @@ namespace harmonia::core
         // insertion, so undoing it removes the wrong child index, and redo then adds a second
         // SCENES node. Creating it up front keeps track insertion cleanly undoable.
         edit->getSceneList();
+
+        // Clips saved before Harmonia stretched sound, or set up by the engine on its own.
+        for (auto* track : te::getAudioTracks (*edit))
+            for (auto* clip : track->getClips())
+                if (auto* audioClip = dynamic_cast<te::AudioClipBase*> (clip))
+                    audio_clips::prepareForPlayback (*audioClip);
 
         edit->getUndoManager().addChangeListener (this);
 
@@ -363,8 +370,20 @@ namespace harmonia::core
         auto clip = track.insertWaveClip (file.getFileNameWithoutExtension(), file, position, false);
 
         if (clip == nullptr)
+        {
             error = file.getFileName() + " could not be added";
+            return nullptr;
+        }
 
+        // The file at its own speed: whether a loop follows the song is the caller's to say (the
+        // engine makes a file whose name or data gives its tempo follow by itself).
+        if (clip->getAutoTempo())
+        {
+            clip->setAutoTempo (false);
+            clip->setPosition (position);
+        }
+
+        audio_clips::prepareForPlayback (*clip);
         return clip.get();
     }
 

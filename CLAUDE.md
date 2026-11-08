@@ -73,6 +73,13 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   возвратных), `getReturnTracks` — возвратные.
 - Эффекты — через `audio::effects` (порядок в списке плагинов: инструмент, эффекты, громкость, индикатор).
   Ручки плагинов — через `audio::PluginControl` (у Chorus/Phaser/времени Delay/типа фильтра нет параметров).
+- Исправления Tracktion — патчи в `external/patches/tracktion_engine` (решение 21), их накладывает настройка CMake.
+  Правишь движок — потом `git -C external/tracktion_engine diff > <патч>`; меняешь готовый патч — сначала
+  `git -C external/tracktion_engine checkout -- .`. В `git status` подмодуль с патчем не виден (`ignore = dirty`).
+- Растяжение и высота аудиоклипа — только через `core::audio_tempo`. Каждый новый аудиоклип и каждый клип
+  открытого проекта — через `core::audio_clips::prepareForPlayback`: иначе движок готовит копии файла в фоне
+  (растянутую, или WAV для FLAC/Ogg/MP3), а экспорт ждёт их вечно. Обычный клип играет путём движка (без него
+  в тестах `AudioRig` он молчит).
 - Сборки — в `build/` (не в git). Пробные программы — в `spikes/`, их выводы — в `docs/research/`.
 
 ## Git

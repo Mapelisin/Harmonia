@@ -226,6 +226,20 @@ namespace harmonia::ui::arrangement
 
         void renameClip (te::Clip&, const juce::String&);
 
+        /** The audio clip follows the song's tempo (core::audio_tempo), or plays at its own speed
+            again. Its loop tempo: what its file says, or what the length of a file called a loop
+            suggests, or else the song's tempo (it sounds as before, and follows from then on).
+            One undo step. Dropped loops follow by themselves (importFiles). */
+        void setFollowsTempo (te::WaveAudioClip&, bool);
+
+        /** The tempo the file of a clip following the song is at (it is played faster or slower
+            to fit). One undo step. */
+        void setLoopBpm (te::WaveAudioClip&, double);
+
+        /** The audio clip higher or lower, in semitones from its file's own (its speed stays).
+            One undo step. */
+        void setPitch (te::AudioClipBase&, float semitones);
+
         //==============================================================================
         // Bars on every track (core::sections): one undo step each. Beats are song beats.
 

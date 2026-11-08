@@ -45,7 +45,11 @@ add_library(harmonia_core STATIC
     Drums.h
     Drums.cpp
     NoteRecorder.h
-    NoteRecorder.cpp)
+    NoteRecorder.cpp
+    AudioTempo.h
+    AudioTempo.cpp
+    AudioClips.h
+    AudioClips.cpp)
 
 harmonia_configure_target(harmonia_core)
 target_link_libraries(harmonia_core PUBLIC harmonia_juce)

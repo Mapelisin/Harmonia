@@ -1,0 +1,315 @@
+diff --git a/modules/tracktion_engine/playback/graph/tracktion_WaveNode.cpp b/modules/tracktion_engine/playback/graph/tracktion_WaveNode.cpp
+index 1993f02782b..b2497720d8a 100644
+--- a/modules/tracktion_engine/playback/graph/tracktion_WaveNode.cpp
++++ b/modules/tracktion_engine/playback/graph/tracktion_WaveNode.cpp
+@@ -602,6 +602,7 @@ public:
+         timeStretcher.initialise (source->getSampleRate(), chunkSize, numChannels,
+                                   mode, elastiqueProOptions, true);
+         latencySamples = timeStretcher.getLatencySamples();
++        outputLatencySamples = timeStretcher.getOutputLatencySamples();
+         inputFifo.setSize (numChannels, timeStretcher.getMaxFramesNeeded() + 1);
+         outputFifo.setSize (numChannels, timeStretcher.getMaxFramesNeeded() + 1);
+ 
+@@ -624,13 +625,7 @@ public:
+             return;
+ 
+         readPosition = (double) t;
+-
+-        source->setPosition (t);
+-        timeStretcher.reset();
+-        setSpeedAndPitch (playbackSpeedRatio, semitonesShift);
+-        inputFifo.reset();
+-        outputFifo.reset();
+-        primeStretcher();
++        restart();
+     }
+ 
+     void setPosition (TimePosition t) override
+@@ -649,6 +644,11 @@ public:
+ 
+         playbackSpeedRatio = speedRatio;
+         setSpeedAndPitch (playbackSpeedRatio, semitonesShift);
++
++        // The latency is compensated for when priming, at the speed then: a reader primed before
++        // its speed was known (the first block sets it) is primed again before it's read
++        if (! hasReadSincePriming)
++            needsPriming = true;
+     }
+ 
+     void setPitch (double semitones) override
+@@ -674,6 +674,9 @@ public:
+         assert (numChannels == (int) destBuffer.getNumChannels());
+         const auto numFramesToDo = destBuffer.getNumFrames();
+ 
++        if (needsPriming)
++            restart();
++
+         for (;;)
+         {
+             // If there are enough output samples in the fifo, read them out
+@@ -689,13 +692,15 @@ public:
+         }
+ 
+         readPosition += numFramesToDo * playbackSpeedRatio;
++        hasReadSincePriming = true;
+ 
+         return true;
+     }
+ 
+     static constexpr int chunkSize = 256;
+     const int numChannels;
+-    int latencySamples = 0;
++    int latencySamples = 0, outputLatencySamples = 0;
++    bool hasReadSincePriming = false, needsPriming = false;
+     TimeStretcher timeStretcher;
+     AudioFifo inputFifo { numChannels, chunkSize }, outputFifo { numChannels, chunkSize };
+     double playbackSpeedRatio = 1.0, semitonesShift = 0.0, readPosition = 0.0;
+@@ -731,10 +736,24 @@ public:
+         return true;
+     }
+ 
++    // Starts the stretcher again from readPosition
++    void restart()
++    {
++        source->setPosition (getReadPosition());
++        timeStretcher.reset();
++        setSpeedAndPitch (playbackSpeedRatio, semitonesShift);
++        inputFifo.reset();
++        outputFifo.reset();
++        primeStretcher();
++    }
++
+     // Pre-feeds real audio into the stretcher and discards the initial output
+     // to handle the stretcher's startup latency locally
+     void primeStretcher()
+     {
++        hasReadSincePriming = false;
++        needsPriming = false;
++
+         if (latencySamples <= 0)
+             return;
+ 
+@@ -745,8 +764,10 @@ public:
+ 
+         // The stretcher's output lags its input by latencySamples so to line the next
+         // output frame up with readPosition, the frames between backupPos and
+-        // readPosition have to be discarded as well as the latency region itself
+-        const auto numToDiscard = static_cast<int> (position - backupPos) + latencySamples;
++        // readPosition have to be discarded as well as the latency region itself.
++        // The input frames and the input part of the latency last 1 / speed as long in the output
++        const auto inputFrames = static_cast<double> (position - backupPos) + (latencySamples - outputLatencySamples);
++        const auto numToDiscard = static_cast<int> (std::round (inputFrames / playbackSpeedRatio)) + outputLatencySamples;
+         int outputDiscarded = 0;
+ 
+         while (outputDiscarded < numToDiscard)
+@@ -780,6 +801,7 @@ public:
+         timeStretcher.initialise (source->getSampleRate(), chunkSize, numChannels,
+                                   mode, elastiqueProOptions, true);
+         latencySamples = timeStretcher.getLatencySamples();
++        outputLatencySamples = timeStretcher.getOutputLatencySamples();
+ 
+         source->setPosition (getReadPosition());
+         timeStretcher.reset();
+@@ -798,11 +820,7 @@ public:
+             return;
+ 
+         readPosition = (double) t;
+-
+-        source->setPosition (t);
+-        timeStretcher.reset();
+-        setSpeedAndPitch (playbackSpeedRatio, semitonesShift);
+-        primeStretcher();
++        restart();
+     }
+ 
+     void setPosition (TimePosition t) override
+@@ -821,6 +839,11 @@ public:
+ 
+         playbackSpeedRatio = speedRatio;
+         setSpeedAndPitch (playbackSpeedRatio, semitonesShift);
++
++        // The latency is compensated for when priming, at the speed then: a reader primed before
++        // its speed was known (the first block sets it) is primed again before it's read
++        if (! hasReadSincePriming)
++            needsPriming = true;
+     }
+ 
+     void setPitch (double semitones) override
+@@ -847,6 +870,9 @@ public:
+         const auto numFramesToDo = static_cast<int> (destBuffer.getNumFrames());
+         int startFrame = 0;
+ 
++        if (needsPriming)
++            restart();
++
+         // Always push one block to keep the input fifo stoked but don't do this for every chunk unless required
+         if (const auto numToPush = timeStretcher.getFramesRecomended(); numToPush > 0)
+             if (! readSourceAndPushFrames (numToPush))
+@@ -878,12 +904,14 @@ public:
+         }
+ 
+         readPosition += numFramesToDo * playbackSpeedRatio;
++        hasReadSincePriming = true;
+ 
+         return true;
+     }
+ 
+     const int numChannels, chunkSize = 1024;
+-    int latencySamples = 0;
++    int latencySamples = 0, outputLatencySamples = 0;
++    bool hasReadSincePriming = false, needsPriming = false;
+     ReadAheadTimeStretcher timeStretcher { 3 };
+     double playbackSpeedRatio = 1.0, semitonesShift = 0.0, readPosition = 0.0;
+ 
+@@ -908,10 +936,22 @@ public:
+         return timeStretcher.pushData (scratchBuffer.buffer.getArrayOfReadPointers(), numSourceFrames) == numSourceFrames;
+     }
+ 
++    // Starts the stretcher again from readPosition
++    void restart()
++    {
++        source->setPosition (getReadPosition());
++        timeStretcher.reset();
++        setSpeedAndPitch (playbackSpeedRatio, semitonesShift);
++        primeStretcher();
++    }
++
+     // Pre-feeds real audio into the stretcher and discards initial output
+     // to handle the stretcher's startup latency locally
+     void primeStretcher()
+     {
++        hasReadSincePriming = false;
++        needsPriming = false;
++
+         if (latencySamples <= 0)
+             return;
+ 
+@@ -921,8 +961,10 @@ public:
+ 
+         // The stretcher's output lags its input by latencySamples so to line the next
+         // output frame up with readPosition, the frames between backupPos and
+-        // readPosition have to be discarded as well as the latency region itself
+-        const auto numToDiscard = static_cast<int> (position - backupPos) + latencySamples;
++        // readPosition have to be discarded as well as the latency region itself.
++        // The input frames and the input part of the latency last 1 / speed as long in the output
++        const auto inputFrames = static_cast<double> (position - backupPos) + (latencySamples - outputLatencySamples);
++        const auto numToDiscard = static_cast<int> (std::round (inputFrames / playbackSpeedRatio)) + outputLatencySamples;
+         int outputDiscarded = 0;
+ 
+         while (outputDiscarded < numToDiscard)
+diff --git a/modules/tracktion_engine/timestretch/tracktion_ReadAheadTimeStretcher.cpp b/modules/tracktion_engine/timestretch/tracktion_ReadAheadTimeStretcher.cpp
+index 0e5c8a3d039..d373302f15a 100644
+--- a/modules/tracktion_engine/timestretch/tracktion_ReadAheadTimeStretcher.cpp
++++ b/modules/tracktion_engine/timestretch/tracktion_ReadAheadTimeStretcher.cpp
+@@ -162,6 +162,11 @@ int ReadAheadTimeStretcher::getLatencySamples() const
+     return stretcher.getLatencySamples();
+ }
+ 
++int ReadAheadTimeStretcher::getOutputLatencySamples() const
++{
++    return stretcher.getOutputLatencySamples();
++}
++
+ int ReadAheadTimeStretcher::getMaxFramesNeeded() const
+ {
+     // N.B. This should be thread safe as its constant in the stretcher implementations
+diff --git a/modules/tracktion_engine/timestretch/tracktion_ReadAheadTimeStretcher.h b/modules/tracktion_engine/timestretch/tracktion_ReadAheadTimeStretcher.h
+index 4fb625fe321..0377f1d8d52 100644
+--- a/modules/tracktion_engine/timestretch/tracktion_ReadAheadTimeStretcher.h
++++ b/modules/tracktion_engine/timestretch/tracktion_ReadAheadTimeStretcher.h
+@@ -59,6 +59,9 @@ public:
+     /** Returns the latency in samples introduced by the stretching algorithm. */
+     int getLatencySamples() const;
+ 
++    /** Returns the part of the latency counted in output samples @see TimeStretcher::getOutputLatencySamples. */
++    int getOutputLatencySamples() const;
++
+     /** Returns the maximum number of frames that will ever be returned by getFramesNeeded.
+         This can be used to size FIFOs for real-time use accordingly.
+     */
+diff --git a/modules/tracktion_engine/timestretch/tracktion_TimeStretch.cpp b/modules/tracktion_engine/timestretch/tracktion_TimeStretch.cpp
+index 26fd3d15d2e..78f15945f6a 100644
+--- a/modules/tracktion_engine/timestretch/tracktion_TimeStretch.cpp
++++ b/modules/tracktion_engine/timestretch/tracktion_TimeStretch.cpp
+@@ -87,6 +87,7 @@ struct TimeStretcher::Stretcher
+     virtual int processData (const float* const* inChannels, int numSamples, float* const* outChannels) = 0;
+     virtual int flush (float* const* outChannels) = 0;
+     virtual int getLatencySamples() const { return 0; }
++    virtual int getOutputLatencySamples() const { return getLatencySamples(); }
+ };
+ 
+ //==============================================================================
+@@ -925,6 +926,7 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
+     {
+         stretch.reset();
+         hasDoneFinalBlock = false;
++        inputRemainder = 0.0;
+     }
+ 
+     bool setSpeedAndPitch (float speedRatio_, float semitonesUp) override
+@@ -936,7 +938,9 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
+ 
+     int getFramesNeeded() const override
+     {
+-        return juce::roundToInt (samplesPerOutputBuffer / speedRatio);
++        // The fraction of a frame left over from each block is carried to the next: rounded each
++        // time, the sound drifts away from the timeline (e.g. 307 frames for 307.2 every block)
++        return static_cast<int> (samplesPerOutputBuffer / speedRatio + inputRemainder);
+     }
+ 
+     int getMaxFramesNeeded() const override
+@@ -948,6 +952,7 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
+     {
+         CRASH_TRACER
+         stretch.process (inChannels, numSamples, outChannels, samplesPerOutputBuffer);
++        inputRemainder = juce::jlimit (0.0, 1.0, inputRemainder + samplesPerOutputBuffer / (double) speedRatio - numSamples);
+         return samplesPerOutputBuffer;
+     }
+ 
+@@ -966,11 +971,17 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
+         return stretch.inputLatency() + stretch.outputLatency();
+     }
+ 
++    int getOutputLatencySamples() const override
++    {
++        return stretch.outputLatency();
++    }
++
+ private:
+     signalsmith::stretch::SignalsmithStretch<float> stretch;
+     int numChannels = 0;
+     const int samplesPerOutputBuffer;
+     float speedRatio = 1.0f;
++    double inputRemainder = 0.0;
+     bool hasDoneFinalBlock = false;
+ 
+     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SignalsmithStretcher)
+@@ -1383,6 +1394,11 @@ int TimeStretcher::getLatencySamples() const
+     return stretcher ? stretcher->getLatencySamples() : 0;
+ }
+ 
++int TimeStretcher::getOutputLatencySamples() const
++{
++    return stretcher ? stretcher->getOutputLatencySamples() : 0;
++}
++
+ int TimeStretcher::getLatencySamplesForMode (Mode mode, double sampleRate, bool realtime)
+ {
+     TimeStretcher temp;
+diff --git a/modules/tracktion_engine/timestretch/tracktion_TimeStretch.h b/modules/tracktion_engine/timestretch/tracktion_TimeStretch.h
+index ae18046910c..88fce0b6c32 100644
+--- a/modules/tracktion_engine/timestretch/tracktion_TimeStretch.h
++++ b/modules/tracktion_engine/timestretch/tracktion_TimeStretch.h
+@@ -184,6 +184,12 @@ public:
+     */
+     int getLatencySamples() const;
+ 
++    /** Returns the part of getLatencySamples that is counted in output samples, the rest being in
++        input samples. Whilst stretching, the input part lasts 1 / speed ratio as long in the output,
++        so compensating for the latency at other speeds needs the two parts.
++    */
++    int getOutputLatencySamples() const;
++
+     /** Returns the latency for a given mode and sample rate without creating a full stretcher.
+         Useful for reporting latency to the graph before the stretcher is initialised.
+     */

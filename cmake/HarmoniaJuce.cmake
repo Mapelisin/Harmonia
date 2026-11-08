@@ -29,6 +29,8 @@ target_compile_definitions(harmonia_juce
         JUCE_STRICT_REFCOUNTEDPOINTER=1
         JUCE_USE_CURL=0
         JUCE_WEB_BROWSER=0
+        # Audio clips follow the song's tempo / change pitch: Signalsmith Stretch (MIT, header-only, inside Tracktion).
+        TRACKTION_ENABLE_TIMESTRETCH_SIGNALSMITH=1
         # Debug: route jassert failures through juce::Logger so tests can detect them.
         $<$<CONFIG:Debug>:JUCE_LOG_ASSERTIONS=1>)
 
