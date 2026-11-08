@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- Harmonia's mark: an "H" whose crossbar is a sound wave. The same shapes as ui::icons::logoGlyph(). -->
+  <rect x="0" y="0" width="256" height="256" rx="56" ry="56" fill="#4f9fe0"/>
+  <rect x="64" y="56" width="30" height="144" rx="15" ry="15" fill="#ffffff"/>
+  <rect x="162" y="56" width="30" height="144" rx="15" ry="15" fill="#ffffff"/>
+  <path d="M 92 128 C 102 110, 118 110, 128 128 C 138 146, 154 146, 164 128" fill="none" stroke="#ffffff" stroke-width="19" stroke-linecap="round"/>
+</svg>

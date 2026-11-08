@@ -82,6 +82,29 @@ TEST_SUITE ("core::Project")
 
         CHECK_FALSE (project->canUndo());
         CHECK_FALSE (project->canRedo());
+        CHECK (project->getUndoDescription().isEmpty());
+        CHECK (project->getRedoDescription().isEmpty());
+    }
+
+    TEST_CASE ("undo and redo name the step they take back or do again (for the Edit menu)")
+    {
+        auto project = Project::createEmpty (harmonia::test::session());
+
+        project->beginGesture ("Change tempo");
+        project->setTempoBpm (140.0);
+        project->beginGesture ("Time signature");
+        project->setBeatsPerBar (3);
+
+        CHECK (project->getUndoDescription() == "Time signature");
+        CHECK (project->getRedoDescription().isEmpty());
+
+        project->undo();
+        CHECK (project->getUndoDescription() == "Change tempo");
+        CHECK (project->getRedoDescription() == "Time signature");
+
+        project->undo();
+        CHECK (project->getUndoDescription().isEmpty());
+        CHECK (project->getRedoDescription() == "Change tempo");
     }
 
     TEST_CASE ("save and load keep every note property and linked copies")

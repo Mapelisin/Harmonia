@@ -44,6 +44,12 @@ namespace harmonia::ui::arrangement
         /** The track menu's commands (also for tests). */
         void renderToAudio (te::AudioTrack&);
 
+        /** The track's menu: right-click on its header, or Track in the menu bar. */
+        juce::PopupMenu createTrackMenu (te::AudioTrack&);
+
+        /** Opens the editor of the track's name in its header. */
+        void startRenaming (te::AudioTrack&);
+
         void paintOverChildren (juce::Graphics&) override;
 
         /** Number of headers (for tests). */

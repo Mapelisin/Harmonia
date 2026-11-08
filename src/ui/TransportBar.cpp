@@ -6,6 +6,26 @@ namespace harmonia::ui
     TransportBar::TransportBar (audio::Transport& t, te::Edit& e, NoteInput& n, arrangement::ArrangementModel& a)
         : transport (t), edit (e), noteInput (n), arrangementModel (a)
     {
+        toStartButton.setTooltip ("Back to the start (Home)");
+        toStartButton.onClick = [this]
+        {
+            if (onGoToStart != nullptr)
+                onGoToStart();
+
+            refresh();
+        };
+
+        stopButton.setTooltip ("Stop (Space); while stopped: back to the start");
+        stopButton.onClick = [this]
+        {
+            if (transport.isPlayRequested() || transport.isPlaying())
+                transport.stop();
+            else if (onGoToStart != nullptr)
+                onGoToStart();
+
+            refresh();
+        };
+
         playButton.setTooltip ("Play / stop (Space)");
         playButton.onClick = [this]
         {
@@ -74,12 +94,12 @@ namespace harmonia::ui
         tapButton.setTooltip ("Tap tempo: click in time with the music (4 clicks or more); a pause starts over");
         tapButton.onClick = [this] { tap (juce::Time::getMillisecondCounterHiRes() / 1000.0); };
 
-        positionLabel.setColour (juce::Label::textColourId, theme::colour::textPrimary);
-        positionLabel.setFont (juce::FontOptions (theme::size::fontSize));
-        positionLabel.setJustificationType (juce::Justification::centredLeft);
+        recordButton.setIconColour (theme::colour::record);
+        recordButton.setOnColour (theme::colour::record.withAlpha (0.45f));
 
-        for (auto* c : std::initializer_list<juce::Component*> { &playButton, &recordButton, &clickButton, &countInButton, &modeButton,
-                                                                 &positionLabel, &tempoBox, &timeSigButton, &tapButton,
+        for (auto* c : std::initializer_list<juce::Component*> { &toStartButton, &stopButton, &playButton, &recordButton,
+                                                                 &positionDisplay, &tempoBox, &timeSigButton, &tapButton,
+                                                                 &clickButton, &countInButton, &modeButton,
                                                                  &keysButton, &quantizeBox })
         {
             c->setWantsKeyboardFocus (false);
@@ -95,28 +115,43 @@ namespace harmonia::ui
         stopTimer();
     }
 
+    namespace
+    {
+        constexpr int iconButtonWidth = 32, iconButtonHeight = 28, gap = 4, groupGap = 16;
+        constexpr int positionWidth = 196, positionHeight = 32, quantizeWidth = 150;
+    }
+
+    int TransportBar::getPreferredWidth()
+    {
+        return 4 * (iconButtonWidth + gap) + groupGap          // to start, stop, play, record
+             + positionWidth + groupGap
+             + 78 + gap + 40 + gap + 40 + groupGap              // tempo, time signature, tap
+             + iconButtonWidth + gap + 76 + gap + 54 + groupGap // metronome, count-in, clip / song
+             + 74 + gap + quantizeWidth;                        // keys, quantize
+    }
+
     void TransportBar::resized()
     {
         auto area = getLocalBounds();
-        const auto place = [&area] (juce::Component& c, int width)
+        const auto place = [&area] (juce::Component& c, int width, int height = theme::size::buttonHeight, int after = gap)
         {
-            c.setBounds (area.removeFromLeft (width).withSizeKeepingCentre (width, theme::size::buttonHeight));
-            area.removeFromLeft (4);
+            c.setBounds (area.removeFromLeft (width).withSizeKeepingCentre (width, height));
+            area.removeFromLeft (after);
         };
 
-        place (playButton, 60);
-        place (recordButton, 50);
-        place (clickButton, 54);
-        place (countInButton, 82);
-        place (modeButton, 54);
-        area.removeFromLeft (theme::size::padding);
-        place (positionLabel, 104);
+        place (toStartButton, iconButtonWidth, iconButtonHeight);
+        place (stopButton, iconButtonWidth, iconButtonHeight);
+        place (playButton, iconButtonWidth, iconButtonHeight);
+        place (recordButton, iconButtonWidth, iconButtonHeight, groupGap);
+        place (positionDisplay, positionWidth, positionHeight, groupGap);
         place (tempoBox, 78);
         place (timeSigButton, 40);
-        place (tapButton, 40);
-        area.removeFromLeft (theme::size::padding);
-        place (keysButton, 70);
-        place (quantizeBox, juce::jlimit (0, 160, area.getWidth()));
+        place (tapButton, 40, theme::size::buttonHeight, groupGap);
+        place (clickButton, iconButtonWidth, iconButtonHeight);
+        place (countInButton, 76);
+        place (modeButton, 54, theme::size::buttonHeight, groupGap);
+        place (keysButton, 74);
+        place (quantizeBox, juce::jlimit (0, quantizeWidth, area.getWidth()));
     }
 
     void TransportBar::tap (double seconds)
@@ -198,17 +233,16 @@ namespace harmonia::ui
     void TransportBar::refresh()
     {
         const auto active = transport.isPlayRequested() || transport.isPlaying();
-        playButton.setButtonText (active ? "Stop" : "Play");
-        playButton.setColour (juce::TextButton::buttonColourId,
-                              active ? theme::colour::accent.withAlpha (0.35f) : theme::colour::surfaceRaised);
+        playButton.setToggleState (active, juce::dontSendNotification);
+        playButton.setIconColour (active ? theme::mixer::meterLow : theme::colour::textPrimary);
 
-        const auto recordColour = noteInput.isRecording() || transport.isRecording() ? theme::colour::record
-                                : noteInput.isRecordArmed() ? theme::colour::record.withAlpha (0.45f)
-                                                            : theme::colour::surfaceRaised;
-        recordButton.setColour (juce::TextButton::buttonColourId, recordColour);
+        // Armed: a dim red; recording: full red with a white dot.
+        const auto recording = noteInput.isRecording() || transport.isRecording();
+        recordButton.setToggleState (recording || noteInput.isRecordArmed(), juce::dontSendNotification);
+        recordButton.setOnColour (recording ? theme::colour::record : theme::colour::record.withAlpha (0.4f));
+        recordButton.setIconColour (recording ? juce::Colours::white : theme::colour::record);
 
-        clickButton.setColour (juce::TextButton::buttonColourId,
-                               edit.clickTrackEnabled.get() ? theme::colour::accent.withAlpha (0.35f) : theme::colour::surfaceRaised);
+        clickButton.setToggleState (edit.clickTrackEnabled.get(), juce::dontSendNotification);
 
         const auto countIn = transport.getCountIn();
         countInButton.setButtonText (countIn == audio::Transport::CountIn::twoBars ? "Count 2 bars"
@@ -233,10 +267,6 @@ namespace harmonia::ui
         quantizeBox.setSelectedId (modeIndex + 1, juce::dontSendNotification);
 
         const auto seconds = transport.getPositionSeconds();
-        const auto barsAndBeats = edit.tempoSequence.toBarsAndBeats (te::TimePosition::fromSeconds (seconds));
-
-        auto text = juce::String (barsAndBeats.bars + 1) + "." + juce::String (barsAndBeats.getWholeBeats() + 1)
-                  + "   " + juce::String (seconds, 2) + " s";
 
         // Counting in, the song is before where the recording starts (maybe before its start).
         if (transport.isCountingIn())
@@ -244,11 +274,12 @@ namespace harmonia::ui
             const auto& tempo = edit.tempoSequence;
             const auto beatsLeft = tempo.toBeats (te::TimePosition::fromSeconds (transport.getRecordStartSeconds())).inBeats()
                                  - tempo.toBeats (te::TimePosition::fromSeconds (seconds)).inBeats();
-            text = "Count-in " + juce::String ((int) std::ceil (beatsLeft - 1.0e-6));
+            positionDisplay.setText ("Count " + juce::String ((int) std::ceil (beatsLeft - 1.0e-6)), "get ready");
         }
-
-        if (positionLabel.getText() != text)
-            positionLabel.setText (text, juce::dontSendNotification);
+        else
+        {
+            positionDisplay.setText (PositionDisplay::barsBeatsText (edit.tempoSequence, seconds), PositionDisplay::clockText (seconds));
+        }
 
         auto& project = arrangementModel.getProject();
         tempoBox.setValue (project.getTempoBpm());

@@ -411,6 +411,16 @@ namespace harmonia::core
         return edit->getUndoManager().canRedo();
     }
 
+    juce::String Project::getUndoDescription() const
+    {
+        return canUndo() ? edit->getUndoManager().getUndoDescription() : juce::String();
+    }
+
+    juce::String Project::getRedoDescription() const
+    {
+        return canRedo() ? edit->getUndoManager().getRedoDescription() : juce::String();
+    }
+
     void Project::undo()
     {
         edit->undo();

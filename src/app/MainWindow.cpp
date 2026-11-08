@@ -454,12 +454,7 @@ namespace harmonia::app
                          + juce::String::fromUTF8 (" \xe2\x80\x94 Harmonia");
 
         if (getName() != title)
-        {
             setName (title);
-
-            if (auto* content = getMainComponent())
-                content->repaint (content->getLocalBounds().removeFromTop (ui::theme::size::headerHeight));
-        }
     }
 
     void MainWindow::timerCallback()

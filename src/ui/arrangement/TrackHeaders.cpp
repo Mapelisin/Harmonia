@@ -315,67 +315,88 @@ namespace harmonia::ui::arrangement
 
         void showMenu()
         {
-            juce::PopupMenu menu;
-            menu.addItem ("Rename", [safe = juce::Component::SafePointer<Header> (this)]
-            {
-                if (safe != nullptr)
-                    safe->name.showEditor();
-            });
-            menu.addSubMenu ("Colour", track_colours::createMenu (core::tracks::getColour (*track), "Automatic",
-                                                                  [&m = model, t = track] (std::optional<juce::Colour> colour)
-                                                                  {
-                                                                      m.setTrackColour (*t, colour);
-                                                                  }));
-            if (core::tracks::isAudio (*track))
-            {
-                auto& engine = track->edit.engine;
-                const auto inputs = audio::AudioInputs::getInputs (engine);
-                auto* current = audio::AudioInputs::getInput (*track);
-                juce::PopupMenu inputMenu;
+            if (auto* owner = findParentComponentOfClass<TrackHeaders>())
+                owner->createTrackMenu (*track).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this));
+        }
 
-                for (auto* input : inputs)
-                    inputMenu.addItem (input->getAliasOrName(), true, input == current, [t = track, inputName = input->getName()]
-                    {
-                        audio::AudioInputs::setInput (*t, inputName);
-                    });
-
-                if (inputs.empty())
-                    inputMenu.addItem ("No inputs (see Audio settings)", false, false, [] {});
-
-                menu.addSeparator();
-                menu.addItem ("Record arm", true, audio::AudioInputs::isArmed (*track), [t = track]
-                {
-                    audio::AudioInputs::setArmed (*t, ! audio::AudioInputs::isArmed (*t));
-                });
-                menu.addSubMenu ("Record from", inputMenu);
-                menu.addItem ("Hear the input while armed", true, audio::AudioInputs::isMonitoring (engine), [&engine]
-                {
-                    audio::AudioInputs::setMonitoring (engine, ! audio::AudioInputs::isMonitoring (engine));
-                });
-                menu.addSeparator();
-            }
-
-            const auto index = model.indexOf (track.get());
-            const auto hasClips = ! core::clips::getClips (*track).isEmpty();
-
-            menu.addItem ("Duplicate track", [&m = model, t = track] { m.duplicateTrack (*t); });
-            menu.addItem ("Move up", index > 0, false, [&m = model, t = track] { m.moveTrack (*t, m.indexOf (t.get()) - 1); });
-            menu.addItem ("Move down", index < model.getNumTracks() - 1, false,
-                          [&m = model, t = track] { m.moveTrack (*t, m.indexOf (t.get()) + 1); });
-            menu.addItem ("Render to audio track", hasClips, false, [safe = juce::Component::SafePointer<Header> (this), t = track]
-            {
-                if (safe != nullptr)
-                    if (auto* owner = safe->findParentComponentOfClass<TrackHeaders>())
-                        owner->renderToAudio (*t);
-            });
-            menu.addSeparator();
-            menu.addItem ("Add instrument track", [&m = model] { m.addTrack(); });
-            menu.addItem ("Add audio track", [&m = model] { m.addAudioTrack(); });
-            menu.addSeparator();
-            menu.addItem ("Delete track", [&m = model, t = track] { m.deleteTrack (*t); });
-            menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this));
+    public:
+        void startRenaming()
+        {
+            name.showEditor();
         }
     };
+
+    //==============================================================================
+    juce::PopupMenu TrackHeaders::createTrackMenu (te::AudioTrack& trackToShow)
+    {
+        juce::ReferenceCountedObjectPtr<te::AudioTrack> track (&trackToShow);
+        juce::Component::SafePointer<TrackHeaders> safe (this);
+
+        juce::PopupMenu menu;
+        menu.addItem ("Rename", [safe, track]
+        {
+            if (safe != nullptr)
+                safe->startRenaming (*track);
+        });
+        menu.addSubMenu ("Colour", track_colours::createMenu (core::tracks::getColour (*track), "Automatic",
+                                                              [&m = model, t = track] (std::optional<juce::Colour> colour)
+                                                              {
+                                                                  m.setTrackColour (*t, colour);
+                                                              }));
+        if (core::tracks::isAudio (*track))
+        {
+            auto& engine = track->edit.engine;
+            const auto inputs = audio::AudioInputs::getInputs (engine);
+            auto* current = audio::AudioInputs::getInput (*track);
+            juce::PopupMenu inputMenu;
+
+            for (auto* input : inputs)
+                inputMenu.addItem (input->getAliasOrName(), true, input == current, [t = track, inputName = input->getName()]
+                {
+                    audio::AudioInputs::setInput (*t, inputName);
+                });
+
+            if (inputs.empty())
+                inputMenu.addItem ("No inputs (see Audio settings)", false, false, [] {});
+
+            menu.addSeparator();
+            menu.addItem ("Record arm", true, audio::AudioInputs::isArmed (*track), [t = track]
+            {
+                audio::AudioInputs::setArmed (*t, ! audio::AudioInputs::isArmed (*t));
+            });
+            menu.addSubMenu ("Record from", inputMenu);
+            menu.addItem ("Hear the input while armed", true, audio::AudioInputs::isMonitoring (engine), [&engine]
+            {
+                audio::AudioInputs::setMonitoring (engine, ! audio::AudioInputs::isMonitoring (engine));
+            });
+            menu.addSeparator();
+        }
+
+        const auto index = model.indexOf (track.get());
+        const auto hasClips = ! core::clips::getClips (*track).isEmpty();
+
+        menu.addItem ("Duplicate track", [&m = model, t = track] { m.duplicateTrack (*t); });
+        menu.addItem ("Move up", index > 0, false, [&m = model, t = track] { m.moveTrack (*t, m.indexOf (t.get()) - 1); });
+        menu.addItem ("Move down", index < model.getNumTracks() - 1, false,
+                      [&m = model, t = track] { m.moveTrack (*t, m.indexOf (t.get()) + 1); });
+        menu.addItem ("Render to audio track", hasClips, false, [safe, t = track]
+        {
+            if (safe != nullptr)
+                safe->renderToAudio (*t);
+        });
+        menu.addSeparator();
+        menu.addSubMenu ("Add track", makeAddTrackMenu (model));
+        menu.addSeparator();
+        menu.addItem ("Delete track", [&m = model, t = track] { m.deleteTrack (*t); });
+        return menu;
+    }
+
+    void TrackHeaders::startRenaming (te::AudioTrack& track)
+    {
+        for (auto* header : headers)
+            if (&header->getTrack() == &track)
+                header->startRenaming();
+    }
 
     //==============================================================================
     TrackHeaders::TrackHeaders (ArrangementModel& m, ArrangementView& v)

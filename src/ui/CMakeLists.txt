@@ -1,6 +1,14 @@
 add_library(harmonia_ui STATIC
     Theme.h
     Theme.cpp
+    Icons.h
+    Icons.cpp
+    IconButton.h
+    IconButton.cpp
+    PositionDisplay.h
+    PositionDisplay.cpp
+    CpuMeter.h
+    CpuMeter.cpp
     TrackColours.h
     TrackColours.cpp
     ShortcutsPanel.h
@@ -78,6 +86,8 @@ add_library(harmonia_ui STATIC
     automation/AutomationPanel.cpp
     browser/SoundBrowser.h
     browser/SoundBrowser.cpp
+    MainMenu.h
+    MainMenu.cpp
     MainComponent.h
     MainComponent.cpp)
 

@@ -85,7 +85,8 @@ namespace harmonia::ui::theme
 
     namespace size
     {
-        inline constexpr int headerHeight = 34;
+        inline constexpr int menuBarHeight = 26;
+        inline constexpr int headerHeight = 42;       // the transport row under the menu bar
         inline constexpr int statusBarHeight = 24;
         inline constexpr int padding = 8;
         inline constexpr int buttonHeight = 22;
@@ -103,5 +104,17 @@ namespace harmonia::ui::theme
         void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour& backgroundColour,
                                    bool isMouseOverButton, bool isButtonDown) override;
         juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override;
+        void drawButtonText (juce::Graphics&, juce::TextButton&, bool isMouseOverButton, bool isButtonDown) override;
+
+        /** Faders with a cap, like on a mixing desk; knobs whose arc starts from the middle when
+            their range goes both ways (pan); the rest as JUCE draws them. */
+        void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height, float sliderPos, float minSliderPos,
+                               float maxSliderPos, juce::Slider::SliderStyle, juce::Slider&) override;
+        void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height, float sliderPosProportional,
+                               float rotaryStartAngle, float rotaryEndAngle, juce::Slider&) override;
+        int getSliderThumbRadius (juce::Slider&) override;
+
+        juce::Font getMenuBarFont (juce::MenuBarComponent&, int itemIndex, const juce::String& itemText) override;
+        void drawMenuBarBackground (juce::Graphics&, int width, int height, bool isMouseOverBar, juce::MenuBarComponent&) override;
     };
 }

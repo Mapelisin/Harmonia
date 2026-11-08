@@ -99,6 +99,11 @@ namespace harmonia::core
 
         bool canUndo() const;
         bool canRedo() const;
+
+        /** The name of the step undo / redo would take back or do again ("Change tempo"),
+            empty if there is none: for the Edit menu. */
+        juce::String getUndoDescription() const;
+        juce::String getRedoDescription() const;
         void undo();
         void redo();
 

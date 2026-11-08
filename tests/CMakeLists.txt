@@ -65,6 +65,7 @@ add_executable(harmonia_tests
     ui/AudioClipToolsTests.cpp
     ui/ChordNameTests.cpp
     ui/LoopExportTests.cpp
+    ui/MainMenuTests.cpp
     ui/MixDoctorMenuTests.cpp
     ui/ChordLaneTests.cpp)
 

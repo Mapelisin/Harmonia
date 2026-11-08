@@ -2,6 +2,7 @@ juce_add_gui_app(Harmonia
     PRODUCT_NAME "Harmonia"
     COMPANY_NAME "Harmonia"
     BUNDLE_ID "org.harmonia.app"
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.svg"
     VERSION "${PROJECT_VERSION}"
     MICROPHONE_PERMISSION_ENABLED TRUE
     NEEDS_CURL FALSE

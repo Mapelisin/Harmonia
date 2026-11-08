@@ -6,6 +6,7 @@
 #include "audio/Loudness.h"
 #include "audio/MixCheck.h"
 #include "ui/ComputerKeyboard.h"
+#include "ui/Icons.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui
@@ -13,12 +14,19 @@ namespace harmonia::ui
     namespace
     {
         constexpr int trackRowHeight = 40;
-        constexpr int appNameWidth = 90, fileButtonWidth = 50, summaryWidth = 136, tabWidth = 86;
+        constexpr int appNameWidth = 112, menuBarWidth = 380, cpuMeterWidth = 132, tabWidth = 86;
         constexpr int lowerPanelTabs = 1001;
     }
 
     MainComponent::MainComponent (core::Session& s, core::Project& p)
-        : session (s), project (p)
+        : session (s), project (p),
+          cpuMeter ([&s]() -> std::optional<float>
+          {
+              if (! audio::getDeviceStatus (s).isOpen)
+                  return std::nullopt;
+
+              return audio::getAudioCpuLoad (s);
+          })
     {
         // Clicks on widgets that don't take focus land here, so Space and the editing
         // shortcuts keep working wherever the user clicked.
@@ -41,16 +49,11 @@ namespace harmonia::ui
         updateMidiStatus();
 
         transportBar.onPlayModeToggled = [this] { togglePlayMode(); };
+        transportBar.onGoToStart = [this] { goToStart(); };
         arrangement.onPositionChosen = [this] (double beat) { playFrom (beat); };
 
         trackNameLabel.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
         trackNameLabel.setColour (juce::Label::textColourId, theme::colour::textPrimary);
-
-        fileButton.setTooltip ("New, open, save, export WAV");
-        fileButton.onClick = [this] { showFileMenu(); };
-
-        audioSettingsButton.setEnabled (session.devicesEnabled());
-        audioSettingsButton.onClick = [this] { showAudioSettings(); };
 
         shortcutsButton.setTooltip ("Keyboard shortcuts and mouse tricks, with a search (F1)");
         shortcutsButton.onClick = [this] { showShortcuts (! areShortcutsShown()); };
@@ -99,8 +102,7 @@ namespace harmonia::ui
                 statusBar.setMessage (text);
         };
 
-        for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &audioSettingsButton, &shortcutsButton,
-                                                                 &soundsTab, &pianoRollTab, &automationTab, &mixerTab })
+        for (auto* c : std::initializer_list<juce::Component*> { &shortcutsButton, &soundsTab, &pianoRollTab, &automationTab, &mixerTab })
             c->setWantsKeyboardFocus (false);
 
         // Arrangement above, piano roll below; the bar between them can be dragged.
@@ -108,7 +110,7 @@ namespace harmonia::ui
         splitLayout.setItemLayout (1, 6.0, 6.0, 6.0);
         splitLayout.setItemLayout (2, 200.0, -1.0, -0.62);
 
-        for (auto* c : std::initializer_list<juce::Component*> { &transportBar, &fileButton, &audioSettingsButton, &shortcutsButton, &trackNameLabel,
+        for (auto* c : std::initializer_list<juce::Component*> { &menuBar, &cpuMeter, &transportBar, &shortcutsButton, &trackNameLabel,
                                                                  &soundsTab, &pianoRollTab, &automationTab, &mixerTab, &arrangement, &splitter, &pianoRoll,
                                                                  &statusBar })
             addAndMakeVisible (c);
@@ -137,6 +139,8 @@ namespace harmonia::ui
         pianoRollModel.removeListener (this);
         pianoRollModel.setAuditioner (nullptr);
         transportBar.onPlayModeToggled = nullptr;
+        transportBar.onGoToStart = nullptr;
+        menuBar.setModel (nullptr);
         transport.recordsAudio = nullptr;
         noteInput.onStateChanged = nullptr;
         midiInputs.onMessage = nullptr;
@@ -204,13 +208,54 @@ namespace harmonia::ui
         }
     }
 
-    void MainComponent::togglePlayMode()
+    void MainComponent::setPlayMode (arrangement::PlayMode mode)
     {
-        using arrangement::PlayMode;
-        arrangementModel.setPlayMode (arrangementModel.getPlayMode() == PlayMode::clip ? PlayMode::song : PlayMode::clip);
+        arrangementModel.setPlayMode (mode);
         updateLoop();
         transportBar.refresh();
         arrangement.repaint();
+    }
+
+    void MainComponent::togglePlayMode()
+    {
+        using arrangement::PlayMode;
+        setPlayMode (arrangementModel.getPlayMode() == PlayMode::clip ? PlayMode::song : PlayMode::clip);
+    }
+
+    void MainComponent::goToStart()
+    {
+        // Song: its very start (not the loop region's: Home means the beginning). Clip: the clip's start.
+        const auto clipMode = arrangementModel.getPlayMode() == arrangement::PlayMode::clip;
+        const auto beat = clipMode ? std::max (0.0, arrangementModel.getPlayRange().start) : 0.0;
+        transport.setPositionSeconds (project.getEdit().tempoSequence.toTime (te::BeatPosition::fromBeats (beat)).inSeconds());
+        transportBar.refresh();
+    }
+
+    void MainComponent::jumpToMarker (bool next)
+    {
+        const auto now = project.getEdit().tempoSequence.toBeats (te::TimePosition::fromSeconds (transport.getPositionSeconds())).inBeats();
+        const auto target = next ? core::markers::findAfter (project.getEdit(), now + 1.0e-6)
+                                 : core::markers::findAtOrBefore (project.getEdit(), now - 1.0e-3);
+
+        if (target.has_value())
+            playFrom (target->beat);
+        else if (! next)
+            playFrom (0.0);
+    }
+
+    void MainComponent::undo()
+    {
+        pianoRollModel.undo();
+    }
+
+    void MainComponent::redo()
+    {
+        pianoRollModel.redo();
+    }
+
+    bool MainComponent::isArrangementTheEditTarget() const
+    {
+        return arrangement.hasKeyboardFocus (true) || lowerPanel != LowerPanel::pianoRoll;
     }
 
     void MainComponent::playFrom (double beat)
@@ -242,39 +287,32 @@ namespace harmonia::ui
 
         updateLoop();
         transportBar.refresh();
-        repaint (getLocalBounds().removeFromTop (theme::size::headerHeight));
     }
 
     //==============================================================================
-    juce::String MainComponent::getProjectSummary() const
-    {
-        const auto tracks = project.getNumTracks();
-        const auto name = fileCommands != nullptr ? fileCommands->getProjectName() : juce::String ("Untitled");
-        return name + juce::String::fromUTF8 ("  \xc2\xb7  ") + juce::String (tracks) + (tracks == 1 ? " track" : " tracks");
-    }
-
     void MainComponent::paint (juce::Graphics& g)
     {
         g.fillAll (theme::colour::background);
 
-        auto header = getLocalBounds().removeFromTop (theme::size::headerHeight);
+        // The menu row and the transport row under it, one panel.
+        auto top = getLocalBounds().removeFromTop (theme::size::menuBarHeight + theme::size::headerHeight);
         g.setColour (theme::colour::surface);
-        g.fillRect (header);
+        g.fillRect (top);
         g.setColour (theme::colour::border);
-        g.fillRect (header.removeFromBottom (1));
+        g.fillRect (top.removeFromBottom (1));
+        g.setColour (theme::colour::border.withAlpha (0.5f));
+        g.fillRect (top.removeFromTop (theme::size::menuBarHeight).removeFromBottom (1).reduced (theme::size::padding, 0));
 
-        auto text = header.reduced (theme::size::padding, 0);
+        // Harmonia's mark and name.
+        auto name = getLocalBounds().removeFromTop (theme::size::menuBarHeight).reduced (theme::size::padding, 0).removeFromLeft (appNameWidth);
+        icons::drawLogo (g, name.removeFromLeft (18).toFloat().withSizeKeepingCentre (18.0f, 18.0f));
+        name.removeFromLeft (7);
         g.setColour (theme::colour::textPrimary);
-        g.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
-        g.drawText ("Harmonia", text.removeFromLeft (appNameWidth), juce::Justification::centredLeft);
-
-        text.removeFromLeft (fileButtonWidth + theme::size::padding);
-        g.setColour (theme::colour::textSecondary);
-        g.setFont (juce::FontOptions (theme::size::fontSize));
-        g.drawText (getProjectSummary(), text.removeFromLeft (summaryWidth), juce::Justification::centredLeft, true);
+        g.setFont (juce::FontOptions (theme::size::fontSize + 1.0f, juce::Font::bold));
+        g.drawText ("Harmonia", name, juce::Justification::centredLeft);
 
         // The track row: the current track's name over the headers, its instrument to the right.
-        auto trackRow = getLocalBounds().withTrimmedTop (theme::size::headerHeight).removeFromTop (trackRowHeight);
+        auto trackRow = getLocalBounds().withTrimmedTop (theme::size::menuBarHeight + theme::size::headerHeight).removeFromTop (trackRowHeight);
         g.setColour (theme::colour::border);
         g.fillRect (trackRow.removeFromBottom (1));
     }
@@ -282,17 +320,21 @@ namespace harmonia::ui
     void MainComponent::resized()
     {
         auto area = getLocalBounds();
+        auto menuRow = area.removeFromTop (theme::size::menuBarHeight).reduced (theme::size::padding, 0);
         auto header = area.removeFromTop (theme::size::headerHeight).reduced (theme::size::padding, 0);
         statusBar.setBounds (area.removeFromBottom (theme::size::statusBarHeight));
-
         shortcuts.setBounds (getLocalBounds());
-        audioSettingsButton.setBounds (header.removeFromRight (120).withSizeKeepingCentre (120, theme::size::buttonHeight));
-        header.removeFromRight (4);
-        shortcutsButton.setBounds (header.removeFromRight (32).withSizeKeepingCentre (32, theme::size::buttonHeight));
-        header.removeFromLeft (appNameWidth);
-        fileButton.setBounds (header.removeFromLeft (fileButtonWidth).withSizeKeepingCentre (fileButtonWidth, theme::size::buttonHeight));
-        header.removeFromLeft (theme::size::padding + summaryWidth);
-        transportBar.setBounds (header.removeFromLeft (std::max (0, std::min (840, header.getWidth() - theme::size::padding))));
+
+        // Menu row: name, menus; on the right the audio load and the shortcuts.
+        menuRow.removeFromLeft (appNameWidth);
+        shortcutsButton.setBounds (menuRow.removeFromRight (26).withSizeKeepingCentre (26, 20));
+        menuRow.removeFromRight (theme::size::padding);
+        cpuMeter.setBounds (menuRow.removeFromRight (cpuMeterWidth).reduced (0, 3));
+        menuBar.setBounds (menuRow.removeFromLeft (std::min (menuBarWidth, menuRow.getWidth())));
+
+        // The transport in the middle of its row.
+        const auto transportWidth = std::min (TransportBar::getPreferredWidth(), header.getWidth());
+        transportBar.setBounds (header.withSizeKeepingCentre (transportWidth, header.getHeight()));
 
         auto trackRow = area.removeFromTop (trackRowHeight);
         trackNameLabel.setBounds (trackRow.removeFromLeft (arrangement::Arrangement::headerWidth).reduced (theme::size::padding / 2, 0));
@@ -389,15 +431,13 @@ namespace harmonia::ui
         if (mods.isCommandDown() && ! mods.isShiftDown() && ! mods.isAltDown()
             && (code == juce::KeyPress::leftKey || code == juce::KeyPress::rightKey))
         {
-            const auto now = project.getEdit().tempoSequence.toBeats (te::TimePosition::fromSeconds (transport.getPositionSeconds())).inBeats();
-            const auto target = code == juce::KeyPress::leftKey ? core::markers::findAtOrBefore (project.getEdit(), now - 1.0e-3)
-                                                                : core::markers::findAfter (project.getEdit(), now + 1.0e-6);
+            jumpToMarker (code == juce::KeyPress::rightKey);
+            return true;
+        }
 
-            if (target.has_value())
-                playFrom (target->beat);
-            else if (code == juce::KeyPress::leftKey)
-                playFrom (0.0);
-
+        if (code == juce::KeyPress::homeKey && ! mods.isAnyModifierKeyDown())
+        {
+            goToStart();
             return true;
         }
 
@@ -506,11 +546,6 @@ namespace harmonia::ui
     }
 
     //==============================================================================
-    void MainComponent::showFileMenu()
-    {
-        createFileMenu().showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fileButton));
-    }
-
     juce::PopupMenu MainComponent::createFileMenu()
     {
         const auto hasCommands = fileCommands != nullptr;
@@ -564,6 +599,14 @@ namespace harmonia::ui
         menu.addSeparator();
         menu.addItem ("Check loudness for streaming...", [safe] { if (safe != nullptr) safe->checkLoudness(); });
         menu.addItem ("Check the mix (Mix Doctor)...", [safe] { if (safe != nullptr) safe->checkMix(); });
+        menu.addSeparator();
+        menu.addItem ("Audio settings...", session.devicesEnabled(), false, [safe] { if (safe != nullptr) safe->showAudioSettings(); });
+        menu.addSeparator();
+        menu.addItem (MainMenu::makeItem ("Exit", "Alt+F4", true, []
+        {
+            if (auto* app = juce::JUCEApplicationBase::getInstance())
+                app->systemRequestedQuit();
+        }));
         return menu;
     }
 
@@ -806,5 +849,21 @@ namespace harmonia::ui
         options.launchAsync();
 
         statusBar.setWarning ({});
+    }
+
+    void MainComponent::showAbout()
+    {
+        auto* app = juce::JUCEApplicationBase::getInstance();
+        const auto version = app != nullptr ? app->getApplicationVersion() : juce::String();
+
+        juce::AlertWindow::showAsync (juce::MessageBoxOptions().withIconType (juce::MessageBoxIconType::InfoIcon)
+                                                               .withTitle ("About Harmonia")
+                                                               .withMessage ("Harmonia " + version + "\n\n"
+                                                                             "A free music studio (DAW) with open source code.\n"
+                                                                             "Made with JUCE and Tracktion Engine.\n\n"
+                                                                             "github.com/Mapelisin/Harmonia")
+                                                               .withButton ("Close", 0)
+                                                               .withAssociatedComponent (this),
+                                      nullptr);
     }
 }

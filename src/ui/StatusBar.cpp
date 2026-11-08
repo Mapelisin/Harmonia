@@ -26,9 +26,6 @@ namespace harmonia::ui
         const auto status = audio::getDeviceStatus (session);
         deviceOpen = status.isOpen;
         deviceText = status.toDisplayString();
-        // juce::String (float, 0) prints full precision, so round explicitly.
-        cpuText = deviceOpen ? "Audio CPU " + juce::String (juce::roundToInt (audio::getAudioCpuLoad (session) * 100.0f)) + "%"
-                             : juce::String();
 
         if (auto* top = getTopLevelComponent())
             rendererText = getCurrentRendererName (*top);
@@ -50,7 +47,6 @@ namespace harmonia::ui
 
         g.setColour (theme::colour::textSecondary);
         g.drawText (rendererText, area.removeFromRight (160), juce::Justification::centredRight, true);
-        g.drawText (cpuText, area.removeFromRight (110), juce::Justification::centredRight, true);
         g.drawText (midiText, area.removeFromRight (260), juce::Justification::centredRight, true);
 
         if (warningText.isNotEmpty())

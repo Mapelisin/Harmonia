@@ -8,8 +8,10 @@
 #include "audio/PlaybackClock.h"
 #include "audio/Transport.h"
 #include "core/Project.h"
+#include "ui/CpuMeter.h"
 #include "ui/FileCommands.h"
 #include "ui/InstrumentPanel.h"
+#include "ui/MainMenu.h"
 #include "ui/NoteInput.h"
 #include "ui/ShortcutsPanel.h"
 #include "ui/StatusBar.h"
@@ -22,7 +24,7 @@
 
 namespace harmonia::ui
 {
-    /** Root of the main window: header (file menu, transport, audio settings), the current
+    /** Root of the main window: the menu bar (with the audio load), the transport, the current
         track's instrument, the arrangement and below it (a draggable divider between them)
         the sound browser, the piano roll of the open clip, the automation of the current track
         or the mixer (F6 / F7 / F8 / F9), and the status bar. */
@@ -93,8 +95,40 @@ namespace harmonia::ui
         bool areShortcutsShown() const                                  { return shortcuts.isVisible(); }
         ShortcutsPanel& getShortcutsPanel() noexcept                    { return shortcuts; }
 
-        /** The File button's menu. */
+        /** The menu bar's File menu. */
         juce::PopupMenu createFileMenu();
+
+        MainMenu& getMainMenu() noexcept                                { return mainMenu; }
+        juce::MenuBarComponent& getMenuBar() noexcept                   { return menuBar; }
+        CpuMeter& getCpuMeter() noexcept                                { return cpuMeter; }
+
+        //==============================================================================
+        // Commands of the menus and the keys.
+
+        /** Undo / redo, wherever the keyboard is (Ctrl+Z / Ctrl+Y). */
+        void undo();
+        void redo();
+
+        /** Whether Edit's commands (Ctrl+C, Ctrl+V...) go to the clips of the arrangement rather
+            than to the notes of the piano roll: while the arrangement has the keyboard, or the
+            piano roll is hidden. */
+        bool isArrangementTheEditTarget() const;
+
+        /** The playhead back to where Play starts from: the song's start, or the open clip's (Home). */
+        void goToStart();
+
+        /** Play the song or the open clip in a loop (L switches). */
+        void setPlayMode (arrangement::PlayMode);
+        void togglePlayMode();
+
+        /** Plays from the next / previous marker (Ctrl+Right / Ctrl+Left); from the start before the first. */
+        void jumpToMarker (bool next);
+
+        void toggleMetronome();
+        void showAudioSettings();
+
+        /** Help → About: the version, and what Harmonia is made with. */
+        void showAbout();
 
         /** What the lower part of the window shows. */
         enum class LowerPanel { pianoRoll, automation, mixer, sounds };
@@ -138,8 +172,10 @@ namespace harmonia::ui
         core::note_ops::BeatRange playedLoop { -1.0, -1.0 };
 
         TransportBar transportBar { transport, project.getEdit(), noteInput, arrangementModel };
-        juce::TextButton fileButton { "File" };
-        juce::TextButton audioSettingsButton { "Audio settings" }, shortcutsButton { "?" };
+        MainMenu mainMenu { *this };
+        juce::MenuBarComponent menuBar { &mainMenu };
+        CpuMeter cpuMeter;
+        juce::TextButton shortcutsButton { "?" };
         juce::Label trackNameLabel;
         juce::TextButton soundsTab { "Sounds" }, pianoRollTab { "Piano roll" }, automationTab { "Automation" }, mixerTab { "Mixer" };
         std::unique_ptr<InstrumentPanel> instrumentPanel;
@@ -160,15 +196,10 @@ namespace harmonia::ui
         void currentChanged();
         void updateLoop();
         void updateMidiStatus();
-        void toggleMetronome();
-        void togglePlayMode();
         void playFrom (double beat);
 
-        void showFileMenu();
         void chooseFilesToImport();
         void chooseMidiExport();
-        void showAudioSettings();
-        juce::String getProjectSummary() const;
 
         void pianoRollChanged() override;
         void arrangementChanged() override;

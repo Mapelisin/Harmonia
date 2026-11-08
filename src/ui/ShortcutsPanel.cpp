@@ -18,6 +18,7 @@ namespace harmonia::ui
         static const std::vector<Section> sections {
             { "Everywhere", {
                 { "Space", "Play / stop" },
+                { "Home", "Back to the start (of the song, or of the clip in Clip mode)" },
                 { "L", "Clip mode (loop the open clip) / Song mode" },
                 { "R", "Arm recording (when the computer keyboard isn't a piano)" },
                 { "Ctrl+M", "Metronome on / off" },
@@ -28,7 +29,8 @@ namespace harmonia::ui
                 { "Ctrl+R", "Export the song as a WAV file (the File menu also exports the loop region)" },
                 { "F6 / F7 / F8 / F9", "Sounds / piano roll / automation / mixer below" },
                 { "Ctrl+Left / Ctrl+Right", "Play from the previous / next marker" },
-                { "F1", "This list" } } },
+                { "F1", "This list" },
+                { "Menu bar", "Every command, with its key written next to it: File, Edit, View, Track, Transport, Help" } } },
 
             { "Arrangement (after a click in it)", {
                 { "Click a clip", "Open it in the piano roll and select it" },

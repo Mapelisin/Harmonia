@@ -4,7 +4,8 @@
 
 namespace harmonia::ui
 {
-    /** Bottom bar: audio device, an optional warning, audio CPU load and renderer.
+    /** Bottom bar: audio device, an optional warning or message, MIDI keyboards and renderer
+        (the audio load is in the menu row).
         Refreshes a few times a second. */
     class StatusBar final : public juce::Component,
                             private juce::Timer
@@ -27,7 +28,7 @@ namespace harmonia::ui
 
     private:
         core::Session& session;
-        juce::String deviceText, cpuText, rendererText, warningText, midiText, messageText;
+        juce::String deviceText, rendererText, warningText, midiText, messageText;
         juce::uint32 messageTime = 0;
         bool deviceOpen = false;
 

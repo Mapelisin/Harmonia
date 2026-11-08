@@ -8,6 +8,7 @@
 #include "audio/DrumKit.h"
 #include "audio/Limiter.h"
 #include "audio/Pump.h"
+#include "ui/Theme.h"
 
 namespace harmonia::test
 {
@@ -47,6 +48,10 @@ int main (int argc, char** argv)
     harmonia::test::AssertionCatcher assertions;
     juce::Logger::setCurrentLogger (&assertions);
 
+    // The program's own look, so components measure and paint (and snapshots look) as in the app.
+    harmonia::ui::theme::LookAndFeel lookAndFeel;
+    juce::LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
+
     int result = 0;
 
     {
@@ -66,6 +71,7 @@ int main (int argc, char** argv)
         harmonia::test::sharedSession = nullptr;
     }
 
+    juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
     juce::Logger::setCurrentLogger (nullptr);
 
     if (assertions.count > 0)
