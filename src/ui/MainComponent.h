@@ -101,6 +101,7 @@ namespace harmonia::ui
         mixer::Mixer mixer { session, arrangementModel };
         LowerPanel lowerPanel = LowerPanel::pianoRoll;
         StatusBar statusBar { session };
+        std::unique_ptr<juce::FileChooser> importChooser;
 
         /** The arrangement's current track or open clip changed: the piano roll, the keyboards
             and the instrument row follow. */
@@ -112,6 +113,7 @@ namespace harmonia::ui
         void playFrom (double beat);
 
         void showFileMenu();
+        void chooseAudioToImport();
         void showAudioSettings();
         juce::String getProjectSummary() const;
 

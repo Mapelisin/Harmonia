@@ -16,10 +16,10 @@ namespace harmonia::ui::arrangement
     /** A clip as the arrangement draws it. Valid until the next change of the edit. */
     struct DrawnClip
     {
-        te::MidiClip* clip = nullptr;
+        te::Clip* clip = nullptr;
         int trackIndex = 0;
         double startBeat = 0.0, endBeat = 0.0;
-        bool selected = false, open = false, linked = false;
+        bool selected = false, open = false, linked = false, audio = false;
     };
 
     /** Everything the arrangement edits and remembers, without drawing: tracks, the current
@@ -70,13 +70,17 @@ namespace harmonia::ui::arrangement
         /** Opens the clip in the piano roll; its track becomes current. */
         void openClip (te::MidiClip*);
 
+        /** A clip was clicked: a MIDI clip opens in the piano roll; an audio clip makes its track
+            current (nothing open) and is what clip mode plays. */
+        void focusClip (te::Clip&);
+
         /** The current track or the open clip changed (called right away, before returning). */
         std::function<void()> onCurrentChanged;
 
         //==============================================================================
         // Clips for drawing and hit-testing
 
-        /** Every MIDI clip, track by track, each track's in time order. */
+        /** Every clip (MIDI and audio), track by track, each track's in time order. */
         const std::vector<DrawnClip>& getClips();
 
         /** The clip drawn on top at this beat of the track's row, or nullptr. */
@@ -89,9 +93,9 @@ namespace harmonia::ui::arrangement
         // Selection
 
         bool isSelected (const te::Clip&) const;
-        juce::Array<te::MidiClip*> getSelectedClips() const;
-        void setSelection (const juce::Array<te::MidiClip*>&);
-        void setSelected (te::MidiClip&, bool shouldBeSelected);
+        juce::Array<te::Clip*> getSelectedClips() const;
+        void setSelection (const juce::Array<te::Clip*>&);
+        void setSelected (te::Clip&, bool shouldBeSelected);
         void selectAll();
         void deselectAll();
 
@@ -114,27 +118,38 @@ namespace harmonia::ui::arrangement
             loops line up), or of four bars at the start. The new track becomes current. */
         te::AudioTrack* addTrack();
 
+        /** A new empty audio track at the bottom; it becomes current. */
+        te::AudioTrack* addAudioTrack();
+
+        /** Imports audio files at `beat` (snapped down to the grid): the first onto the track at
+            `trackIndex` if that is an audio track, the others (or all) onto new audio tracks
+            below it, named after the files. Selects the new clips and switches to song mode.
+            Returns what went wrong (empty if nothing did). */
+        juce::String importAudio (const juce::Array<juce::File>&, int trackIndex, double beat);
+
         void deleteTrack (te::AudioTrack&);
 
         /** Clips still named after the track get the new name too. */
         void renameTrack (te::AudioTrack&, const juce::String&);
 
-        /** An empty one-bar clip in the grid cell at `beat`, opened in the piano roll. */
+        /** An empty one-bar clip in the grid cell at `beat`, opened in the piano roll.
+            Nothing on an audio track. */
         te::MidiClip* createClip (te::AudioTrack&, double beat);
 
         void deleteSelected();
 
         /** Deletes clips in the current undo transaction (for gestures; see beginGesture). */
-        void removeClips (const juce::Array<te::MidiClip*>&);
+        void removeClips (const juce::Array<te::Clip*>&);
 
         /** Copies the selected clips right after the selection (by whole bars) and selects the
-            copies. Linked copies share their notes with the originals. */
+            copies. Linked copies share their notes with the originals (audio clips are always
+            copied independently). */
         void duplicateSelected (bool linked);
 
         /** Makes the clip independent of its linked copies. */
         void makeUnique (te::MidiClip&);
 
-        void renameClip (te::MidiClip&, const juce::String&);
+        void renameClip (te::Clip&, const juce::String&);
 
         void undo();
         void redo();
@@ -150,7 +165,8 @@ namespace harmonia::ui::arrangement
         void setLoopRegion (core::note_ops::BeatRange);
         void clearLoopRegion();
 
-        /** What Play loops: the open clip in clip mode; in song mode the loop region, or else
+        /** What Play loops: the open clip (or the clicked audio clip) in clip mode; in song mode
+            the loop region, or else
             the whole song up to the end of its last bar. Empty when there is nothing to loop. */
         core::note_ops::BeatRange getPlayRange() const;
 
@@ -159,6 +175,7 @@ namespace harmonia::ui::arrangement
 
         juce::ReferenceCountedObjectPtr<te::AudioTrack> currentTrack;
         juce::ReferenceCountedObjectPtr<te::MidiClip> openedClip;
+        te::Clip::Ptr focusedAudioClip;
 
         // Selected clips by ID, so a clip deleted by undo can't leave a dangling pointer.
         std::vector<te::EditItemID> selection;
@@ -174,6 +191,8 @@ namespace harmonia::ui::arrangement
         juce::ListenerList<Listener> listeners;
 
         void setCurrent (te::AudioTrack*, te::MidiClip*);
+        te::AudioTrack* createAudioTrack (const juce::String& name, te::Track* after);
+        te::Clip* getFocusedAudioClip() const;
         void changed();
         void validateCurrent();
 

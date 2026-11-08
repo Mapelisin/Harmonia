@@ -1,5 +1,6 @@
 #include "ui/arrangement/TrackHeaders.h"
 #include "audio/Instruments.h"
+#include "core/Tracks.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui::arrangement
@@ -10,6 +11,14 @@ namespace harmonia::ui::arrangement
     {
         constexpr int colourStripWidth = 4;
         constexpr int smallButtonSize = 20;
+    }
+
+    void showAddTrackMenu (ArrangementModel& model, juce::Component& target)
+    {
+        juce::PopupMenu menu;
+        menu.addItem ("Instrument track (MIDI, built-in synth)", [&model] { model.addTrack(); });
+        menu.addItem ("Audio track (sound files)", [&model] { model.addAudioTrack(); });
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target));
     }
 
     //==============================================================================
@@ -75,7 +84,8 @@ namespace harmonia::ui::arrangement
             if (! name.isBeingEdited())
                 name.setText (track->getName(), juce::dontSendNotification);
 
-            instrument.setText (audio::instruments::getName (*track), juce::dontSendNotification);
+            instrument.setText (core::tracks::isAudio (*track) ? juce::String ("Audio") : audio::instruments::getName (*track),
+                                juce::dontSendNotification);
 
             const auto muted = track->isMuted (false), soloed = track->isSolo (false);
             mute.setColour (juce::TextButton::buttonColourId, muted ? colours::mute.withAlpha (0.8f) : theme::colour::surfaceRaised);
@@ -152,7 +162,8 @@ namespace harmonia::ui::arrangement
                 if (safe != nullptr)
                     safe->name.showEditor();
             });
-            menu.addItem ("Add track", [&m = model] { m.addTrack(); });
+            menu.addItem ("Add instrument track", [&m = model] { m.addTrack(); });
+            menu.addItem ("Add audio track", [&m = model] { m.addAudioTrack(); });
             menu.addSeparator();
             menu.addItem ("Delete track", [&m = model, t = track] { m.deleteTrack (*t); });
             menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this));

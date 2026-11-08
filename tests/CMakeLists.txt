@@ -1,6 +1,7 @@
 add_executable(harmonia_tests
     TestMain.cpp
     TestSession.h
+    TestAudioFiles.h
     core/TestProject.h
     core/ProjectTests.cpp
     core/NoteTests.cpp
@@ -17,7 +18,8 @@ add_executable(harmonia_tests
     ui/PianoRollViewTests.cpp
     ui/NoteInputTests.cpp
     ui/ArrangementTests.cpp
-    ui/MixerTests.cpp)
+    ui/MixerTests.cpp
+    ui/AudioClipTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)

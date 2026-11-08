@@ -13,7 +13,8 @@ namespace harmonia::ui::arrangement
         Ctrl+drag: independent copy; Ctrl+click: add to / remove from the selection. Drag a
         clip's left or right edge: show or hide its beginning or end. Right button: delete
         (drag over clips to delete several). Drag on empty space: select with a rectangle
-        (Shift or Ctrl adds). Double-click on empty space: new clip. The small mark at a clip's
+        (Shift or Ctrl adds). Double-click on empty space: new clip (not on audio tracks; audio
+        clips only move to audio tracks, MIDI clips to instrument tracks). The small mark at a clip's
         top left opens its menu. Alt turns snap off. Middle button scrolls. */
     class ArrangementGestures
     {
@@ -39,7 +40,7 @@ namespace harmonia::ui::arrangement
         std::optional<juce::Rectangle<float>> getSelectionRectangle() const;
 
         /** The clip's menu mark was clicked (position in clip-area pixels). */
-        std::function<void (te::MidiClip&, juce::Point<float>)> onClipMenuRequested;
+        std::function<void (te::Clip&, juce::Point<float>)> onClipMenuRequested;
 
         /** The view was scrolled by the middle button. */
         std::function<void()> onViewScrolled;
@@ -80,12 +81,12 @@ namespace harmonia::ui::arrangement
         int appliedTrackDelta = 0;
 
         // rectangle
-        juce::Array<te::MidiClip*> selectionAtStart;
+        juce::Array<te::Clip*> selectionAtStart;
 
         core::snap::Mode getSnapMode (const Pointer&) const;
         int trackAt (float y) const;
 
-        void beginMove (te::MidiClip&, const Pointer&);
+        void beginMove (te::Clip&, const Pointer&);
         void dragMove (const Pointer&);
         void makeCopies();
         void dragResize (const Pointer&);

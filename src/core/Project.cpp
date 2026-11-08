@@ -122,9 +122,10 @@ namespace harmonia::core
         return getTracks().size();
     }
 
-    te::AudioTrack* Project::addTrack (const juce::String& name)
+    te::AudioTrack* Project::addTrack (const juce::String& name, te::Track* after)
     {
-        auto track = edit->insertNewAudioTrack (te::TrackInsertPoint (nullptr, getTracks().getLast()), nullptr);
+        te::Track* preceding = after != nullptr ? after : getTracks().getLast();
+        auto track = edit->insertNewAudioTrack (te::TrackInsertPoint (nullptr, preceding), nullptr);
 
         if (track != nullptr)
             track->setName (name);
@@ -142,6 +143,41 @@ namespace harmonia::core
         const te::TimeRange range (edit->tempoSequence.toTime (start), edit->tempoSequence.toTime (end));
 
         return track.insertMIDIClip (name, range, nullptr).get();
+    }
+
+    bool Project::canImport (const juce::File& file) const
+    {
+        auto& formats = edit->engine.getAudioFileFormatManager().readFormatManager;
+        return formats.findFormatForFileExtension (file.getFileExtension()) != nullptr;
+    }
+
+    te::WaveAudioClip* Project::addAudioClip (te::AudioTrack& track, const juce::File& file, double startBeat,
+                                              juce::String& error)
+    {
+        error = {};
+
+        if (! file.existsAsFile())
+        {
+            error = "File not found: " + file.getFullPathName();
+            return nullptr;
+        }
+
+        const te::AudioFile audioFile (edit->engine, file);
+
+        if (! canImport (file) || ! audioFile.isValid() || audioFile.getLength() <= 0.0)
+        {
+            error = "Can't read " + file.getFileName() + " as audio";
+            return nullptr;
+        }
+
+        const auto start = edit->tempoSequence.toTime (te::BeatPosition::fromBeats (std::max (0.0, startBeat)));
+        const te::ClipPosition position { { start, start + te::TimeDuration::fromSeconds (audioFile.getLength()) }, {} };
+        auto clip = track.insertWaveClip (file.getFileNameWithoutExtension(), file, position, false);
+
+        if (clip == nullptr)
+            error = file.getFileName() + " could not be added";
+
+        return clip.get();
     }
 
     double Project::getTempoBpm() const

@@ -5,7 +5,8 @@
 namespace harmonia::audio
 {
     /** Renders the whole song (from the start to the end of the last clip, plus a moment for
-        notes to ring out) to a 24-bit WAV file. Blocks until done.
+        notes to ring out) to a 24-bit WAV file, as it sounds: muted tracks are left out, and
+        while some tracks are soloed only those play. Blocks until done.
         Returns an error message, empty on success. */
     juce::String exportWav (te::Edit&, const juce::File&);
 

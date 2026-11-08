@@ -37,12 +37,20 @@ namespace harmonia::core
         juce::Array<te::AudioTrack*> getTracks() const;
         int getNumTracks() const;
 
-        /** Appends a track at the bottom. */
-        te::AudioTrack* addTrack (const juce::String& name);
+        /** Adds a track after `after`, or at the bottom. */
+        te::AudioTrack* addTrack (const juce::String& name, te::Track* after = nullptr);
 
         /** Inserts an empty MIDI clip; positions are in beats from the start of the song. */
         te::MidiClip* addMidiClip (te::AudioTrack&, double startBeat, double lengthBeats,
                                    const juce::String& name = {});
+
+        /** Inserts a clip playing a whole audio file (WAV, AIFF, FLAC, OGG, MP3...) from `startBeat`.
+            The clip refers to the file where it is. Returns nullptr with the reason in `error`
+            if the file can't be read. */
+        te::WaveAudioClip* addAudioClip (te::AudioTrack&, const juce::File&, double startBeat, juce::String& error);
+
+        /** Whether a file looks like audio Harmonia can read (by its extension). */
+        bool canImport (const juce::File&) const;
 
         double getTempoBpm() const;
         void setTempoBpm (double bpm);

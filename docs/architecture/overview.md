@@ -88,7 +88,12 @@ Tracktion останавливает воспроизведение, когда 
   клип, выделение клипов (по ID, чтобы undo не оставлял висячих указателей), привязка, режим Clip/Song, луп и
   команды; `ArrangementGestures` — мышь (двигать, копии, края, удаление, рамка); компоненты `ClipArea`,
   `ArrangementRuler`, `TrackHeaders`, `Arrangement` только рисуют общий вид (`ArrangementView`) и передают ввод.
-  Операции над клипами — в `core/Clips` (`move`, `setStart`, `setEnd`, `remove`), связанные копии — `core/ClipLinks`.
+  Операции над клипами — в `core/Clips` (`move`, `setStart`, `setEnd`, `duplicate`, `remove`; MIDI и аудио),
+  связанные копии — `core/ClipLinks` (только MIDI). Вид дорожки — `core/Tracks` (с инструментом или аудио,
+  свойство `hTrackKind` в проекте): аудиоклипы живут только на аудиодорожках, MIDI — только на дорожках
+  с инструментом. Звуковые файлы: `Project::addAudioClip` (клип ссылается на файл на месте),
+  `ArrangementModel::importAudio` (куда класть), перетаскивание — `Arrangement` (`FileDragAndDropTarget`),
+  волна — `ClipArea` (`te::SmartThumbnail` на клип, только видимая часть).
   `ui/MainComponent` связывает: открытый клип → piano roll, текущая дорожка → инструмент, клавиатуры; что играет
   Play — `ArrangementModel::getPlayRange`. Файлы (новый/открыть/сохранить, экспорт `audio/Export`) — `app/MainWindow`,
   он владеет проектом и пересоздаёт экран при смене проекта; `MainComponent` зовёт их через `ui/FileCommands`.

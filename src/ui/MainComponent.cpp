@@ -1,4 +1,5 @@
 #include "ui/MainComponent.h"
+#include "core/Tracks.h"
 #include "audio/DeviceStatus.h"
 #include "ui/ComputerKeyboard.h"
 #include "ui/Theme.h"
@@ -61,6 +62,14 @@ namespace harmonia::ui
         mixerTab.onClick = [this] { showLowerPanel (LowerPanel::mixer); };
 
         mixer.onMessage = [this] (const juce::String& text, bool isProblem)
+        {
+            if (isProblem)
+                statusBar.setWarning (text);
+            else
+                statusBar.setMessage (text);
+        };
+
+        arrangement.onMessage = [this] (const juce::String& text, bool isProblem)
         {
             if (isProblem)
                 statusBar.setWarning (text);
@@ -141,6 +150,9 @@ namespace harmonia::ui
         }
 
         trackNameLabel.setText (track != nullptr ? track->getName() : juce::String ("No track"), juce::dontSendNotification);
+        pianoRoll.getGrid().setEmptyText (track != nullptr && core::tracks::isAudio (*track)
+                                              ? "Audio track: its clips are sound files. The piano roll edits the MIDI clips of instrument tracks."
+                                              : pianoroll::NoteGrid::getDefaultEmptyText());
 
         if (clip != pianoRollModel.getClip())
         {
@@ -417,8 +429,37 @@ namespace harmonia::ui
         menu.addItem ("Save  (Ctrl+S)", hasCommands, false, run (&FileCommands::saveProject));
         menu.addItem ("Save as...  (Ctrl+Shift+S)", hasCommands, false, run (&FileCommands::saveProjectAs));
         menu.addSeparator();
+        menu.addItem ("Import audio...", [safe] { if (safe != nullptr) safe->chooseAudioToImport(); });
         menu.addItem ("Export WAV...  (Ctrl+R)", hasCommands, false, run (&FileCommands::exportWav));
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fileButton));
+    }
+
+    void MainComponent::chooseAudioToImport()
+    {
+        auto& formats = session.getEngine().getAudioFileFormatManager().readFormatManager;
+        const auto folder = juce::File::getSpecialLocation (juce::File::userMusicDirectory);
+
+        importChooser = std::make_unique<juce::FileChooser> ("Import audio", folder, formats.getWildcardForAllFormats());
+        importChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles
+                                        | juce::FileBrowserComponent::canSelectMultipleItems,
+                                    [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::FileChooser& fc)
+        {
+            const auto files = fc.getResults();
+
+            if (safe == nullptr || files.isEmpty())
+                return;
+
+            // Onto the current track if it is an audio track (else new tracks), at the playhead.
+            auto& model = safe->arrangementModel;
+            const auto beat = model.getEdit().tempoSequence.toBeats (te::TimePosition::fromSeconds (safe->transport.getPositionSeconds())).inBeats();
+            const auto error = model.importAudio (files, model.indexOf (model.getCurrentTrack()), beat);
+
+            if (error.isNotEmpty())
+                safe->showWarning (error);
+            else
+                safe->showMessage (files.size() == 1 ? "Added " + files.getFirst().getFileName()
+                                                     : "Added " + juce::String (files.size()) + " audio files");
+        });
     }
 
     void MainComponent::showAudioSettings()

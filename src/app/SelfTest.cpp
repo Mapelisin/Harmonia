@@ -10,6 +10,7 @@
 #include "audio/Transport.h"
 #include "core/NoteEditor.h"
 #include "core/Project.h"
+#include "core/Tracks.h"
 
 namespace harmonia::app
 {
@@ -254,6 +255,7 @@ namespace harmonia::app
                     checkEffects (*project, track, transport, level);
                 }
 
+                checkAudioClip (*project, transport);
                 checkRender (*project, "builtin-synth.wav");
                 checkExport (*project, "export.wav");
 
@@ -572,6 +574,66 @@ namespace harmonia::app
                                                       + juce::String (juce::Decibels::gainToDecibels (stats.peak), 1) + " dBFS)");
                 report.check (stats.seconds >= expected - 0.1, "Rendered length " + juce::String (stats.seconds, 2)
                                                                    + " s covers the song (" + juce::String (expected, 2) + " s)");
+            }
+
+            /** A sound file dragged in: it becomes a clip on an audio track and is heard when the
+                song plays (and in the render and export after this). */
+            void checkAudioClip (core::Project& project, audio::Transport& transport)
+            {
+                options.renderDirectory.createDirectory();
+                const auto file = options.renderDirectory.getChildFile ("tone.wav");
+                report.check (writeTone (file, 2.0), "Wrote a test sound file -> " + file.getFullPathName());
+
+                auto* track = project.addTrack ("Audio");
+
+                if (track == nullptr)
+                {
+                    report.check (false, "Added an audio track");
+                    return;
+                }
+
+                core::tracks::setKind (*track, core::tracks::Kind::audio);
+                juce::String error;
+                auto* clip = project.addAudioClip (*track, file, 0.0, error);
+                report.check (clip != nullptr, "The sound file became an audio clip"
+                                                   + (error.isEmpty() ? juce::String() : " (" + error + ")"));
+
+                if (clip == nullptr || ! options.useDevice || audio::getDeviceManager (session).getCurrentAudioDevice() == nullptr)
+                    return;
+
+                TrackLevel audioLevel (*track);
+                transport.setPositionSeconds (0.0);
+                transport.play();
+                pump (1500, audioLevel, transport, report);
+                const auto peak = audioLevel.takePeakDb();
+                report.check (peak > -30.0f, "The audio clip is heard while the song plays (peak "
+                                                 + juce::String (peak, 1) + " dBFS)");
+                transport.stop();
+                pump (200, audioLevel, transport, report);
+            }
+
+            /** A 220 Hz tone at -6 dBFS. */
+            static bool writeTone (const juce::File& file, double seconds)
+            {
+                constexpr double sampleRate = 44100.0;
+                file.deleteFile();
+
+                std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (file);
+                juce::WavAudioFormat wav;
+                auto writer = wav.createWriterFor (stream, juce::AudioFormatWriterOptions {}
+                                                               .withSampleRate (sampleRate)
+                                                               .withNumChannels (1)
+                                                               .withBitsPerSample (16));
+
+                if (writer == nullptr)
+                    return false;
+
+                juce::AudioBuffer<float> buffer (1, (int) (seconds * sampleRate));
+
+                for (int i = 0; i < buffer.getNumSamples(); ++i)
+                    buffer.setSample (0, i, 0.5f * (float) std::sin (juce::MathConstants<double>::twoPi * 220.0 * i / sampleRate));
+
+                return writer->writeFromAudioSampleBuffer (buffer, 0, buffer.getNumSamples());
             }
 
             /** File > Export WAV: the song plus its tail, with the device running. */

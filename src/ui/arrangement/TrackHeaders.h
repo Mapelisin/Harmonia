@@ -5,6 +5,9 @@
 
 namespace harmonia::ui::arrangement
 {
+    /** "Instrument track" / "Audio track", shown under `target`. */
+    void showAddTrackMenu (ArrangementModel&, juce::Component& target);
+
     /** The column left of the clips: one header per track with its name (double-click to
         rename), mute, solo and volume. Click a header to make the track current; right-click
         for its menu. */

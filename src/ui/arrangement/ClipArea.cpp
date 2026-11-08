@@ -1,6 +1,7 @@
 #include "ui/arrangement/ClipArea.h"
 #include "core/Clips.h"
 #include "ui/Theme.h"
+#include <set>
 
 namespace harmonia::ui::arrangement
 {
@@ -68,6 +69,9 @@ namespace harmonia::ui::arrangement
             if (d.trackIndex >= firstRow && d.trackIndex <= lastRow && d.endBeat > leftBeat && d.startBeat < rightBeat)
                 paintClip (g, d);
 
+        forgetRemovedWaveforms();
+        paintDropMarker (g);
+
         if (const auto rectangle = gestures.getSelectionRectangle())
         {
             g.setColour (theme::pianoroll::selectionFill);
@@ -82,7 +86,7 @@ namespace harmonia::ui::arrangement
         if (numTracks == 0)
             g.drawText ("No tracks yet: + Track adds one", bounds, juce::Justification::centred);
         else if (model.getClips().empty())
-            g.drawText ("Double-click in a track's row to add a clip",
+            g.drawText ("Double-click in a track's row to add a clip, or drop audio files (WAV, MP3, FLAC...) here",
                         bounds.withTop ((int) view.trackToY (numTracks)).withHeight ((int) view.trackHeight), juce::Justification::centred);
 
         if (playheadBeat.has_value())
@@ -146,42 +150,10 @@ namespace harmonia::ui::arrangement
             juce::Graphics::ScopedSaveState save (g);
             g.reduceClipRegion (r.toNearestInt());
 
-            // A small picture of the notes: the clip's own pitch range fills the body.
-            const auto& notes = d.clip->getSequence().getNotes();
-
-            if (! notes.isEmpty())
-            {
-                int lowest = 127, highest = 0;
-
-                for (auto* n : notes)
-                {
-                    lowest = std::min (lowest, n->getNoteNumber());
-                    highest = std::max (highest, n->getNoteNumber());
-                }
-
-                const auto inner = body.reduced (0.0f, 3.0f);
-                const auto span = std::max (1, highest - lowest);
-                const auto noteHeight = juce::jlimit (1.5f, 4.0f, inner.getHeight() / (float) (span + 1));
-                const auto usable = inner.getHeight() - noteHeight;
-                const auto contentStart = core::clips::getContentStartBeat (*d.clip);
-                const auto clipLeft = view.xToBeat (r.getX()), clipRight = view.xToBeat (r.getRight());
-
-                g.setColour (colour.brighter (0.5f));
-
-                for (auto* n : notes)
-                {
-                    const auto start = contentStart + n->getStartBeat().inBeats();
-                    const auto end = start + n->getLengthBeats().inBeats();
-
-                    if (end <= clipLeft || start >= clipRight)
-                        continue;
-
-                    const auto position = highest == lowest ? 0.5f : (float) (n->getNoteNumber() - lowest) / (float) span;
-                    const auto x = view.beatToX (start);
-                    g.fillRect (juce::Rectangle<float> (x, inner.getY() + usable * (1.0f - position),
-                                                        std::max (1.0f, view.beatToX (end) - x), noteHeight));
-                }
-            }
+            if (auto* midi = dynamic_cast<te::MidiClip*> (d.clip))
+                paintNotes (g, *midi, r, body, colour);
+            else if (auto* audio = dynamic_cast<te::AudioClipBase*> (d.clip))
+                paintWaveform (g, *audio, body, colour);
 
             // Header: the menu mark, the link mark and the name.
             auto text = header.reduced (2.0f, 0.0f);
@@ -223,6 +195,178 @@ namespace harmonia::ui::arrangement
             g.setColour (theme::pianoroll::noteSelected);
             g.drawRect (r.reduced (1.5f), 1.0f);
         }
+    }
+
+    void ClipArea::paintNotes (juce::Graphics& g, te::MidiClip& clip, juce::Rectangle<float> r,
+                               juce::Rectangle<float> body, juce::Colour colour)
+    {
+        // A small picture of the notes: the clip's own pitch range fills the body.
+        const auto& notes = clip.getSequence().getNotes();
+
+        if (notes.isEmpty())
+            return;
+
+        int lowest = 127, highest = 0;
+
+        for (auto* n : notes)
+        {
+            lowest = std::min (lowest, n->getNoteNumber());
+            highest = std::max (highest, n->getNoteNumber());
+        }
+
+        const auto inner = body.reduced (0.0f, 3.0f);
+        const auto span = std::max (1, highest - lowest);
+        const auto noteHeight = juce::jlimit (1.5f, 4.0f, inner.getHeight() / (float) (span + 1));
+        const auto usable = inner.getHeight() - noteHeight;
+        const auto contentStart = core::clips::getContentStartBeat (clip);
+        const auto clipLeft = view.xToBeat (r.getX()), clipRight = view.xToBeat (r.getRight());
+
+        g.setColour (colour.brighter (0.5f));
+
+        for (auto* n : notes)
+        {
+            const auto start = contentStart + n->getStartBeat().inBeats();
+            const auto end = start + n->getLengthBeats().inBeats();
+
+            if (end <= clipLeft || start >= clipRight)
+                continue;
+
+            const auto position = highest == lowest ? 0.5f : (float) (n->getNoteNumber() - lowest) / (float) span;
+            const auto x = view.beatToX (start);
+            g.fillRect (juce::Rectangle<float> (x, inner.getY() + usable * (1.0f - position),
+                                                std::max (1.0f, view.beatToX (end) - x), noteHeight));
+        }
+    }
+
+    void ClipArea::paintWaveform (juce::Graphics& g, te::AudioClipBase& clip, juce::Rectangle<float> body, juce::Colour colour)
+    {
+        const auto file = clip.getCurrentSourceFile();
+
+        if (! file.existsAsFile())
+        {
+            g.setColour (theme::colour::warning);
+            g.setFont (juce::FontOptions (theme::size::smallFontSize));
+            g.drawText ("File missing: " + file.getFileName(), body.reduced (4.0f, 0.0f), juce::Justification::centredLeft, true);
+            return;
+        }
+
+        // Only the part on screen: the clip may be much wider than the window.
+        const auto visible = body.reduced (0.0f, 2.0f).getIntersection (g.getClipBounds().toFloat()).getSmallestIntegerContainer();
+
+        if (visible.isEmpty())
+            return;
+
+        // Which stretch of the file plays there (clips play their file at its own speed).
+        const auto& tempo = model.getEdit().tempoSequence;
+        const auto sourceStart = clip.getPosition().getStartOfSource();
+        const auto fileTimeAt = [&] (int x)
+        {
+            const auto songTime = tempo.toTime (te::BeatPosition::fromBeats (view.xToBeat ((float) x)));
+            return te::TimePosition::fromSeconds ((songTime - sourceStart).inSeconds());
+        };
+
+        auto& thumbnail = getWaveform (clip);
+        g.setColour (colour.brighter (0.55f));
+        thumbnail.drawChannels (g, visible, { fileTimeAt (visible.getX()), fileTimeAt (visible.getRight()) },
+                                clip.getGain());
+    }
+
+    te::SmartThumbnail& ClipArea::getWaveform (te::AudioClipBase& clip)
+    {
+        auto& engine = model.getEdit().engine;
+        const auto file = clip.getCurrentSourceFile();
+        auto& waveform = waveforms[clip.itemID.getRawID()];
+
+        if (waveform.thumbnail == nullptr)
+            waveform.thumbnail = std::make_unique<te::SmartThumbnail> (engine, te::AudioFile (engine, file), *this, nullptr);
+        else if (waveform.file != file)
+            waveform.thumbnail->setNewFile (te::AudioFile (engine, file));
+
+        waveform.file = file;
+        return *waveform.thumbnail;
+    }
+
+    void ClipArea::forgetRemovedWaveforms()
+    {
+        std::set<juce::uint64> present;
+
+        for (const auto& d : model.getClips())
+            if (d.audio)
+                present.insert (d.clip->itemID.getRawID());
+
+        for (auto it = waveforms.begin(); it != waveforms.end();)
+            it = present.count (it->first) == 0 ? waveforms.erase (it) : std::next (it);
+    }
+
+    bool ClipArea::areWaveformsLoaded() const
+    {
+        for (const auto& d : model.getClips())
+        {
+            if (! d.audio)
+                continue;
+
+            auto* clip = dynamic_cast<te::AudioClipBase*> (d.clip);
+
+            if (clip == nullptr || ! clip->getCurrentSourceFile().existsAsFile())
+                continue;
+
+            const auto it = waveforms.find (clip->itemID.getRawID());
+
+            if (it == waveforms.end())
+                return false;
+
+            // An empty thumbnail counts as "fully loaded" before it starts reading.
+            const auto& thumbnail = *it->second.thumbnail;
+
+            if (thumbnail.isOutOfDate() || thumbnail.getTotalLength() <= 0.0 || ! thumbnail.isFullyLoaded())
+                return false;
+        }
+
+        return true;
+    }
+
+    void ClipArea::paintDropMarker (juce::Graphics& g)
+    {
+        if (! dropMarker.has_value())
+            return;
+
+        const auto numTracks = model.getNumTracks();
+        const auto x = std::round (view.beatToX (dropMarker->beat));
+        juce::Rectangle<float> lane;
+
+        if (dropMarker->newTrack)
+        {
+            // A new track goes below the one pointed at (or below them all).
+            const auto below = dropMarker->trackIndex >= 0 ? dropMarker->trackIndex + 1 : numTracks;
+            const auto y = view.trackToY (below);
+            lane = { 0.0f, y, (float) getWidth(), view.trackHeight };
+
+            g.setColour (theme::colour::accent);
+            g.fillRect (0.0f, y - 1.0f, (float) getWidth(), 2.0f);
+            g.setColour (theme::colour::accent.withAlpha (0.08f));
+            g.fillRect (lane);
+            g.setColour (theme::colour::textSecondary);
+            g.setFont (juce::FontOptions (theme::size::smallFontSize));
+            g.drawText ("New audio track", lane.withTrimmedLeft (x + 6.0f).toNearestInt(), juce::Justification::centredLeft, true);
+        }
+        else
+        {
+            lane = { 0.0f, view.trackToY (dropMarker->trackIndex), (float) getWidth(), view.trackHeight };
+            g.setColour (theme::colour::accent.withAlpha (0.12f));
+            g.fillRect (lane);
+        }
+
+        g.setColour (theme::colour::accent);
+        g.fillRect (x, lane.getY(), 2.0f, lane.getHeight());
+    }
+
+    void ClipArea::setDropMarker (std::optional<DropMarker> marker)
+    {
+        if (marker == dropMarker)
+            return;
+
+        dropMarker = marker;
+        repaint();
     }
 
     //==============================================================================

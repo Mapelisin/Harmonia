@@ -1,5 +1,6 @@
 #include "ui/mixer/Mixer.h"
 #include "ui/Theme.h"
+#include "ui/arrangement/TrackHeaders.h"
 
 namespace harmonia::ui::mixer
 {
@@ -20,7 +21,7 @@ namespace harmonia::ui::mixer
 
         addTrackButton.setTooltip ("Add a track");
         addTrackButton.setWantsKeyboardFocus (false);
-        addTrackButton.onClick = [this] { model.addTrack(); };
+        addTrackButton.onClick = [this] { arrangement::showAddTrackMenu (model, addTrackButton); };
         stripRow.addAndMakeVisible (addTrackButton);
 
         connect (master);

@@ -65,8 +65,21 @@ namespace harmonia::ui::pianoroll
         {
             g.setColour (theme::colour::textSecondary);
             g.setFont (juce::FontOptions (theme::size::fontSize));
-            g.drawText ("No clip open: click a clip in the arrangement, or double-click in a track's row to make one",
-                        getLocalBounds(), juce::Justification::centred);
+            g.drawText (emptyText, getLocalBounds(), juce::Justification::centred);
+        }
+    }
+
+    juce::String NoteGrid::getDefaultEmptyText()
+    {
+        return "No clip open: click a clip in the arrangement, or double-click in a track's row to make one";
+    }
+
+    void NoteGrid::setEmptyText (const juce::String& text)
+    {
+        if (text != emptyText)
+        {
+            emptyText = text;
+            repaint();
         }
     }
 

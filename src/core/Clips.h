@@ -29,22 +29,33 @@ namespace harmonia::core::clips
     /** The track's MIDI clips in time order. */
     juce::Array<te::MidiClip*> getMidiClips (te::AudioTrack&);
 
+    /** The track's MIDI and audio clips in time order. */
+    juce::Array<te::Clip*> getClips (te::AudioTrack&);
+
+    /** An audio clip (plays a file), not a MIDI clip. */
+    bool isAudio (const te::Clip&);
+
     /** False once the clip has been deleted (also by undo) or its track has. */
     bool isInEdit (const te::Clip&);
 
     /** Where the last clip of the song ends (0 for an empty song). */
     double getSongEndBeat (const te::Edit&);
 
-    /** Puts the clip at `startBeat` (at least 0) on `track`, with its length and notes. */
-    void move (te::MidiClip&, double startBeat, te::AudioTrack& track);
+    /** Puts the clip at `startBeat` (at least 0) on `track`, with its length and content. */
+    void move (te::Clip&, double startBeat, te::AudioTrack& track);
 
-    /** Moves the clip's start, its notes staying where they are in the song: hides or shows
-        the beginning. Not before the content start, and at least `minLengthBeats` long. */
-    void setStart (te::MidiClip&, double startBeat, double minLengthBeats);
+    /** Moves the clip's start, its notes (or audio) staying where they are in the song: hides or
+        shows the beginning. Not before the content start, and at least `minLengthBeats` long. */
+    void setStart (te::Clip&, double startBeat, double minLengthBeats);
 
-    /** Moves the clip's end, its notes staying where they are. At least `minLengthBeats` long. */
-    void setEnd (te::MidiClip&, double endBeat, double minLengthBeats);
+    /** Moves the clip's end, its content staying where it is. At least `minLengthBeats` long;
+        an audio clip not past the end of its file. */
+    void setEnd (te::Clip&, double endBeat, double minLengthBeats);
+
+    /** A copy of the clip on its track at `startBeat`. A linked copy (MIDI clips only; audio
+        clips are always copied independently) shares its notes with the original. */
+    te::Clip* duplicate (te::Clip&, double startBeat, bool linked);
 
     /** Deletes clips. A link group left with one clip stops being a group. */
-    void remove (const juce::Array<te::MidiClip*>&);
+    void remove (const juce::Array<te::Clip*>&);
 }

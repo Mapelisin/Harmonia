@@ -24,10 +24,15 @@ namespace harmonia::ui::pianoroll
         /** Moves the playhead line (song beats), or hides it. */
         void setPlayheadBeat (std::optional<double>);
 
+        /** What it says while no clip is open. */
+        void setEmptyText (const juce::String&);
+        static juce::String getDefaultEmptyText();
+
         /** Zoom or scroll changed here (wheel, middle button). */
         std::function<void()> onViewChanged;
 
     private:
+        juce::String emptyText = getDefaultEmptyText();
         PianoRollModel& model;
         View& view;
         GridGestures gestures { model, view };

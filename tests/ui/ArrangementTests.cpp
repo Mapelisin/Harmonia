@@ -148,7 +148,7 @@ TEST_SUITE ("arrangement: model")
         auto* linked = onTrack[1];
         CHECK (clips::getStartBeat (*linked) == doctest::Approx (16.0));
         CHECK (links::getGroup (*f.clip).contains (linked));
-        CHECK (f.model.getSelectedClips() == juce::Array<te::MidiClip*> { linked });
+        CHECK (f.model.getSelectedClips() == juce::Array<te::Clip*> { linked });
 
         f.model.duplicateSelected (false);
         onTrack = f.clipsOn (*f.track);
@@ -253,14 +253,14 @@ TEST_SUITE ("arrangement: mouse")
         f.click (f.at (17.0, 1));
         CHECK (f.model.getOpenClip() == other);
         CHECK (f.model.getCurrentTrack() == second);
-        CHECK (f.model.getSelectedClips() == juce::Array<te::MidiClip*> { other });
+        CHECK (f.model.getSelectedClips() == juce::Array<te::Clip*> { other });
 
         f.click (f.at (4.0, 0), ctrl);
         CHECK (f.model.getOpenClip() == f.clip);
         CHECK (f.model.getSelectedClips().size() == 2);
 
         f.click (f.at (17.0, 1), ctrl);
-        CHECK (f.model.getSelectedClips() == juce::Array<te::MidiClip*> { f.clip });
+        CHECK (f.model.getSelectedClips() == juce::Array<te::Clip*> { f.clip });
 
         // A click on empty space clears the selection.
         f.click (f.at (40.0, 0));
@@ -317,7 +317,7 @@ TEST_SUITE ("arrangement: mouse")
         CHECK (clips::getStartBeat (*onTrack[0]) == doctest::Approx (0.0));
         CHECK (clips::getStartBeat (*onTrack[1]) == doctest::Approx (16.0));
         CHECK (links::getGroup (*f.clip).size() == 2);
-        CHECK (f.model.getSelectedClips() == juce::Array<te::MidiClip*> { onTrack[1] });
+        CHECK (f.model.getSelectedClips() == juce::Array<te::Clip*> { onTrack[1] });
         CHECK (f.model.getOpenClip() == onTrack[1]);
 
         f.model.undo();
@@ -407,8 +407,8 @@ TEST_SUITE ("arrangement: mouse")
     TEST_CASE ("the mark at a clip's top left asks for its menu; edges and marks set the cursor")
     {
         ArrangementFixture f;
-        te::MidiClip* asked = nullptr;
-        f.gestures.onClipMenuRequested = [&asked] (te::MidiClip& clip, juce::Point<float>) { asked = &clip; };
+        te::Clip* asked = nullptr;
+        f.gestures.onClipMenuRequested = [&asked] (te::Clip& clip, juce::Point<float>) { asked = &clip; };
 
         f.click ({ f.view.beatToX (0.0) + 5.0f, f.view.trackToY (0) + 7.0f });
         CHECK (asked == f.clip);

@@ -2,6 +2,7 @@
 #include "audio/Instruments.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
+#include "core/Tracks.h"
 
 namespace harmonia::ui::arrangement
 {
@@ -25,7 +26,8 @@ namespace harmonia::ui::arrangement
         bool affectsArrangement (juce::ValueTree tree)
         {
             for (; tree.isValid(); tree = tree.getParent())
-                if (tree.hasType (te::IDs::TRACK) || tree.hasType (te::IDs::MIDICLIP) || tree.hasType (te::IDs::TEMPOSEQUENCE))
+                if (tree.hasType (te::IDs::TRACK) || tree.hasType (te::IDs::MIDICLIP) || tree.hasType (te::IDs::AUDIOCLIP)
+                    || tree.hasType (te::IDs::TEMPOSEQUENCE))
                     return true;
 
             return false;
@@ -80,6 +82,33 @@ namespace harmonia::ui::arrangement
         setCurrent (track, clip);
     }
 
+    void ArrangementModel::focusClip (te::Clip& clip)
+    {
+        if (auto* midi = dynamic_cast<te::MidiClip*> (&clip))
+        {
+            openClip (midi);
+            return;
+        }
+
+        if (focusedAudioClip.get() != &clip)
+        {
+            focusedAudioClip = &clip;
+            changed();
+        }
+
+        setCurrent (dynamic_cast<te::AudioTrack*> (clip.getClipTrack()), nullptr);
+    }
+
+    te::Clip* ArrangementModel::getFocusedAudioClip() const
+    {
+        auto* clip = focusedAudioClip.get();
+
+        if (clip == nullptr || ! clips::isInEdit (*clip) || clip->getClipTrack() != getCurrentTrack())
+            return nullptr;
+
+        return clip;
+    }
+
     void ArrangementModel::setCurrent (te::AudioTrack* track, te::MidiClip* clip)
     {
         if (track == currentTrack.get() && clip == openedClip.get())
@@ -129,7 +158,7 @@ namespace harmonia::ui::arrangement
 
             for (int i = 0; i < tracks.size(); ++i)
             {
-                for (auto* clip : clips::getMidiClips (*tracks[i]))
+                for (auto* clip : clips::getClips (*tracks[i]))
                 {
                     DrawnClip d;
                     d.clip = clip;
@@ -138,7 +167,11 @@ namespace harmonia::ui::arrangement
                     d.endBeat = clips::getEndBeat (*clip);
                     d.selected = isSelected (*clip);
                     d.open = clip == open;
-                    d.linked = core::clip_links::isLinked (*clip);
+                    d.audio = clips::isAudio (*clip);
+
+                    if (auto* midi = dynamic_cast<te::MidiClip*> (clip))
+                        d.linked = core::clip_links::isLinked (*midi);
+
                     drawn.push_back (d);
                 }
             }
@@ -172,19 +205,19 @@ namespace harmonia::ui::arrangement
         return std::find (selection.begin(), selection.end(), clip.itemID) != selection.end();
     }
 
-    juce::Array<te::MidiClip*> ArrangementModel::getSelectedClips() const
+    juce::Array<te::Clip*> ArrangementModel::getSelectedClips() const
     {
-        juce::Array<te::MidiClip*> result;
+        juce::Array<te::Clip*> result;
 
         for (auto id : selection)
-            if (auto* clip = dynamic_cast<te::MidiClip*> (te::findClipForID (project.getEdit(), id)))
+            if (auto* clip = te::findClipForID (project.getEdit(), id))
                 if (clips::isInEdit (*clip))
                     result.add (clip);
 
         return result;
     }
 
-    void ArrangementModel::setSelection (const juce::Array<te::MidiClip*>& clipsToSelect)
+    void ArrangementModel::setSelection (const juce::Array<te::Clip*>& clipsToSelect)
     {
         std::vector<te::EditItemID> ids;
 
@@ -200,7 +233,7 @@ namespace harmonia::ui::arrangement
         }
     }
 
-    void ArrangementModel::setSelected (te::MidiClip& clip, bool shouldBeSelected)
+    void ArrangementModel::setSelected (te::Clip& clip, bool shouldBeSelected)
     {
         auto current = getSelectedClips();
 
@@ -214,7 +247,7 @@ namespace harmonia::ui::arrangement
 
     void ArrangementModel::selectAll()
     {
-        juce::Array<te::MidiClip*> all;
+        juce::Array<te::Clip*> all;
 
         for (const auto& d : getClips())
             all.add (d.clip);
@@ -286,6 +319,80 @@ namespace harmonia::ui::arrangement
         return track;
     }
 
+    te::AudioTrack* ArrangementModel::createAudioTrack (const juce::String& name, te::Track* after)
+    {
+        auto* track = project.addTrack (name, after);
+
+        if (track != nullptr)
+            core::tracks::setKind (*track, core::tracks::Kind::audio);
+
+        return track;
+    }
+
+    te::AudioTrack* ArrangementModel::addAudioTrack()
+    {
+        project.beginGesture ("Add audio track");
+        auto* track = createAudioTrack ("Audio " + juce::String (getNumTracks() + 1), nullptr);
+
+        if (track != nullptr)
+        {
+            setSelection ({});
+            setCurrent (track, nullptr);
+        }
+
+        return track;
+    }
+
+    juce::String ArrangementModel::importAudio (const juce::Array<juce::File>& files, int trackIndex, double beat)
+    {
+        if (files.isEmpty())
+            return {};
+
+        const auto start = std::max (0.0, snap::snapFloor (beat, snapMode, getSnapContext()));
+        auto* target = getTrack (trackIndex);
+        te::Track* previous = target != nullptr ? target : getTracks().getLast();
+        auto useTarget = target != nullptr && core::tracks::isAudio (*target);
+
+        project.beginGesture (files.size() == 1 ? "Import audio" : "Import audio files");
+        juce::StringArray problems;
+        juce::Array<te::Clip*> added;
+
+        for (const auto& file : files)
+        {
+            if (! project.canImport (file))
+            {
+                problems.add ("Can't read " + file.getFileName() + " as audio");
+                continue;
+            }
+
+            auto* track = useTarget ? target : createAudioTrack (file.getFileNameWithoutExtension(), previous);
+            useTarget = false;
+
+            if (track == nullptr)
+                continue;
+
+            juce::String error;
+
+            if (auto* clip = project.addAudioClip (*track, file, start, error))
+                added.add (clip);
+            else
+                problems.add (error);
+
+            previous = track;
+        }
+
+        if (! added.isEmpty())
+        {
+            setSelection (added);
+            focusClip (*added.getFirst());
+            setPlayMode (PlayMode::song);
+        }
+
+        clipsDirty = true;
+        changed();
+        return problems.joinIntoString ("; ");
+    }
+
     void ArrangementModel::deleteTrack (te::AudioTrack& track)
     {
         const auto tracks = getTracks();
@@ -298,7 +405,7 @@ namespace harmonia::ui::arrangement
         project.beginGesture ("Delete track");
 
         // Linked copies on other tracks stay linked only if more than one of them is left.
-        clips::remove (clips::getMidiClips (track));
+        clips::remove (clips::getClips (track));
         getEdit().deleteTrack (&track);
 
         const auto remaining = getTracks();
@@ -322,7 +429,7 @@ namespace harmonia::ui::arrangement
             track.setName (trimmed);
 
             // Clips named after the track (as new clips are) keep following it.
-            for (auto* clip : clips::getMidiClips (track))
+            for (auto* clip : clips::getClips (track))
                 if (clip->getName() == oldName)
                     clip->setName (trimmed);
         }
@@ -330,6 +437,9 @@ namespace harmonia::ui::arrangement
 
     te::MidiClip* ArrangementModel::createClip (te::AudioTrack& track, double beat)
     {
+        if (core::tracks::isAudio (track))
+            return nullptr;
+
         const auto start = std::max (0.0, snap::snapFloor (beat, snapMode, getSnapContext()));
 
         project.beginGesture ("Add clip");
@@ -355,7 +465,7 @@ namespace harmonia::ui::arrangement
         removeClips (toDelete);
     }
 
-    void ArrangementModel::removeClips (const juce::Array<te::MidiClip*>& toDelete)
+    void ArrangementModel::removeClips (const juce::Array<te::Clip*>& toDelete)
     {
         if (toDelete.isEmpty())
             return;
@@ -388,10 +498,10 @@ namespace harmonia::ui::arrangement
         const auto offset = std::max (1.0, std::ceil ((end - start) / beatsPerBar - 1.0e-9)) * beatsPerBar;
 
         project.beginGesture (linked ? "Duplicate clips (linked)" : "Duplicate clips");
-        juce::Array<te::MidiClip*> copies;
+        juce::Array<te::Clip*> copies;
 
         for (auto* clip : originals)
-            if (auto* copy = core::clip_links::duplicate (*clip, clips::getStartBeat (*clip) + offset, linked))
+            if (auto* copy = clips::duplicate (*clip, clips::getStartBeat (*clip) + offset, linked))
                 copies.add (copy);
 
         setSelection (copies);
@@ -410,7 +520,7 @@ namespace harmonia::ui::arrangement
         changed();
     }
 
-    void ArrangementModel::renameClip (te::MidiClip& clip, const juce::String& name)
+    void ArrangementModel::renameClip (te::Clip& clip, const juce::String& name)
     {
         const auto trimmed = name.trim();
 
@@ -475,6 +585,9 @@ namespace harmonia::ui::arrangement
         if (playMode == PlayMode::clip)
         {
             if (auto* clip = getOpenClip())
+                return { clips::getStartBeat (*clip), clips::getEndBeat (*clip) };
+
+            if (auto* clip = getFocusedAudioClip())
                 return { clips::getStartBeat (*clip), clips::getEndBeat (*clip) };
 
             return {};

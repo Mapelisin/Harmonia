@@ -1,6 +1,7 @@
 #include "ui/arrangement/Arrangement.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
+#include "core/Tracks.h"
 #include "ui/ComputerKeyboard.h"
 #include "ui/Theme.h"
 
@@ -19,8 +20,8 @@ namespace harmonia::ui::arrangement
     {
         model.addListener (this);
 
-        addTrackButton.setTooltip ("Add a track with the built-in synth");
-        addTrackButton.onClick = [this] { model.addTrack(); };
+        addTrackButton.setTooltip ("Add a track: an instrument track for MIDI clips, or an audio track for sound files");
+        addTrackButton.onClick = [this] { showAddTrackMenu (model, addTrackButton); };
 
         const auto& modes = ArrangementModel::getSnapModes();
 
@@ -36,7 +37,7 @@ namespace harmonia::ui::arrangement
 
         clipArea.onViewChanged = [this] { viewChanged(); };
         headers.onViewChanged = [this] { viewChanged(); };
-        clipArea.getGestures().onClipMenuRequested = [this] (te::MidiClip& clip, juce::Point<float> position)
+        clipArea.getGestures().onClipMenuRequested = [this] (te::Clip& clip, juce::Point<float> position)
         {
             showClipMenu (clip, position);
         };
@@ -209,19 +210,102 @@ namespace harmonia::ui::arrangement
     }
 
     //==============================================================================
-    void Arrangement::showClipMenu (te::MidiClip& clip, juce::Point<float> position)
+    bool Arrangement::isInterestedInFileDrag (const juce::StringArray& files)
     {
-        const juce::ReferenceCountedObjectPtr<te::MidiClip> target (&clip);
+        for (const auto& path : files)
+            if (model.getProject().canImport (juce::File (path)))
+                return true;
+
+        return false;
+    }
+
+    ClipArea::DropMarker Arrangement::getDropTarget (juce::Point<int> position) const
+    {
+        const auto local = clipArea.getLocalPoint (this, position).toFloat();
+        const auto numTracks = model.getNumTracks();
+        auto track = view.yToTrack (local.y);
+
+        if (track < 0 || track >= numTracks || local.y < 0.0f)
+            track = -1;
+
+        ClipArea::DropMarker marker;
+        marker.trackIndex = track;
+        marker.beat = std::max (0.0, snap::snapFloor (view.xToBeat (std::max (0.0f, local.x)), model.getSnap(), model.getSnapContext()));
+        marker.newTrack = track < 0 || ! core::tracks::isAudio (*model.getTrack (track));
+        return marker;
+    }
+
+    void Arrangement::fileDragEnter (const juce::StringArray&, int x, int y)
+    {
+        clipArea.setDropMarker (getDropTarget ({ x, y }));
+    }
+
+    void Arrangement::fileDragMove (const juce::StringArray&, int x, int y)
+    {
+        clipArea.setDropMarker (getDropTarget ({ x, y }));
+    }
+
+    void Arrangement::fileDragExit (const juce::StringArray&)
+    {
+        clipArea.setDropMarker (std::nullopt);
+    }
+
+    void Arrangement::filesDropped (const juce::StringArray& paths, int x, int y)
+    {
+        clipArea.setDropMarker (std::nullopt);
+        const auto target = getDropTarget ({ x, y });
+
+        juce::Array<juce::File> files;
+
+        for (const auto& path : paths)
+            files.add (juce::File (path));
+
+        const auto error = model.importAudio (files, target.trackIndex, target.beat);
+
+        // Delete, Ctrl+B... act on the dropped clips straight away.
+        if (isShowing())
+            grabKeyboardFocus();
+
+        if (onMessage == nullptr)
+            return;
+
+        if (error.isNotEmpty())
+            onMessage (error, true);
+        else
+            onMessage (files.size() == 1 ? "Added " + files.getFirst().getFileName()
+                                         : "Added " + juce::String (files.size()) + " audio files", false);
+    }
+
+    //==============================================================================
+    void Arrangement::showClipMenu (te::Clip& clip, juce::Point<float> position)
+    {
+        const te::Clip::Ptr target (&clip);
         const auto isValid = [target] { return target != nullptr && core::clips::isInEdit (*target); };
+        auto* midi = dynamic_cast<te::MidiClip*> (&clip);
 
         juce::PopupMenu menu;
         menu.addSectionHeader (clip.getName());
         menu.addItem ("Rename...", [this, target, isValid] { if (isValid()) askToRename (*target); });
-        menu.addItem ("Make unique", core::clip_links::isLinked (clip),
-                      false, [this, target, isValid] { if (isValid()) model.makeUnique (*target); });
-        menu.addSeparator();
-        menu.addItem ("Duplicate, linked (Ctrl+B)", [this] { model.duplicateSelected (true); });
-        menu.addItem ("Duplicate (Ctrl+Shift+B)", [this] { model.duplicateSelected (false); });
+
+        if (midi != nullptr)
+        {
+            menu.addItem ("Make unique", core::clip_links::isLinked (*midi), false, [this, target, isValid]
+            {
+                if (auto* m = dynamic_cast<te::MidiClip*> (target.get()); m != nullptr && isValid())
+                    model.makeUnique (*m);
+            });
+            menu.addSeparator();
+            menu.addItem ("Duplicate, linked (Ctrl+B)", [this] { model.duplicateSelected (true); });
+            menu.addItem ("Duplicate (Ctrl+Shift+B)", [this] { model.duplicateSelected (false); });
+        }
+        else if (auto* audio = dynamic_cast<te::AudioClipBase*> (&clip))
+        {
+            const auto file = audio->getCurrentSourceFile();
+            menu.addItem ("Show file in folder", file.exists(), false, [file] { file.revealToUser(); });
+            menu.addSeparator();
+            menu.addItem ("Duplicate (Ctrl+B)", [this] { model.duplicateSelected (false); });
+        }
+
         menu.addSeparator();
         menu.addItem ("Delete (Del)", [this] { model.deleteSelected(); });
 
@@ -229,14 +313,14 @@ namespace harmonia::ui::arrangement
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea ({ screen.x, screen.y, 1, 1 }));
     }
 
-    void Arrangement::askToRename (te::MidiClip& clip)
+    void Arrangement::askToRename (te::Clip& clip)
     {
         auto* window = new juce::AlertWindow ("Rename clip", {}, juce::MessageBoxIconType::NoIcon, this);
         window->addTextEditor ("name", clip.getName());
         window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
         window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
 
-        const juce::ReferenceCountedObjectPtr<te::MidiClip> target (&clip);
+        const te::Clip::Ptr target (&clip);
         juce::Component::SafePointer<juce::AlertWindow> safeWindow (window);
         juce::Component::SafePointer<Arrangement> safeThis (this);
 

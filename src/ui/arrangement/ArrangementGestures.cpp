@@ -1,6 +1,7 @@
 #include "ui/arrangement/ArrangementGestures.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
+#include "core/Tracks.h"
 
 namespace harmonia::ui::arrangement
 {
@@ -96,7 +97,7 @@ namespace harmonia::ui::arrangement
                 if (! model.isSelected (*clip))
                     model.setSelection ({ clip });
 
-                model.openClip (clip);
+                model.focusClip (*clip);
 
                 if (onClipMenuRequested != nullptr)
                     onClipMenuRequested (*clip, p.position);
@@ -104,7 +105,7 @@ namespace harmonia::ui::arrangement
                 return;
             }
 
-            model.openClip (clip);
+            model.focusClip (*clip);
 
             if (zone == Zone::startEdge || zone == Zone::endEdge)
             {
@@ -132,7 +133,7 @@ namespace harmonia::ui::arrangement
 
         kind = Kind::rectangle;
         const auto adding = p.mods.isShiftDown() || p.mods.isCommandDown();
-        selectionAtStart = adding ? model.getSelectedClips() : juce::Array<te::MidiClip*>();
+        selectionAtStart = adding ? model.getSelectedClips() : juce::Array<te::Clip*>();
 
         if (! adding)
             model.deselectAll();
@@ -170,7 +171,7 @@ namespace harmonia::ui::arrangement
     {
         if (kind == Kind::move && ! dragged)
         {
-            if (auto* clip = dynamic_cast<te::MidiClip*> (grabbed.get()))
+            if (auto* clip = grabbed.get())
             {
                 if (toggleOnClick)
                     model.setSelected (*clip, ! model.isSelected (*clip));
@@ -221,7 +222,7 @@ namespace harmonia::ui::arrangement
     }
 
     //==============================================================================
-    void ArrangementGestures::beginMove (te::MidiClip& clip, const Pointer& p)
+    void ArrangementGestures::beginMove (te::Clip& clip, const Pointer& p)
     {
         kind = Kind::move;
         grabbed = &clip;
@@ -282,8 +283,25 @@ namespace harmonia::ui::arrangement
         delta = std::max (delta, -earliest);
 
         const auto tracks = model.getTracks();
-        const auto trackDelta = juce::jlimit (-lowestTrack, tracks.size() - 1 - highestTrack,
-                                              view.yToTrack (p.position.y) - view.yToTrack (downPointer.position.y));
+        auto trackDelta = juce::jlimit (-lowestTrack, tracks.size() - 1 - highestTrack,
+                                        view.yToTrack (p.position.y) - view.yToTrack (downPointer.position.y));
+
+        // Audio clips only go to audio tracks, MIDI clips only to instrument tracks.
+        const auto fits = [&] (int candidate)
+        {
+            for (const auto& t : targets)
+            {
+                auto* destination = tracks[t.trackIndex + candidate];
+
+                if (destination == nullptr || core::tracks::isAudio (*destination) != clips::isAudio (*t.clip))
+                    return false;
+            }
+
+            return true;
+        };
+
+        if (! fits (trackDelta))
+            trackDelta = appliedTrackDelta;
 
         if (std::abs (delta - appliedDelta) < 1.0e-9 && trackDelta == appliedTrackDelta)
             return;
@@ -292,23 +310,23 @@ namespace harmonia::ui::arrangement
         appliedTrackDelta = trackDelta;
 
         for (const auto& t : targets)
-            if (auto* clip = dynamic_cast<te::MidiClip*> (t.clip.get()); clip != nullptr && clips::isInEdit (*clip))
+            if (auto* clip = t.clip.get(); clip != nullptr && clips::isInEdit (*clip))
                 if (auto* track = tracks[t.trackIndex + trackDelta])
                     clips::move (*clip, t.startBeat + delta, *track);
     }
 
     void ArrangementGestures::makeCopies()
     {
-        juce::Array<te::MidiClip*> copies;
+        juce::Array<te::Clip*> copies;
 
         for (auto& t : targets)
         {
-            auto* original = dynamic_cast<te::MidiClip*> (t.clip.get());
+            auto* original = t.clip.get();
 
             if (original == nullptr || ! clips::isInEdit (*original))
                 continue;
 
-            if (auto* c = core::clip_links::duplicate (*original, t.startBeat, copy == Copy::linked))
+            if (auto* c = clips::duplicate (*original, t.startBeat, copy == Copy::linked))
             {
                 if (t.clip == grabbed)
                     grabbed = c;
@@ -321,13 +339,13 @@ namespace harmonia::ui::arrangement
         // The copy is what the hand holds: it is selected and open.
         model.setSelection (copies);
 
-        if (auto* clip = dynamic_cast<te::MidiClip*> (grabbed.get()))
-            model.openClip (clip);
+        if (auto* clip = grabbed.get())
+            model.focusClip (*clip);
     }
 
     void ArrangementGestures::dragResize (const Pointer& p)
     {
-        auto* clip = dynamic_cast<te::MidiClip*> (grabbed.get());
+        auto* clip = grabbed.get();
 
         if (clip == nullptr || ! clips::isInEdit (*clip))
             return;
@@ -347,7 +365,7 @@ namespace harmonia::ui::arrangement
     void ArrangementGestures::eraseAlong (juce::Point<float> from, juce::Point<float> to)
     {
         const auto steps = std::max (1, (int) std::ceil (from.getDistanceFrom (to) / 4.0f));
-        juce::Array<te::MidiClip*> hit;
+        juce::Array<te::Clip*> hit;
 
         for (int i = 0; i <= steps; ++i)
         {

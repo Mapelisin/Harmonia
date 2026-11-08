@@ -8,8 +8,10 @@
 namespace harmonia::ui::arrangement
 {
     /** The arrangement (FL's playlist): track headers, ruler, clips, scrollbars, "+ Track" and
-        Snap, plus its keyboard shortcuts (they work while it has keyboard focus). */
+        Snap, plus its keyboard shortcuts (they work while it has keyboard focus). Audio files
+        dragged in from Explorer become audio clips where they are dropped. */
     class Arrangement final : public juce::Component,
+                              public juce::FileDragAndDropTarget,
                               private ArrangementModel::Listener,
                               private juce::ScrollBar::Listener
     {
@@ -30,6 +32,18 @@ namespace harmonia::ui::arrangement
 
         /** A position was clicked on the ruler. */
         std::function<void (double beat)> onPositionChosen;
+
+        /** Something to tell the user (e.g. a dropped file couldn't be read). */
+        std::function<void (const juce::String& text, bool isProblem)> onMessage;
+
+        bool isInterestedInFileDrag (const juce::StringArray&) override;
+        void fileDragEnter (const juce::StringArray&, int x, int y) override;
+        void fileDragMove (const juce::StringArray&, int x, int y) override;
+        void fileDragExit (const juce::StringArray&) override;
+        void filesDropped (const juce::StringArray&, int x, int y) override;
+
+        /** Where files dropped at this point (in the arrangement's coordinates) would go. */
+        ClipArea::DropMarker getDropTarget (juce::Point<int>) const;
 
         static constexpr int headerWidth = 200, rulerHeight = 22, scrollBarSize = 10;
 
@@ -54,7 +68,7 @@ namespace harmonia::ui::arrangement
         void updateContentSize();
         void updateScrollBars();
         void updatePlayhead();
-        void showClipMenu (te::MidiClip&, juce::Point<float>);
-        void askToRename (te::MidiClip&);
+        void showClipMenu (te::Clip&, juce::Point<float>);
+        void askToRename (te::Clip&);
     };
 }

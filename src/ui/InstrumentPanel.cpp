@@ -1,6 +1,7 @@
 #include "ui/InstrumentPanel.h"
 #include "audio/Effects.h"
 #include "audio/Instruments.h"
+#include "core/Tracks.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui
@@ -35,6 +36,18 @@ namespace harmonia::ui
                                                                  &scanButton, &messageLabel })
             addAndMakeVisible (c);
 
+        // An audio track plays sound files: no instrument to choose.
+        if (core::tracks::isAudio (track))
+        {
+            titleLabel.setText ("Audio track", juce::dontSendNotification);
+
+            for (auto* c : std::initializer_list<juce::Component*> { &instrumentBox, &editorButton, &scanButton })
+                c->setVisible (false);
+
+            showMessage ("Plays sound files: drag WAV, MP3, FLAC... from Explorer onto its row, or File > Import audio.", false);
+            return;
+        }
+
         refreshList();
     }
 
@@ -53,6 +66,13 @@ namespace harmonia::ui
         row = row.withSizeKeepingCentre (row.getWidth(), theme::size::buttonHeight);
 
         titleLabel.setBounds (row.removeFromLeft (90));
+
+        if (! instrumentBox.isVisible())
+        {
+            messageLabel.setBounds (row);
+            return;
+        }
+
         instrumentBox.setBounds (row.removeFromLeft (300));
         row.removeFromLeft (theme::size::padding);
         editorButton.setBounds (row.removeFromLeft (110));
