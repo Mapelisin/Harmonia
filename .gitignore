@@ -1,0 +1,58 @@
+# ===== Аудио (хранится отдельно, не в Git) =====
+*.wav
+*.flac
+*.mp3
+*.ogg
+*.aiff
+*.aif
+*.m4a
+*.opus
+
+# ===== Веса ИИ-моделей =====
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.bin
+*.gguf
+*.h5
+models/
+checkpoints/
+
+# ===== Данные и сэмплы =====
+samples/
+datasets/
+data/raw/
+
+# ===== Сборка и зависимости =====
+build/
+dist/
+out/
+target/
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ===== Секреты =====
+.env
+.env.*
+!.env.example
+
+# ===== Логи и временные файлы =====
+*.log
+*.tmp
+temp/
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.suo
+*.user
+
+# ===== Системные файлы =====
+Thumbs.db
+desktop.ini
+.DS_Store
