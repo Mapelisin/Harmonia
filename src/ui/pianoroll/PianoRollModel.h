@@ -105,6 +105,14 @@ namespace harmonia::ui::pianoroll
         bool areDrumNamesShown() const;
         void setDrumNamesShown (bool);
 
+        /** Before a drum pattern goes in: a track with nothing on it yet that plays the built-in
+            synth (or nothing) becomes a drum track (audio::instruments::makeDrumTrack), an undo
+            step of its own. Returns whether it did. */
+        bool makeDrumTrackIfNew();
+
+        /** Takes that step back again, if it is still the last one. */
+        void undoMakeDrumTrack();
+
         /** The drum a key plays when drum names are shown (else, or for other keys, empty). */
         juce::String getDrumName (int pitch) const;
 

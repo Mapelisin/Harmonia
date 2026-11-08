@@ -6,10 +6,13 @@ namespace harmonia::ui
 {
     /** Chooses the instrument of one track: built-in synth or a scanned plugin,
         opens its editor and scans for new plugins. */
-    class InstrumentPanel final : public juce::Component
+    class InstrumentPanel final : public juce::Component,
+                                  private juce::ValueTree::Listener,
+                                  private juce::AsyncUpdater
     {
     public:
         InstrumentPanel (core::Session&, te::AudioTrack&);
+        ~InstrumentPanel() override;
 
         void paint (juce::Graphics&) override;
         void resized() override;
@@ -28,9 +31,14 @@ namespace harmonia::ui
         juce::Label messageLabel;
 
         void refreshList();
+        void showCurrent();
         void instrumentChosen();
         void startScan();
         void showMessage (const juce::String&, bool isProblem);
+
+        void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
+        void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
+        void handleAsyncUpdate() override;
 
         JUCE_DECLARE_NON_COPYABLE (InstrumentPanel)
     };

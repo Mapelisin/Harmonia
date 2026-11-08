@@ -60,6 +60,9 @@ namespace harmonia::ui::pianoroll
         /** Opens the window in a call-out box pointing at `area` of `parent`. */
         static void show (std::unique_ptr<NoteToolWindow>, juce::Component& parent, juce::Rectangle<int> area);
 
+        /** Called after Cancel (or Esc) took the result back. */
+        std::function<void()> onCancel;
+
         int getNumSettings() const noexcept             { return (int) settings.size(); }
         const Setting& getSetting (int index) const     { return settings[(size_t) index]; }
         double getValue (int index) const;

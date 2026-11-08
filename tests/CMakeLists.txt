@@ -35,6 +35,7 @@ add_executable(harmonia_tests
     audio/LoudnessTests.cpp
     audio/LimiterTests.cpp
     audio/PumpTests.cpp
+    audio/DrumKitTests.cpp
     audio/MixCheckTests.cpp
     ui/PianoRollTests.cpp
     ui/PianoRollViewTests.cpp
@@ -60,6 +61,7 @@ add_executable(harmonia_tests
     ui/SoundBrowserTests.cpp
     ui/RecentProjectsTests.cpp
     ui/DrumNamesTests.cpp
+    ui/DrumTrackTests.cpp
     ui/AudioClipToolsTests.cpp
     ui/ChordNameTests.cpp
     ui/LoopExportTests.cpp

@@ -1,4 +1,5 @@
 #include "ui/pianoroll/PianoRollModel.h"
+#include "audio/Instruments.h"
 #include "core/Drums.h"
 #include "core/Clips.h"
 #include "core/Progressions.h"
@@ -169,6 +170,28 @@ namespace harmonia::ui::pianoroll
 
         beginGesture (shouldShow ? "Show drum names" : "Hide drum names");
         core::drums::setShowsNames (*track, shouldShow);
+    }
+
+    namespace
+    {
+        const juce::String drumTrackGesture = "Make a drum track";
+    }
+
+    bool PianoRollModel::makeDrumTrackIfNew()
+    {
+        auto* track = clip != nullptr ? dynamic_cast<te::AudioTrack*> (clip->getTrack()) : nullptr;
+
+        if (track == nullptr || ! audio::instruments::isUntouched (*track))
+            return false;
+
+        beginGesture (drumTrackGesture);
+        return audio::instruments::makeDrumTrack (*track).isEmpty();
+    }
+
+    void PianoRollModel::undoMakeDrumTrack()
+    {
+        if (getEdit().getUndoManager().getUndoDescription() == drumTrackGesture)
+            undo();
     }
 
     juce::String PianoRollModel::getDrumName (int pitch) const

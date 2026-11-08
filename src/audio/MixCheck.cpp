@@ -279,8 +279,11 @@ namespace harmonia::audio::mix_check
 
         // The peaks to the ceiling: over 0 dB the render can't say by how much, so down 3 dB, then
         // 6, then 12, listening again each time; under it, exactly to the ceiling (back up a little
-        // if it went down too far, never above where the master was).
+        // if it went down too far, never above where the master was). Then once more to be sure:
+        // synths start their notes at random phases, so the peaks differ a little from render to
+        // render; a louder one brings the master down again (never up).
         auto lowered = 0.0f, step = 3.0f;
+        auto settled = false;
 
         for (int attempt = 0; attempt < 6; ++attempt)
         {
@@ -299,8 +302,26 @@ namespace harmonia::audio::mix_check
                 continue;
             }
 
-            if (measured->peakDb > loudness::peakCeilingDb + 0.05f || lowered > 0.05f)
-                lowered -= loudness::addToMasterVolume (edit, std::min (loudness::peakCeilingDb - measured->peakDb, lowered));
+            const auto over = measured->peakDb - loudness::peakCeilingDb;
+
+            if (settled)
+            {
+                if (over > 0.1f)
+                {
+                    lowered -= loudness::addToMasterVolume (edit, -over);
+                    continue;
+                }
+
+                break;
+            }
+
+            settled = true;
+
+            if (over > 0.05f || lowered > 0.05f)
+            {
+                lowered -= loudness::addToMasterVolume (edit, std::min (-over, lowered));
+                continue;
+            }
 
             break;
         }

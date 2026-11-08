@@ -1,4 +1,7 @@
 #include "audio/Instruments.h"
+#include "audio/DrumKit.h"
+#include "core/Drums.h"
+#include "core/Tracks.h"
 
 namespace harmonia::audio::instruments
 {
@@ -49,6 +52,58 @@ namespace harmonia::audio::instruments
     juce::String useBuiltInSynth (te::AudioTrack& track)
     {
         return replaceWith (track, track.edit.getPluginCache().createNewPlugin (te::FourOscPlugin::xmlTypeName, {}));
+    }
+
+    juce::String useDrumKit (te::AudioTrack& track)
+    {
+        return replaceWith (track, track.edit.getPluginCache().createNewPlugin (drum_kit::Plugin::xmlTypeName, {}));
+    }
+
+    bool playsDrumKit (te::AudioTrack& track)
+    {
+        return dynamic_cast<drum_kit::Plugin*> (get (track)) != nullptr;
+    }
+
+    bool isUntouched (te::AudioTrack& track)
+    {
+        if (core::tracks::isAudio (track) || core::tracks::isReturn (track))
+            return false;
+
+        if (auto* instrument = get (track); instrument != nullptr && dynamic_cast<te::FourOscPlugin*> (instrument) == nullptr)
+            return false;
+
+        for (auto* clip : track.getClips())
+        {
+            auto* midi = dynamic_cast<te::MidiClip*> (clip);
+
+            if (midi == nullptr || ! midi->getSequence().getNotes().isEmpty())
+                return false;
+        }
+
+        return true;
+    }
+
+    juce::String makeDrumTrack (te::AudioTrack& track)
+    {
+        if (auto error = useDrumKit (track); error.isNotEmpty())
+            return error;
+
+        core::drums::setShowsNames (track, true);
+
+        // A track still called "Track 2" is the drums now.
+        const auto name = track.getName();
+        const auto number = name.fromFirstOccurrenceOf ("Track ", false, false);
+
+        if (name.startsWith ("Track ") && number.isNotEmpty() && number.containsOnly ("0123456789"))
+        {
+            for (auto* clip : track.getClips())
+                if (clip->getName() == name)
+                    clip->setName ("Drums");
+
+            track.setName ("Drums");
+        }
+
+        return {};
     }
 
     juce::String useExternal (te::AudioTrack& track, const juce::PluginDescription& description)

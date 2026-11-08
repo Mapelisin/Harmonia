@@ -1,6 +1,7 @@
 #include "app/MainWindow.h"
 #include "app/SelfTest.h"
 #include "audio/DeviceSetup.h"
+#include "audio/DrumKit.h"
 #include "audio/Limiter.h"
 #include "audio/Pump.h"
 #include "ui/PluginWindow.h"
@@ -25,6 +26,7 @@ namespace harmonia::app
             auto session = std::make_unique<core::Session> (std::move (options));
             audio::limiter::registerType (session->getEngine());
             audio::pump::registerType (session->getEngine());
+            audio::drum_kit::registerType (session->getEngine());
             return session;
         }
     }

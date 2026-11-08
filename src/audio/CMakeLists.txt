@@ -23,6 +23,8 @@ add_library(harmonia_audio STATIC
     Limiter.cpp
     Pump.h
     Pump.cpp
+    DrumKit.h
+    DrumKit.cpp
     Instruments.h
     Instruments.cpp
     MidiInputs.h

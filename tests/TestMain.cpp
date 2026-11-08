@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "TestSession.h"
+#include "audio/DrumKit.h"
 #include "audio/Limiter.h"
 #include "audio/Pump.h"
 
@@ -56,6 +57,7 @@ int main (int argc, char** argv)
         harmonia::core::Session session (std::move (options));
         harmonia::audio::limiter::registerType (session.getEngine());
         harmonia::audio::pump::registerType (session.getEngine());
+        harmonia::audio::drum_kit::registerType (session.getEngine());
         harmonia::test::sharedSession = &session;
 
         doctest::Context context (argc, argv);

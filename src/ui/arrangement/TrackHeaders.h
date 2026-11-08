@@ -5,7 +5,7 @@
 
 namespace harmonia::ui::arrangement
 {
-    /** "Instrument track" / "Audio track". */
+    /** "Instrument track" / "Drum track" / "Audio track". */
     juce::PopupMenu makeAddTrackMenu (ArrangementModel&);
 
     /** makeAddTrackMenu, shown under `target`. */

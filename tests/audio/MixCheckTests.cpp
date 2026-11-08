@@ -1,10 +1,12 @@
 #include <doctest.h>
 
+#include "TestAudioFiles.h"
 #include "TestSession.h"
 #include "audio/Instruments.h"
 #include "audio/Loudness.h"
 #include "audio/MixCheck.h"
 #include "core/Project.h"
+#include "core/Tracks.h"
 
 using namespace harmonia;
 namespace mix_check = audio::mix_check;
@@ -223,30 +225,27 @@ TEST_SUITE ("audio::mix_check")
 
     TEST_CASE ("Mix Doctor fixes the levels: lost tracks up, the master down until the peaks are at -1 dB, one undo step")
     {
+        test::TempFolder temp;
         auto project = core::Project::createEmpty (test::session());
         auto& edit = project->getEdit();
 
-        const auto addPart = [&project] (te::AudioTrack* track, const juce::String& name, std::initializer_list<int> pitches,
-                                         int velocity) -> te::AudioTrack&
+        // Steady tones: every render's peaks are the same (a synth's random phases would move them a little).
+        const auto addPart = [&project, &temp] (te::AudioTrack* track, const juce::String& name) -> te::AudioTrack&
         {
             if (track == nullptr)
                 track = project->addTrack (name);
 
             REQUIRE (track != nullptr);
             track->setName (name);
-            REQUIRE (audio::instruments::useBuiltInSynth (*track).isEmpty());
-            auto* clip = project->addMidiClip (*track, 0.0, 8.0, name);
-            REQUIRE (clip != nullptr);
-
-            for (int pitch : pitches)
-                clip->getSequence().addNote (pitch, te::BeatPosition(), te::BeatDuration::fromBeats (8.0), velocity, 0, nullptr);
-
+            core::tracks::setKind (*track, core::tracks::Kind::audio);
+            juce::String error;
+            REQUIRE (project->addAudioClip (*track, test::writeTone (temp.getFile (name + ".wav"), 4.0, 0.9f, 2), 0.0, error) != nullptr);
             return *track;
         };
 
         // Loud chords that clip with the master at +6 dB; a pad far under them.
-        addPart (project->getTracks().getFirst(), "Chords", { 48, 52, 55, 60, 64, 67 }, 127);
-        auto& pad = addPart (nullptr, "Pad", { 72 }, 60);
+        addPart (project->getTracks().getFirst(), "Chords");
+        auto& pad = addPart (nullptr, "Pad");
         pad.getVolumePlugin()->setVolumeDb (-20.0f);
         edit.getMasterVolumePlugin()->setVolumeDb (6.0f);
         project->clearUndoHistory();
@@ -280,11 +279,10 @@ TEST_SUITE ("audio::mix_check")
         CHECK (pad.getVolumePlugin()->getVolumeDb() == doctest::Approx (-20.0f + fixes.raise[0].second).epsilon (0.01));
         CHECK (edit.getMasterVolumePlugin()->getVolumeDb() < 6.0f);
 
-        // The peaks now under the ceiling (the synth's phases change a little from render to render).
+        // The peaks now at the ceiling.
         const auto after = audio::loudness::measureSong (edit, error);
         REQUIRE (after.has_value());
-        CHECK (after->peakDb < -0.3f);
-        CHECK (after->peakDb > -2.5f);
+        CHECK (after->peakDb == doctest::Approx (audio::loudness::peakCeilingDb).epsilon (0.1));
 
         project->undo();
         CHECK (pad.getVolumePlugin()->getVolumeDb() == doctest::Approx (-20.0f));

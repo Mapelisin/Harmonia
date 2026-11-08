@@ -9,13 +9,17 @@ namespace harmonia::ui
     namespace
     {
         constexpr int builtInSynthId = 1;
+        constexpr int drumKitId = 2;
         constexpr int firstPluginId = 100;
         const juce::String builtInSynthName = "4OSC (built-in)";
+        const juce::String drumKitName = "Drums (built-in)";
     }
 
     InstrumentPanel::InstrumentPanel (core::Session& s, te::AudioTrack& t)
         : session (s), track (t)
     {
+        track.state.addListener (this);
+
         titleLabel.setText ("Instrument", juce::dontSendNotification);
         titleLabel.setColour (juce::Label::textColourId, theme::colour::textPrimary);
         titleLabel.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
@@ -49,6 +53,11 @@ namespace harmonia::ui
         }
 
         refreshList();
+    }
+
+    InstrumentPanel::~InstrumentPanel()
+    {
+        track.state.removeListener (this);
     }
 
     void InstrumentPanel::paint (juce::Graphics& g)
@@ -88,6 +97,7 @@ namespace harmonia::ui
 
         instrumentBox.clear (juce::dontSendNotification);
         instrumentBox.addItem (builtInSynthName, builtInSynthId);
+        instrumentBox.addItem (drumKitName, drumKitId);
 
         if (! available.isEmpty())
             instrumentBox.addSeparator();
@@ -95,12 +105,21 @@ namespace harmonia::ui
         for (int i = 0; i < available.size(); ++i)
             instrumentBox.addItem (available[i].name + "  (" + available[i].manufacturerName + ")", firstPluginId + i);
 
-        // Show the current instrument.
+        showCurrent();
+
+        if (available.isEmpty())
+            showMessage ("No plugins found yet: \"Scan plugins\" looks for VST3 instruments and effects.", false);
+    }
+
+    void InstrumentPanel::showCurrent()
+    {
         auto* current = audio::instruments::get (track);
         int selectedId = 0;
 
         if (dynamic_cast<te::FourOscPlugin*> (current) != nullptr)
             selectedId = builtInSynthId;
+        else if (audio::instruments::playsDrumKit (track))
+            selectedId = drumKitId;
         else if (auto* external = dynamic_cast<te::ExternalPlugin*> (current))
             for (int i = 0; i < available.size(); ++i)
                 if (external->desc.isDuplicateOf (available[i]))
@@ -108,9 +127,25 @@ namespace harmonia::ui
 
         instrumentBox.setSelectedId (selectedId, juce::dontSendNotification);
         editorButton.setEnabled (current != nullptr);
+    }
 
-        if (available.isEmpty())
-            showMessage ("No plugins found yet: \"Scan plugins\" looks for VST3 instruments and effects.", false);
+    void InstrumentPanel::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree& child)
+    {
+        if (child.hasType (te::IDs::PLUGIN))
+            triggerAsyncUpdate();
+    }
+
+    void InstrumentPanel::valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree& child, int)
+    {
+        if (child.hasType (te::IDs::PLUGIN))
+            triggerAsyncUpdate();
+    }
+
+    void InstrumentPanel::handleAsyncUpdate()
+    {
+        // Another instrument came (an undo, a drum pattern...): the list shows it.
+        if (instrumentBox.isVisible())
+            showCurrent();
     }
 
     void InstrumentPanel::instrumentChosen()
@@ -126,6 +161,11 @@ namespace harmonia::ui
         {
             name = builtInSynthName;
             error = audio::instruments::useBuiltInSynth (track);
+        }
+        else if (id == drumKitId)
+        {
+            name = drumKitName;
+            error = audio::instruments::makeDrumTrack (track);
         }
         else if (id >= firstPluginId && id - firstPluginId < available.size())
         {

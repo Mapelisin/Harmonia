@@ -123,6 +123,9 @@ namespace harmonia::ui::arrangement
         /** A new empty audio track at the bottom; it becomes current. */
         te::AudioTrack* addAudioTrack();
 
+        /** As addTrack, but a drum track (audio::instruments::makeDrumTrack) called "Drums". */
+        te::AudioTrack* addDrumTrack();
+
         /** Imports audio files at `beat` (snapped down to the grid): the first onto the track at
             `trackIndex` if that is an audio track, the others (or all) onto new audio tracks
             below it, named after the files. Selects the new clips and switches to song mode.
@@ -286,6 +289,8 @@ namespace harmonia::ui::arrangement
 
     private:
         core::Project& project;
+
+        te::AudioTrack* addInstrumentTrack (bool drums);
 
         juce::ReferenceCountedObjectPtr<te::AudioTrack> currentTrack;
         juce::ReferenceCountedObjectPtr<te::MidiClip> openedClip;

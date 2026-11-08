@@ -4,6 +4,7 @@
 #include "audio/Sends.h"
 #include "audio/DeviceSetup.h"
 #include "audio/DeviceStatus.h"
+#include "audio/DrumKit.h"
 #include "audio/Effects.h"
 #include "audio/Instruments.h"
 #include "audio/Export.h"
@@ -265,7 +266,10 @@ namespace harmonia::app
                 checkAudioClip (*project, transport);
 
                 if (options.useDevice)
+                {
+                    checkDrumKit (*project, transport);
                     checkAudioRecording (*project, transport);
+                }
 
                 checkRender (*project, "builtin-synth.wav");
                 checkExport (*project, "export.wav");
@@ -624,6 +628,76 @@ namespace harmonia::app
                                                  + juce::String (peak, 1) + " dBFS)");
                 transport.stop();
                 pump (200, audioLevel, transport, report);
+            }
+
+            /** A drum track (the built-in drum machine) is heard while the song plays, and changing
+                its kit while playing neither silences it nor drops out. The track goes again after. */
+            void checkDrumKit (core::Project& project, audio::Transport& transport)
+            {
+                auto* track = project.addTrack ("Drums");
+
+                if (track == nullptr || audio::getDeviceManager (session).getCurrentAudioDevice() == nullptr)
+                {
+                    report.check (track != nullptr, "Added a drum track");
+                    return;
+                }
+
+                const auto error = audio::instruments::makeDrumTrack (*track);
+                auto* kit = dynamic_cast<audio::drum_kit::Plugin*> (audio::instruments::get (*track));
+                report.check (error.isEmpty() && kit != nullptr, "The built-in drums on a new track"
+                                                                     + (error.isEmpty() ? juce::String() : " (" + error + ")"));
+
+                if (kit == nullptr)
+                {
+                    project.getEdit().deleteTrack (track);
+                    return;
+                }
+
+                // Kick on 1 and 3, snare on 2 and 4, closed hats on the eighths.
+                auto* clip = project.addMidiClip (*track, 0.0, songBeats, "Drums");
+                std::vector<core::Note> notes;
+
+                for (int eighth = 0; eighth < (int) songBeats * 2; ++eighth)
+                {
+                    const auto addHit = [&notes, eighth] (int pitch, int velocity)
+                    {
+                        core::Note n;
+                        n.pitch = pitch;
+                        n.startBeat = eighth * 0.5;
+                        n.lengthBeats = 0.25;
+                        n.velocity = velocity;
+                        notes.push_back (n);
+                    };
+
+                    addHit (42, eighth % 2 == 0 ? 90 : 60);
+
+                    if (eighth % 4 == 0)
+                        addHit (eighth % 8 == 0 ? 36 : 38, 110);
+                }
+
+                core::NoteEditor (*clip).add (notes);
+
+                TrackLevel drumLevel (*track);
+                auto* device = audio::getDeviceManager (session).getCurrentAudioDevice();
+                transport.setPositionSeconds (0.0);
+                transport.play();
+                pump (1500, drumLevel, transport, report);
+                const auto peak = drumLevel.takePeakDb();
+                report.check (transport.isPlaying() && peak > -30.0f,
+                              "The drum track is heard while the song plays (peak " + juce::String (peak, 1) + " dBFS)");
+
+                const auto xrunsBefore = device->getXRunCount();
+                kit->kit->setParameter (1.0f, juce::sendNotificationSync);     // "808"
+                pump (1000, drumLevel, transport, report);
+                const auto after = drumLevel.takePeakDb();
+                const auto xruns = device->getXRunCount() - xrunsBefore;
+                report.check (transport.isPlaying() && after > -30.0f && (xrunsBefore < 0 || xruns == 0),
+                              "Changed the kit to " + kit->kit->getCurrentValueAsString() + " while playing: still heard (peak "
+                                  + juce::String (after, 1) + " dBFS), dropouts: " + juce::String (xruns));
+
+                transport.stop();
+                pump (200, drumLevel, transport, report);
+                project.getEdit().deleteTrack (track);
             }
 
             /** A reverb return added while playing hears what track 1 sends it; deleting it again

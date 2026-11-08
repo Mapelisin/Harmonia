@@ -1,6 +1,7 @@
 #include <doctest.h>
 
 #include "core/TestProject.h"
+#include "audio/Instruments.h"
 #include "ui/MainComponent.h"
 #include "ui/pianoroll/NotePropertiesPanel.h"
 #include "ui/pianoroll/NoteToolWindow.h"
@@ -382,6 +383,58 @@ TEST_SUITE ("piano roll: tool windows")
         }
 
         CHECK (f.notes().empty());
+    }
+
+    TEST_CASE ("a drum pattern on a new track makes it a drum track (Cancel takes that back); a track with notes keeps its sound")
+    {
+        ToolsFixture f;
+        REQUIRE (audio::instruments::useBuiltInSynth (*f.track).isEmpty());
+        f.track->setName ("Track 1");
+        f.project->clearUndoHistory();
+        const auto playsSynth = [&f] { return dynamic_cast<te::FourOscPlugin*> (audio::instruments::get (*f.track)) != nullptr; };
+
+        {
+            auto window = NoteToolWindow::create (f.model, NoteTool::drumPattern);
+            REQUIRE (window != nullptr);
+            CHECK (audio::instruments::playsDrumKit (*f.track));
+            CHECK (f.track->getName() == "Drums");
+            CHECK (f.model.areDrumNamesShown());
+            CHECK_FALSE (f.notes().empty());
+            window->cancel();
+        }
+
+        CHECK (f.notes().empty());
+        CHECK (playsSynth());
+        CHECK (f.track->getName() == "Track 1");
+        CHECK_FALSE (f.model.areDrumNamesShown());
+
+        {
+            auto window = NoteToolWindow::create (f.model, NoteTool::drumPattern);
+            REQUIRE (window != nullptr);
+            window->accept();
+        }
+
+        CHECK (audio::instruments::playsDrumKit (*f.track));
+        CHECK_FALSE (f.notes().empty());
+        f.project->undo();
+        CHECK (f.notes().empty());
+        CHECK (audio::instruments::playsDrumKit (*f.track));
+        f.project->undo();
+        CHECK (playsSynth());
+
+        // A track that has notes already (a melody, say) keeps its instrument.
+        f.add (72, 0.0, 1.0);
+
+        {
+            auto window = NoteToolWindow::create (f.model, NoteTool::drumPattern);
+            REQUIRE (window != nullptr);
+            CHECK (playsSynth());
+            window->cancel();
+        }
+
+        CHECK (playsSynth());
+        CHECK (f.track->getName() == "Track 1");
+        CHECK (f.notes().size() == 1);
     }
 
     TEST_CASE ("the chord progression writes chords live, selected, as one undo step; Cancel takes them away")

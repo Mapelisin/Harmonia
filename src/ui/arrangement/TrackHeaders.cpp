@@ -20,6 +20,7 @@ namespace harmonia::ui::arrangement
     {
         juce::PopupMenu menu;
         menu.addItem ("Instrument track (MIDI, built-in synth)", [&model] { model.addTrack(); });
+        menu.addItem ("Drum track (built-in drums)", [&model] { model.addDrumTrack(); });
         menu.addItem ("Audio track (sound files)", [&model] { model.addAudioTrack(); });
         return menu;
     }

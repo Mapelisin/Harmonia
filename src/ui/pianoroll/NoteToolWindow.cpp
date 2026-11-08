@@ -192,6 +192,10 @@ namespace harmonia::ui::pianoroll
     void NoteToolWindow::cancel()
     {
         preview.revert();
+
+        if (onCancel != nullptr)
+            onCancel();
+
         close();
     }
 
@@ -540,6 +544,9 @@ namespace harmonia::ui::pianoroll
         if (model.getClip() == nullptr)
             return nullptr;
 
+        // A new track becomes a drum track first, so the pattern sounds like drums (Cancel takes that back too).
+        const auto madeDrumTrack = model.makeDrumTrackIfNew();
+
         juce::StringArray styles;
 
         for (const auto& style : patterns::getStyles())
@@ -552,7 +559,7 @@ namespace harmonia::ui::pianoroll
         const auto end = selection.has_value() ? selection->end : model.getClipEndBeat();
         const auto bars = juce::jlimit (1, 16, juce::roundToInt ((end - start) / beatsPerBar));
 
-        return std::make_unique<NoteToolWindow> (model, pianoroll::getName (NoteTool::drumPattern), std::vector<Setting> {
+        auto window = std::make_unique<NoteToolWindow> (model, pianoroll::getName (NoteTool::drumPattern), std::vector<Setting> {
             { "Style", 0.0, 0.0, 0.0, 0.0, {}, styles },
             { "Bars", 1.0, 16.0, 1.0, (double) bars, {}, {} },
             { "Fill", 0.0, 0.0, 0.0, 1.0, {}, { "None", "Every 4th bar", "Last bar" } },
@@ -572,5 +579,10 @@ namespace harmonia::ui::pianoroll
                 s.startBeat = start;
                 return tools::Result { {}, {}, patterns::generate (s) };
             }, juce::Array<te::MidiNote*>());
+
+        if (madeDrumTrack)
+            window->onCancel = [&model] { model.undoMakeDrumTrack(); };
+
+        return window;
     }
 }

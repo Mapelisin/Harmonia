@@ -37,6 +37,13 @@ namespace harmonia::ui::arrangement
 
             return false;
         }
+
+        /** A part all on MIDI channel 10: General MIDI drums. */
+        bool isDrumPart (const core::midi_files::Part& part)
+        {
+            return ! part.notes.empty()
+                && std::all_of (part.notes.begin(), part.notes.end(), [] (const core::Note& n) { return n.colour == 9; });
+        }
     }
 
     ArrangementModel::ArrangementModel (core::Project& p)
@@ -303,6 +310,16 @@ namespace harmonia::ui::arrangement
     //==============================================================================
     te::AudioTrack* ArrangementModel::addTrack()
     {
+        return addInstrumentTrack (false);
+    }
+
+    te::AudioTrack* ArrangementModel::addDrumTrack()
+    {
+        return addInstrumentTrack (true);
+    }
+
+    te::AudioTrack* ArrangementModel::addInstrumentTrack (bool drums)
+    {
         auto start = 0.0, length = newTrackBars * getBeatsPerBar();
 
         if (auto* open = getOpenClip())
@@ -311,13 +328,16 @@ namespace harmonia::ui::arrangement
             length = clips::getEndBeat (*open) - start;
         }
 
-        project.beginGesture ("Add track");
-        auto* track = project.addTrack ("Track " + juce::String (getNumTracks() + 1));
+        project.beginGesture (drums ? "Add drum track" : "Add track");
+        auto* track = project.addTrack (drums ? juce::String ("Drums") : "Track " + juce::String (getNumTracks() + 1));
 
         if (track == nullptr)
             return nullptr;
 
-        audio::instruments::useBuiltInSynth (*track);
+        if (drums)
+            audio::instruments::makeDrumTrack (*track);
+        else
+            audio::instruments::useBuiltInSynth (*track);
         auto* clip = project.addMidiClip (*track, start, length, track->getName());
         setSelection ({});
         setCurrent (track, clip);
@@ -456,13 +476,22 @@ namespace harmonia::ui::arrangement
                                          : part.name.isNotEmpty() ? part.name : baseName + " " + juce::String ((int) i + 1);
                 te::AudioTrack* track = nullptr;
 
+                const auto drums = isDrumPart (part);
+
                 if (useTarget && single)
                 {
                     track = target;
+
+                    // Drums dropped on a new, empty track: it becomes the drum track.
+                    if (drums && audio::instruments::isUntouched (*track))
+                        audio::instruments::makeDrumTrack (*track);
                 }
                 else if ((track = project.addTrack (name, previous)) != nullptr)
                 {
-                    audio::instruments::useBuiltInSynth (*track);
+                    if (drums)
+                        audio::instruments::makeDrumTrack (*track);
+                    else
+                        audio::instruments::useBuiltInSynth (*track);
                 }
 
                 useTarget = false;
