@@ -405,6 +405,9 @@ namespace harmonia::ui::pianoroll
         const auto drums = model.areDrumNamesShown();
         menu.addItem ("Drum names on the keys (General MIDI)", model.getClip() != nullptr, drums,
                       [this, drums] { model.setDrumNamesShown (! drums); });
+
+        const auto chordNames = model.areChordNamesShown();
+        menu.addItem ("Chord names on the ruler", true, chordNames, [this, chordNames] { model.setChordNamesShown (! chordNames); });
         return menu;
     }
 

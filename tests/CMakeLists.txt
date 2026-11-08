@@ -52,7 +52,8 @@ add_executable(harmonia_tests
     ui/DrumNamesTests.cpp
     ui/AudioClipToolsTests.cpp
     ui/ChordNameTests.cpp
-    ui/LoopExportTests.cpp)
+    ui/LoopExportTests.cpp
+    ui/ChordLaneTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)

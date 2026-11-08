@@ -38,6 +38,7 @@ namespace harmonia::ui::pianoroll
         }
 
         paintClipStrip (g, bounds);
+        paintChords (g);
         paintMarkers (g);
 
         // Bars (below the markers): label every 1, 2, 4… bars so numbers never overlap; beat ticks when there's room.
@@ -144,6 +145,36 @@ namespace harmonia::ui::pianoroll
     {
         const auto textWidth = juce::GlyphArrangement::getStringWidth (juce::Font (markerFont()), marker.name);
         return { view.beatToX (marker.beat), 1.0f, textWidth + flagPadding * 2.0f, markerLaneHeight - 2.0f };
+    }
+
+    void TimeRuler::paintChords (juce::Graphics& g)
+    {
+        // The chords the notes make, in the marker lane (a marker's flag goes over them).
+        if (! model.areChordNamesShown())
+            return;
+
+        g.setFont (juce::FontOptions (theme::size::smallFontSize));
+        const auto width = (float) getWidth();
+
+        for (const auto& chord : model.getChords())
+        {
+            const auto left = view.beatToX (chord.startBeat), right = view.beatToX (chord.endBeat);
+
+            if (right < 0.0f || left > width)
+                continue;
+
+            const juce::Rectangle<float> span (left, 2.0f, right - left, markerLaneHeight - 3.0f);
+            g.setColour (theme::colour::textSecondary.withAlpha (0.25f));
+            g.fillRect (span.withWidth (1.0f));
+            g.fillRect (span.withY (span.getBottom()).withHeight (1.0f).reduced (1.0f, 0.0f));
+
+            if (span.getWidth() >= 14.0f)
+            {
+                g.setColour (theme::colour::textPrimary.withAlpha (0.85f));
+                g.drawText (chord.name, span.withTrimmedLeft (3.0f).withTrimmedRight (2.0f).withRight (std::min (span.getRight(), width)),
+                            juce::Justification::centredLeft, true);
+            }
+        }
     }
 
     void TimeRuler::paintMarkers (juce::Graphics& g)

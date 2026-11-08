@@ -371,5 +371,87 @@ namespace harmonia::core
 
             return name;
         }
+
+        std::vector<Span> findChords (const std::vector<Note>& notes, double shortest)
+        {
+            constexpr double tolerance = 1.0e-6;
+
+            struct Change
+            {
+                double beat;
+                int pitch;
+                bool starts;
+            };
+
+            std::vector<Change> changes;
+
+            for (const auto& n : notes)
+            {
+                if (n.muted || n.lengthBeats <= tolerance || n.pitch < 0 || n.pitch > 127)
+                    continue;
+
+                changes.push_back ({ n.startBeat, n.pitch, true });
+                changes.push_back ({ n.getEndBeat(), n.pitch, false });
+            }
+
+            // In time order; at the same moment, notes stop before others start.
+            std::sort (changes.begin(), changes.end(), [] (const Change& a, const Change& b)
+            {
+                return a.beat != b.beat ? a.beat < b.beat : (! a.starts && b.starts);
+            });
+
+            std::array<int, 128> sounding {};
+            std::vector<Span> pieces;
+
+            for (size_t i = 0; i < changes.size();)
+            {
+                const auto beat = changes[i].beat;
+
+                for (; i < changes.size() && changes[i].beat - beat <= tolerance; ++i)
+                    sounding[(size_t) changes[i].pitch] += changes[i].starts ? 1 : -1;
+
+                if (i == changes.size())
+                    break;
+
+                std::vector<int> pitches;
+
+                for (int p = 0; p < 128; ++p)
+                    if (sounding[(size_t) p] > 0)
+                        pitches.push_back (p);
+
+                auto name = nameOf (pitches);
+
+                if (name.isEmpty() && pitches.size() > 3)
+                {
+                    pitches.pop_back();     // the melody on top
+                    name = nameOf (pitches);
+                }
+
+                if (name.isEmpty())
+                    continue;
+
+                const auto end = changes[i].beat;
+
+                if (! pieces.empty() && pieces.back().name == name && std::abs (pieces.back().endBeat - beat) <= tolerance)
+                    pieces.back().endBeat = end;
+                else
+                    pieces.push_back ({ beat, end, name });
+            }
+
+            std::vector<Span> chords;
+
+            for (const auto& piece : pieces)
+            {
+                if (piece.endBeat - piece.startBeat < shortest - tolerance)
+                    continue;
+
+                if (! chords.empty() && chords.back().name == piece.name && piece.startBeat - chords.back().endBeat <= shortest + tolerance)
+                    chords.back().endBeat = piece.endBeat;
+                else
+                    chords.push_back (piece);
+            }
+
+            return chords;
+        }
     }
 }

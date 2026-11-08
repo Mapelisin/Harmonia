@@ -262,6 +262,14 @@ namespace harmonia::ui::pianoroll
                                   { return a.values.startBeat < b.values.startBeat; });
             }
 
+            std::vector<core::Note> values;
+            values.reserve (drawn.size());
+
+            for (const auto& d : drawn)
+                values.push_back (d.values);
+
+            chords = core::chords::findChords (values);
+
             notesDirty = false;
             selectionDirty = true;
         }
@@ -383,6 +391,21 @@ namespace harmonia::ui::pianoroll
         const auto current = (int) (std::find (all.begin(), all.end(), laneProperty) - all.begin());
         const auto count = (int) all.size();
         setLaneProperty (all[(size_t) (((current + direction) % count + count) % count)]);
+    }
+
+    const std::vector<core::chords::Span>& PianoRollModel::getChords()
+    {
+        ensureNotes();
+        return chords;
+    }
+
+    void PianoRollModel::setChordNamesShown (bool shouldShow)
+    {
+        if (chordNamesShown != shouldShow)
+        {
+            chordNamesShown = shouldShow;
+            notifyChanged();
+        }
     }
 
     void PianoRollModel::setGhostsVisible (bool shouldBeVisible)

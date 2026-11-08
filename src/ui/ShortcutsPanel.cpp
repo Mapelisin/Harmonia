@@ -68,6 +68,7 @@ namespace harmonia::ui
                 { "Middle button", "Move the view" },
                 { "Keyboard: right button", "Drum names on the keys (General MIDI) on / off" },
                 { "Select notes", "The chord they make shows top right (Am7, C/E...)" },
+                { "Ruler, top line", "The chords the notes make (Scale menu: on / off)" },
                 { "Ctrl+drag on the ruler", "Select time (for rotate, insert / delete space)" },
                 { "Click a marker on the ruler", "Play from it (markers are added in the arrangement)" },
                 { "Drag the bracket on the ruler", "A looping clip: make its loop longer or shorter" },

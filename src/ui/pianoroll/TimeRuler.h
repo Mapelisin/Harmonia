@@ -45,6 +45,7 @@ namespace harmonia::ui::pianoroll
         bool isOverLoopEnd (juce::Point<float>) const;
         juce::Rectangle<float> getFlag (const core::markers::Marker&) const;
         void paintMarkers (juce::Graphics&);
+        void paintChords (juce::Graphics&);
         void paintClipStrip (juce::Graphics&, juce::Rectangle<float> bounds);
         juce::Rectangle<int> getPlayheadArea() const;
     };

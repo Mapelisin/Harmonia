@@ -147,6 +147,12 @@ namespace harmonia::ui::pianoroll
         bool areGhostsVisible() const noexcept          { return ghostsVisible; }
         void setGhostsVisible (bool);
 
+        /** The chords the clip's notes make over time (core::chords::findChords), in the same beats
+            as getNotes. Shown on the ruler while chord names are on (at first they are). */
+        const std::vector<core::chords::Span>& getChords();
+        bool areChordNamesShown() const noexcept        { return chordNamesShown; }
+        void setChordNamesShown (bool);
+
         /** Length of the next drawn note: the last note clicked or drawn. */
         double getNewNoteLength() const noexcept        { return newNoteLength; }
         void setNewNoteLength (double);
@@ -331,7 +337,8 @@ namespace harmonia::ui::pianoroll
         core::snap::Mode snapMode = core::snap::Mode::line;
         double pixelsPerBeat = 80.0;
         core::NoteProperty laneProperty = core::NoteProperty::velocity;
-        bool ghostsVisible = true;
+        bool ghostsVisible = true, chordNamesShown = true;
+        std::vector<core::chords::Span> chords;
         double newNoteLength = 0.25;
 
         // Selected notes, keyed by the live MidiNote and checked against its tree, so a stale

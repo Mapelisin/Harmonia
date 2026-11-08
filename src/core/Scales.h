@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Note.h"
 #include "core/Tracktion.h"
 
 namespace harmonia::core
@@ -97,5 +98,21 @@ namespace harmonia::core
             another note in the bass)... Octaves and repeated notes don't matter. Empty for a
             single note or a mix that isn't a common chord. */
         juce::String nameOf (const std::vector<int>& pitches);
+
+        /** A stretch of time where the notes make one chord. */
+        struct Span
+        {
+            double startBeat = 0.0, endBeat = 0.0;
+            juce::String name;
+
+            bool operator== (const Span&) const = default;
+        };
+
+        /** The chords the notes make over time (muted notes left out), in time order: from each
+            point where notes start or stop to the next, what sounds there. When that isn't a chord,
+            the highest note is left out and it is tried again (a melody over chords). Chords
+            shorter than `shortest` beats (passing notes) are left out, and the same chord either
+            side of one joins up. */
+        std::vector<Span> findChords (const std::vector<Note>& notes, double shortest = 0.5);
     }
 }
