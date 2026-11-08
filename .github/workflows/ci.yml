@@ -34,7 +34,7 @@ jobs:
       - name: Use HTTPS for GitHub submodules
         run: git config --global url."https://github.com/".insteadOf "git@github.com:"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
 
