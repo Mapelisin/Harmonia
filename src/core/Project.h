@@ -26,8 +26,33 @@ namespace harmonia::core
         const te::Edit& getEdit() const noexcept    { return *edit; }
 
         int getFormatVersion() const;
+
+        //==============================================================================
+        // Tracks and clips. All changes are undoable.
+
+        juce::Array<te::AudioTrack*> getTracks() const;
         int getNumTracks() const;
+
+        /** Appends a track at the bottom. */
+        te::AudioTrack* addTrack (const juce::String& name);
+
+        /** Inserts an empty MIDI clip; positions are in beats from the start of the song. */
+        te::MidiClip* addMidiClip (te::AudioTrack&, double startBeat, double lengthBeats,
+                                   const juce::String& name = {});
+
         double getTempoBpm() const;
+        void setTempoBpm (double bpm);
+
+        //==============================================================================
+        // Undo. One user gesture (a click, a drag, a menu command) = one transaction.
+
+        /** Starts a new undo transaction; everything changed until the next call is undone together. */
+        void beginGesture (const juce::String& name);
+
+        bool canUndo() const;
+        bool canRedo() const;
+        void undo();
+        void redo();
 
     private:
         explicit Project (std::unique_ptr<te::Edit>);

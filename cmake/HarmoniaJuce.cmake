@@ -29,7 +29,8 @@ target_compile_definitions(harmonia_juce
         JUCE_STRICT_REFCOUNTEDPOINTER=1
         JUCE_USE_CURL=0
         JUCE_WEB_BROWSER=0
-        JUCE_DISPLAY_SPLASH_SCREEN=0)
+        # Debug: route jassert failures through juce::Logger so tests can detect them.
+        $<$<CONFIG:Debug>:JUCE_LOG_ASSERTIONS=1>)
 
 # Re-export what the PRIVATE JUCE modules contribute, so consumers see the same configuration.
 target_include_directories(harmonia_juce

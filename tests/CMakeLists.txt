@@ -1,7 +1,11 @@
 add_executable(harmonia_tests
     TestMain.cpp
     TestSession.h
+    core/TestProject.h
     core/ProjectTests.cpp
+    core/NoteTests.cpp
+    core/NoteEditorTests.cpp
+    core/ClipLinksTests.cpp
     audio/DeviceStatusTests.cpp)
 
 harmonia_configure_target(harmonia_tests)

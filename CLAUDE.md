@@ -1,7 +1,7 @@
 # Harmonia — инструкции для Claude
 
 Harmonia — бесплатная DAW с открытым кодом и локальными ИИ-инструментами.
-Репозиторий: https://github.com/Mapelisin/Harmonia (приватный), ветка `main`.
+Репозиторий: https://github.com/Mapelisin/Harmonia (публичный с 2026-11-08), ветка `main`. Файла лицензии пока нет — см. решение 13.
 
 ## В начале каждой сессии
 1. Прочитай `docs/PROJECT.md`: там принятые решения, текущий этап и следующий шаг.
@@ -38,6 +38,9 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   `src/app` (точка входа), `tests/` (doctest, по папке на модуль). JUCE+Tracktion компилируются один раз
   в библиотеку `harmonia_juce` (`cmake/HarmoniaJuce.cmake`); новые цели настраивать через `harmonia_configure_target`.
 - Предупреждения — ошибки (`/W4 /WX`). Каждое изменение модели — с тестом.
+- Перед коммитом изменений в `core`/`audio` гонять и `windows-debug`: там тесты падают на любом jassert JUCE/Tracktion
+  (`JUCE_LOG_ASSERTIONS` + ловушка в `tests/TestMain.cpp`). Release этого не видит.
+- Ноты клипа меняются только через `core::NoteEditor` (undo + связанные копии), жесты — `Project::beginGesture`.
 - Сборки — в `build/` (не в git). Пробные программы — в `spikes/`, их выводы — в `docs/research/`.
 
 ## Git
