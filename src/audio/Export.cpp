@@ -146,10 +146,13 @@ namespace harmonia::audio
         return render (track.edit, file, tracks, range, false);
     }
 
-    juce::String exportWav (te::Edit& edit, const juce::File& file)
+    juce::String exportWav (te::Edit& edit, const juce::File& file, std::optional<te::TimeRange> part)
     {
         if (edit.getLength() <= te::TimeDuration())
             return "Nothing to export: the song has no clips";
+
+        if (part.has_value() && (part->getLength() <= te::TimeDuration() || part->getStart() < te::TimePosition()))
+            return "Nothing to export: the part to export is empty";
 
         // What you hear is what you get.
         const auto audible = findAudible (edit);
@@ -165,7 +168,7 @@ namespace harmonia::audio
         for (auto* track : audible.returnTracks)
             tracks.add (track);
 
-        return render (edit, file, tracks, getRange (edit), true);
+        return render (edit, file, tracks, part.value_or (getRange (edit)), true);
     }
 
     juce::String getStemFileName (const juce::String& prefix, int number, const juce::String& trackName)

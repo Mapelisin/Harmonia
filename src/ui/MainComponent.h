@@ -50,6 +50,10 @@ namespace harmonia::ui
 
         pianoroll::PianoRollModel& getPianoRollModel() noexcept         { return pianoRollModel; }
         arrangement::ArrangementModel& getArrangementModel() noexcept   { return arrangementModel; }
+
+        /** "bars 5-8", "bar 3", or in beats when it isn't whole bars ("beats 2.50-5"): for names.
+            Bars and beats are counted from 1. */
+        static juce::String describeBars (core::note_ops::BeatRange, double beatsPerBar);
         arrangement::Arrangement& getArrangement() noexcept             { return arrangement; }
         pianoroll::PianoRoll& getPianoRoll() noexcept                   { return pianoRoll; }
         NoteInput& getNoteInput() noexcept                              { return noteInput; }

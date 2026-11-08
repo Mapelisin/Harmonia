@@ -6,9 +6,10 @@ namespace harmonia::audio
 {
     /** Renders the whole song (from the start to the end of the last clip, plus a moment for
         notes to ring out) to a 24-bit WAV file, as it sounds: muted tracks are left out, and
-        while some tracks are soloed only those play. Blocks until done. Changes nothing in the
-        project. Returns an error message, empty on success. */
-    juce::String exportWav (te::Edit&, const juce::File&);
+        while some tracks are soloed only those play. With `part`, only that stretch of the song,
+        exactly (a loop to use as a sample: nothing added to ring out). Blocks until done. Changes
+        nothing in the project. Returns an error message, empty on success. */
+    juce::String exportWav (te::Edit&, const juce::File&, std::optional<te::TimeRange> part = std::nullopt);
 
     /** How long the export lets notes ring out after the last clip ends. */
     inline constexpr double exportTailSeconds = 2.0;

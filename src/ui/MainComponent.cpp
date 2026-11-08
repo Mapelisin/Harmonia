@@ -552,8 +552,28 @@ namespace harmonia::ui
         menu.addItem ("Import audio or MIDI...", [safe] { if (safe != nullptr) safe->chooseFilesToImport(); });
         menu.addItem ("Export WAV...  (Ctrl+R)", hasCommands, false, run (&FileCommands::exportWav));
         menu.addItem ("Export stems (WAV per track)...", hasCommands, false, run (&FileCommands::exportStems));
+
+        const auto loop = arrangementModel.getLoopRegion();
+        menu.addItem (loop.has_value() ? "Export the loop region as WAV (" + describeBars (*loop, arrangementModel.getBeatsPerBar()) + ")..."
+                                       : juce::String ("Export the loop region as WAV (Ctrl+drag on the ruler first)"),
+                      hasCommands && loop.has_value(), false, run (&FileCommands::exportLoopWav));
         menu.addItem ("Export MIDI...", [safe] { if (safe != nullptr) safe->chooseMidiExport(); });
         return menu;
+    }
+
+    juce::String MainComponent::describeBars (core::note_ops::BeatRange range, double beatsPerBar)
+    {
+        const auto isWhole = [] (double x) { return std::abs (x - std::round (x)) < 1.0e-6; };
+
+        if (beatsPerBar > 0.0 && isWhole (range.start / beatsPerBar) && isWhole (range.end / beatsPerBar))
+        {
+            const auto first = juce::roundToInt (range.start / beatsPerBar) + 1;
+            const auto last = juce::roundToInt (range.end / beatsPerBar);
+            return first >= last ? "bar " + juce::String (first) : "bars " + juce::String (first) + "-" + juce::String (last);
+        }
+
+        const auto beat = [isWhole] (double b) { return juce::String (b + 1.0, isWhole (b) ? 0 : 2); };
+        return "beats " + beat (range.start) + "-" + beat (range.end);
     }
 
     void MainComponent::chooseFilesToImport()

@@ -25,7 +25,7 @@ namespace harmonia::ui
                 { "Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z)", "Undo / redo" },
                 { "Ctrl+N / Ctrl+O", "New project / open a project" },
                 { "Ctrl+S / Ctrl+Shift+S", "Save / save as" },
-                { "Ctrl+R", "Export the song as a WAV file" },
+                { "Ctrl+R", "Export the song as a WAV file (the File menu also exports the loop region)" },
                 { "F6 / F7 / F8 / F9", "Sounds / piano roll / automation / mixer below" },
                 { "Ctrl+Left / Ctrl+Right", "Play from the previous / next marker" },
                 { "F1", "This list" } } },

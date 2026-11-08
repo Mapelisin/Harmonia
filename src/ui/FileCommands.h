@@ -17,6 +17,9 @@ namespace harmonia::ui
         virtual void exportWav() = 0;       // Ctrl+R, as in FL Studio
         virtual void exportStems() = 0;     // a WAV per track
 
+        /** The loop region set on the arrangement's ruler, exactly, as a WAV (to use as a sample). */
+        virtual void exportLoopWav()                                    {}
+
         /** The project's file name without extension, or "Untitled". */
         virtual juce::String getProjectName() const = 0;
 

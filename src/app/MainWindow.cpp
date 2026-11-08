@@ -343,13 +343,37 @@ namespace harmonia::app
 
     void MainWindow::exportWav()
     {
+        chooseWavExport (getProjectName(), std::nullopt);
+    }
+
+    void MainWindow::exportLoopWav()
+    {
+        auto* content = getMainComponent();
+        const auto region = content != nullptr ? content->getArrangementModel().getLoopRegion() : std::nullopt;
+
+        if (! region.has_value() || region->getLength() <= 0.0)
+        {
+            showError ("Nothing to export", "Set a loop region first: Ctrl+drag along the ruler above the arrangement's tracks (or a marker's menu: Loop this section).");
+            return;
+        }
+
+        auto& tempo = project->getEdit().tempoSequence;
+        const te::TimeRange part (tempo.toTime (te::BeatPosition::fromBeats (region->start)),
+                                  tempo.toTime (te::BeatPosition::fromBeats (region->end)));
+        chooseWavExport (getProjectName() + " - " + ui::MainComponent::describeBars (*region, content->getArrangementModel().getBeatsPerBar()),
+                         part);
+    }
+
+    void MainWindow::chooseWavExport (const juce::String& defaultName, std::optional<te::TimeRange> part)
+    {
         const auto folder = file != juce::File() ? file.getParentDirectory() : getDefaultFolder();
         folder.createDirectory();
 
-        chooser = std::make_unique<juce::FileChooser> ("Export WAV", folder.getChildFile (getProjectName() + ".wav"), "*.wav");
+        chooser = std::make_unique<juce::FileChooser> ("Export WAV", folder.getChildFile (juce::File::createLegalFileName (defaultName + ".wav")),
+                                                       "*.wav");
         chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
                                   | juce::FileBrowserComponent::warnAboutOverwriting,
-                              [this] (const juce::FileChooser& fc)
+                              [this, part] (const juce::FileChooser& fc)
         {
             auto result = fc.getResult();
 
@@ -362,7 +386,7 @@ namespace harmonia::app
             if (auto* content = getMainComponent())
                 content->getTransport().stop();
 
-            if (const auto error = audio::exportWav (project->getEdit(), result); error.isNotEmpty())
+            if (const auto error = audio::exportWav (project->getEdit(), result, part); error.isNotEmpty())
                 showError ("Export failed", error);
             else if (auto* content = getMainComponent())
                 content->showMessage ("Exported " + result.getFullPathName());

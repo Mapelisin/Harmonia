@@ -46,6 +46,7 @@ namespace harmonia::app
         void saveProjectAs() override;
         void exportWav() override;
         void exportStems() override;
+        void exportLoopWav() override;
         juce::String getProjectName() const override;
         juce::Array<juce::File> getRecentProjects() const override;
         void openRecentProject (const juce::File&) override;
@@ -75,6 +76,9 @@ namespace harmonia::app
         void saveAs (std::function<void()> then);
         bool writeTo (const juce::File&);
         void showError (const juce::String& title, const juce::String& message);
+
+        /** Asks where to save `defaultName`.wav, then exports the song (or `part` of it) there. */
+        void chooseWavExport (const juce::String& defaultName, std::optional<te::TimeRange> part);
         void updateTitle();
         bool restore (const core::Autosave::Leftover&);
         void timerCallback() override;
