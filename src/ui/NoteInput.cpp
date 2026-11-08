@@ -100,7 +100,9 @@ namespace harmonia::ui
 
     void NoteInput::update()
     {
-        const auto shouldRecord = armed && clock.isPlaying() && model.getClip() != nullptr;
+        // Not while a count-in plays before the song's start: those notes would be before beat 0.
+        const auto heard = clock.isPlaying() ? clock.getHeardBeat (now()) : std::optional<double>();
+        const auto shouldRecord = armed && clock.isPlaying() && model.getClip() != nullptr && heard.value_or (0.0) >= 0.0;
 
         if (shouldRecord && ! recorder.isActive())
             startTake();

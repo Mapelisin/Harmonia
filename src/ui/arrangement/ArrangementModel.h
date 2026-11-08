@@ -146,6 +146,30 @@ namespace harmonia::ui::arrangement
             copied independently). */
         void duplicateSelected (bool linked);
 
+        /** Splits clips in two at `beat`: the selected clips there or, if none of them is there,
+            the clips of the current track there. One undo step; the right halves become the
+            selection. Returns how many clips were split. */
+        int splitAt (double beat);
+
+        /** Ctrl+C: remembers the selected clips (for every project opened in this run). Returns how many. */
+        int copySelected();
+
+        /** Ctrl+X: copySelected, then deletes them (one undo step). */
+        int cutSelected();
+
+        /** Ctrl+V: the copied clips as new independent clips, the earliest at `beat` and the topmost
+            on the current track; the others keep their distance in time and in tracks. A clip lands
+            on the nearest track below its place that takes its kind (MIDI on instrument tracks, audio
+            on audio tracks), or is left out. One undo step; the pasted clips become the selection.
+            Returns how many were pasted. */
+        int paste (double beat);
+
+        /** Something was copied. */
+        static bool canPaste();
+
+        /** How many clips are on the clipboard (for messages). */
+        static int getNumCopiedClips();
+
         /** Makes the clip independent of its linked copies. */
         void makeUnique (te::MidiClip&);
 

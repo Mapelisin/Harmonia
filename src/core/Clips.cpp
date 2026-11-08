@@ -1,4 +1,5 @@
 #include "core/Clips.h"
+#include "core/Tracks.h"
 #include "core/ClipLinks.h"
 
 namespace harmonia::core::clips
@@ -191,5 +192,46 @@ namespace harmonia::core::clips
         for (auto* survivor : survivors)
             if (clip_links::getGroup (*survivor).size() == 1)
                 clip_links::unlink (*survivor);
+    }
+
+    te::Clip* split (te::Clip& clip, double beat)
+    {
+        // Not right at an edge: both halves must be something.
+        constexpr double minPartBeats = 1.0e-3;
+
+        if (beat <= getStartBeat (clip) + minPartBeats || beat >= getEndBeat (clip) - minPartBeats)
+            return nullptr;
+
+        return te::split (clip, toTime (clip.edit, beat));
+    }
+
+    bool canTake (const te::AudioTrack& track, const te::ClipCopy& copy)
+    {
+        const auto& state = copy.getState();
+
+        if (tracks::isReturn (track))
+            return false;
+
+        if (state.hasType (te::IDs::AUDIOCLIP))
+            return tracks::isAudio (track);
+
+        return state.hasType (te::IDs::MIDICLIP) && ! tracks::isAudio (track);
+    }
+
+    te::Clip* insertCopy (te::AudioTrack& track, const te::ClipCopy& copy, double startBeat)
+    {
+        if (! canTake (track, copy))
+            return nullptr;
+
+        auto* clip = te::insertClipCopy (track, copy.withNewItemID (track.edit));
+
+        if (clip == nullptr)
+            return nullptr;
+
+        if (auto* midi = dynamic_cast<te::MidiClip*> (clip); midi != nullptr && clip_links::isLinked (*midi))
+            clip_links::unlink (*midi);
+
+        clip->setStart (toTime (track.edit, std::max (0.0, startBeat)), false, true);
+        return clip;
     }
 }

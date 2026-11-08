@@ -29,6 +29,9 @@ namespace harmonia::audio
         resumeCount = 0;
         recentResumeTimesMs.clear();
 
+        countInPending = recordRequested && edit.getNumCountInBeats() > 0;
+        countInStarted = false;
+
         if (recordRequested)
         {
             recordStartSeconds = getPositionSeconds();
@@ -60,6 +63,50 @@ namespace harmonia::audio
     bool Transport::isRecording() const
     {
         return transport().isRecording();
+    }
+
+    void Transport::setCountIn (CountIn countIn)
+    {
+        edit.setCountInMode (countIn == CountIn::twoBars ? te::Edit::CountIn::twoBar
+                           : countIn == CountIn::oneBar  ? te::Edit::CountIn::oneBar
+                                                         : te::Edit::CountIn::none);
+    }
+
+    Transport::CountIn Transport::getCountIn() const
+    {
+        switch (edit.getCountInMode())
+        {
+            case te::Edit::CountIn::twoBar:     return CountIn::twoBars;
+            case te::Edit::CountIn::oneBar:     return CountIn::oneBar;
+            case te::Edit::CountIn::none:
+            case te::Edit::CountIn::twoBeat:
+            case te::Edit::CountIn::oneBeat:
+            default:                            break;
+        }
+
+        return CountIn::off;
+    }
+
+    bool Transport::isCountingIn() const
+    {
+        if (! countInPending || ! recordRequested || ! isPlaying())
+            return false;
+
+        // The playhead itself (the transport's position follows it only now and then). Until the
+        // first block plays, it still says where Play was pressed: that's not the end of the count-in.
+        auto* context = transport().getCurrentPlaybackContext();
+        const auto position = context != nullptr ? context->getPosition().inSeconds() : getPositionSeconds();
+
+        if (position < recordStartSeconds - 0.001)
+        {
+            countInStarted = true;
+            return true;
+        }
+
+        if (countInStarted)
+            countInPending = false;
+
+        return countInPending;
     }
 
     void Transport::togglePlayStop()

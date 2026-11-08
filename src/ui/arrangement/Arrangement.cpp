@@ -119,6 +119,10 @@ namespace harmonia::ui::arrangement
                 case 'B': model.duplicateSelected (! mods.isShiftDown()); return true;
                 case 'A': if (! mods.isShiftDown()) { model.selectAll(); return true; } return false;
                 case 'D': if (! mods.isShiftDown()) { model.deselectAll(); return true; } return false;
+                case 'C': if (! mods.isShiftDown()) { copySelected(); return true; } return false;
+                case 'X': if (! mods.isShiftDown()) { cutSelected(); return true; } return false;
+                case 'V': if (! mods.isShiftDown()) { pasteAtPlayhead(); return true; } return false;
+                case 'E': if (! mods.isShiftDown()) { splitAtPlayhead(); return true; } return false;
                 default:  return false;
             }
         }
@@ -139,6 +143,67 @@ namespace harmonia::ui::arrangement
         }
 
         return false;
+    }
+
+    //==============================================================================
+    double Arrangement::getPlayheadBeat() const
+    {
+        return model.getEdit().tempoSequence.toBeats (te::TimePosition::fromSeconds (transport.getPositionSeconds())).inBeats();
+    }
+
+    void Arrangement::tell (const juce::String& text, bool isProblem)
+    {
+        if (onMessage != nullptr)
+            onMessage (text, isProblem);
+    }
+
+    void Arrangement::copySelected()
+    {
+        const auto count = model.copySelected();
+
+        if (count == 0)
+            tell ("Nothing to copy: select clips first", true);
+        else
+            tell ("Copied " + juce::String (count) + (count == 1 ? " clip" : " clips")
+                      + " (Ctrl+V pastes at the playhead, on the current track)", false);
+    }
+
+    void Arrangement::cutSelected()
+    {
+        const auto count = model.cutSelected();
+
+        if (count == 0)
+            tell ("Nothing to cut: select clips first", true);
+        else
+            tell ("Cut " + juce::String (count) + (count == 1 ? " clip" : " clips") + " (Ctrl+V puts them back somewhere)", false);
+    }
+
+    void Arrangement::pasteAtPlayhead()
+    {
+        if (! ArrangementModel::canPaste())
+        {
+            tell ("Nothing to paste: copy clips first (Ctrl+C)", true);
+            return;
+        }
+
+        const auto beat = std::max (0.0, snap::snapFloor (getPlayheadBeat(), model.getSnap(), model.getSnapContext()));
+        const auto count = model.paste (beat);
+        const auto copied = ArrangementModel::getNumCopiedClips();
+
+        if (count == 0)
+            tell ("Nothing pasted: MIDI clips go on instrument tracks, audio clips on audio tracks", true);
+        else if (count < copied)
+            tell ("Pasted " + juce::String (count) + " of " + juce::String (copied)
+                      + " clips: the others found no track of their kind below", true);
+        else
+            tell ("Pasted " + juce::String (count) + (count == 1 ? " clip" : " clips"), false);
+    }
+
+    void Arrangement::splitAtPlayhead()
+    {
+        if (model.splitAt (getPlayheadBeat()) == 0)
+            tell ("Nothing to split: put the playhead over a clip of the current track (click the ruler), "
+                  "or select the clips to split", true);
     }
 
     //==============================================================================
@@ -325,6 +390,20 @@ namespace harmonia::ui::arrangement
             menu.addSeparator();
             menu.addItem ("Duplicate (Ctrl+B)", [this] { model.duplicateSelected (false); });
         }
+
+        const auto playhead = getPlayheadBeat();
+        const auto playheadInside = core::clips::getStartBeat (clip) < playhead && playhead < core::clips::getEndBeat (clip);
+        menu.addItem ("Split at the playhead (Ctrl+E)", playheadInside, false, [this, target, isValid]
+        {
+            if (isValid())
+            {
+                model.setSelection ({ target.get() });
+                splitAtPlayhead();
+            }
+        });
+        menu.addItem ("Copy (Ctrl+C)", [this] { copySelected(); });
+        menu.addItem ("Cut (Ctrl+X)", [this] { cutSelected(); });
+        menu.addItem ("Paste at the playhead (Ctrl+V)", ArrangementModel::canPaste(), false, [this] { pasteAtPlayhead(); });
 
         menu.addSeparator();
         menu.addItem ("Delete (Del)", [this] { model.deleteSelected(); });

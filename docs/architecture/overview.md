@@ -111,6 +111,11 @@ Tracktion останавливает воспроизведение, когда 
   следит за деревом проекта), `ChannelStrip`, `LevelMeter` (читает `te::LevelMeasurer`: дорожки — её
   `LevelMeterPlugin`, мастер — `masterLevels` текущего контекста воспроизведения, который бывает пересоздан).
   `MainComponent` показывает снизу piano roll или микшер (F7 / F9).
+- **Правка аранжировки:** разрез (`core::clips::split` → `te::split`) и буфер обмена клипов
+  (`ArrangementModel::copySelected / cutSelected / paste`: копии состояний `te::ClipCopy` и их смещения по
+  дорожкам и долям; `core::clips::insertCopy` даёт новые ID и отвязывает от группы связанных).
+  Предотсчёт — `te::Edit::setCountInMode` (настройка движка) через `audio::Transport::setCountIn`; работает,
+  когда Play записывает звук (`TransportControl::record`).
 - **Посылы:** `audio/Sends` — возвратные дорожки (`core::tracks::Kind::fxReturn`: в конце списка дорожек,
   `Project::getTracks` их не отдаёт — аранжировка их не видит; `getReturnTracks`) с `te::AuxReturnPlugin` на
   своей шине первым в списке и посылы — `te::AuxSendPlugin` на той же шине после громкости дорожки. Эффекты

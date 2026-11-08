@@ -30,11 +30,13 @@ namespace harmonia::ui
         NoteInput& noteInput;
         arrangement::ArrangementModel& arrangementModel;
 
-        juce::TextButton playButton { "Play" }, recordButton { "Rec" }, clickButton { "Click" }, modeButton, keysButton;
+        juce::TextButton playButton { "Play" }, recordButton { "Rec" }, clickButton { "Click" }, countInButton { "Count-in" },
+                         modeButton, keysButton;
         juce::Label positionLabel;
         juce::ComboBox quantizeBox;
 
         void timerCallback() override;
+        void showCountInMenu();
 
         JUCE_DECLARE_NON_COPYABLE (TransportBar)
     };

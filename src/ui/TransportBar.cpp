@@ -24,6 +24,10 @@ namespace harmonia::ui
             refresh();
         };
 
+        countInButton.setTooltip ("Count-in: metronome clicks before a recording of audio starts, to get ready\n"
+                                  "(off, 1 bar or 2 bars). The recording still starts where Play was pressed.");
+        countInButton.onClick = [this] { showCountInMenu(); };
+
         modeButton.setTooltip ("What Play plays (L): the clip open in the piano roll, looped (Clip),\n"
                                "or the arrangement (Song: the loop region set with Ctrl+drag on its ruler, or the whole song).\n"
                                "Like PAT / SONG in FL Studio.");
@@ -58,8 +62,8 @@ namespace harmonia::ui
         positionLabel.setFont (juce::FontOptions (theme::size::fontSize));
         positionLabel.setJustificationType (juce::Justification::centredLeft);
 
-        for (auto* c : std::initializer_list<juce::Component*> { &playButton, &recordButton, &clickButton, &modeButton, &positionLabel,
-                                                                 &keysButton, &quantizeBox })
+        for (auto* c : std::initializer_list<juce::Component*> { &playButton, &recordButton, &clickButton, &countInButton, &modeButton,
+                                                                 &positionLabel, &keysButton, &quantizeBox })
         {
             c->setWantsKeyboardFocus (false);
             addAndMakeVisible (c);
@@ -86,6 +90,7 @@ namespace harmonia::ui
         place (playButton, 60);
         place (recordButton, 50);
         place (clickButton, 54);
+        place (countInButton, 82);
         place (modeButton, 54);
         area.removeFromLeft (theme::size::padding);
         place (positionLabel, 110);
@@ -96,6 +101,31 @@ namespace harmonia::ui
     void TransportBar::timerCallback()
     {
         refresh();
+    }
+
+    void TransportBar::showCountInMenu()
+    {
+        using CountIn = audio::Transport::CountIn;
+        const auto current = transport.getCountIn();
+        juce::Component::SafePointer<TransportBar> safe (this);
+        juce::PopupMenu menu;
+        menu.addSectionHeader ("Count-in before recording audio");
+
+        for (const auto& [countIn, name] : { std::pair<CountIn, const char*> { CountIn::off, "Off" },
+                                             { CountIn::oneBar, "1 bar" },
+                                             { CountIn::twoBars, "2 bars" } })
+        {
+            menu.addItem (name, true, countIn == current, [safe, countIn]
+            {
+                if (safe != nullptr)
+                {
+                    safe->transport.setCountIn (countIn);
+                    safe->refresh();
+                }
+            });
+        }
+
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&countInButton));
     }
 
     void TransportBar::refresh()
@@ -112,6 +142,14 @@ namespace harmonia::ui
 
         clickButton.setColour (juce::TextButton::buttonColourId,
                                edit.clickTrackEnabled.get() ? theme::colour::accent.withAlpha (0.35f) : theme::colour::surfaceRaised);
+
+        const auto countIn = transport.getCountIn();
+        countInButton.setButtonText (countIn == audio::Transport::CountIn::twoBars ? "Count 2 bars"
+                                   : countIn == audio::Transport::CountIn::oneBar  ? "Count 1 bar"
+                                                                                   : "Count-in");
+        countInButton.setColour (juce::TextButton::buttonColourId,
+                                 countIn != audio::Transport::CountIn::off ? theme::colour::accent.withAlpha (0.35f)
+                                                                           : theme::colour::surfaceRaised);
 
         const auto song = arrangementModel.getPlayMode() == arrangement::PlayMode::song;
         modeButton.setButtonText (song ? "Song" : "Clip");
@@ -130,8 +168,17 @@ namespace harmonia::ui
         const auto seconds = transport.getPositionSeconds();
         const auto barsAndBeats = edit.tempoSequence.toBarsAndBeats (te::TimePosition::fromSeconds (seconds));
 
-        const auto text = juce::String (barsAndBeats.bars + 1) + "." + juce::String (barsAndBeats.getWholeBeats() + 1)
-                        + "   " + juce::String (seconds, 2) + " s";
+        auto text = juce::String (barsAndBeats.bars + 1) + "." + juce::String (barsAndBeats.getWholeBeats() + 1)
+                  + "   " + juce::String (seconds, 2) + " s";
+
+        // Counting in, the song is before where the recording starts (maybe before its start).
+        if (transport.isCountingIn())
+        {
+            const auto& tempo = edit.tempoSequence;
+            const auto beatsLeft = tempo.toBeats (te::TimePosition::fromSeconds (transport.getRecordStartSeconds())).inBeats()
+                                 - tempo.toBeats (te::TimePosition::fromSeconds (seconds)).inBeats();
+            text = "Count-in " + juce::String ((int) std::ceil (beatsLeft - 1.0e-6));
+        }
 
         if (positionLabel.getText() != text)
             positionLabel.setText (text, juce::dontSendNotification);

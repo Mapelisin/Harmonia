@@ -509,6 +509,139 @@ namespace harmonia::ui::arrangement
         changed();
     }
 
+    //==============================================================================
+    namespace
+    {
+        /** What Ctrl+C keeps: copies of the clips' states, and where each was relative to the
+            earliest clip and the topmost track. */
+        struct CopiedClip
+        {
+            te::ClipCopy copy;
+            int trackOffset = 0;
+            double beatOffset = 0.0;
+        };
+
+        std::vector<CopiedClip>& getClipboard()
+        {
+            static std::vector<CopiedClip> clipboard;
+            return clipboard;
+        }
+    }
+
+    int ArrangementModel::splitAt (double beat)
+    {
+        const auto covers = [beat] (te::Clip* clip)
+        {
+            return clips::getStartBeat (*clip) < beat && beat < clips::getEndBeat (*clip);
+        };
+
+        auto targets = getSelectedClips();
+        targets.removeIf ([&covers] (te::Clip* clip) { return ! covers (clip); });
+
+        if (targets.isEmpty())
+            if (auto* track = getCurrentTrack())
+                for (auto* clip : clips::getClips (*track))
+                    if (covers (clip))
+                        targets.add (clip);
+
+        if (targets.isEmpty())
+            return 0;
+
+        project.beginGesture (targets.size() == 1 ? "Split clip" : "Split clips");
+        juce::Array<te::Clip*> rightHalves;
+
+        for (auto* clip : targets)
+            if (auto* right = clips::split (*clip, beat))
+                rightHalves.add (right);
+
+        setSelection (rightHalves);
+        clipsDirty = true;
+        changed();
+        return rightHalves.size();
+    }
+
+    int ArrangementModel::copySelected()
+    {
+        const auto selected = getSelectedClips();
+
+        if (selected.isEmpty())
+            return 0;
+
+        auto firstBeat = std::numeric_limits<double>::max();
+        auto topTrack = std::numeric_limits<int>::max();
+
+        for (auto* clip : selected)
+        {
+            firstBeat = std::min (firstBeat, clips::getStartBeat (*clip));
+            topTrack = std::min (topTrack, indexOf (clip->getTrack()));
+        }
+
+        auto& clipboard = getClipboard();
+        clipboard.clear();
+
+        for (auto* clip : selected)
+            clipboard.push_back ({ te::ClipCopy::fromClip (*clip),
+                                   indexOf (clip->getTrack()) - topTrack,
+                                   clips::getStartBeat (*clip) - firstBeat });
+
+        return (int) clipboard.size();
+    }
+
+    int ArrangementModel::cutSelected()
+    {
+        const auto count = copySelected();
+
+        if (count > 0)
+        {
+            project.beginGesture (count == 1 ? "Cut clip" : "Cut clips");
+            removeClips (getSelectedClips());
+        }
+
+        return count;
+    }
+
+    int ArrangementModel::paste (double beat)
+    {
+        const auto& clipboard = getClipboard();
+
+        if (clipboard.empty())
+            return 0;
+
+        const auto tracks = getTracks();
+        const auto baseTrack = std::max (0, indexOf (getCurrentTrack()));
+        project.beginGesture ("Paste clips");
+        juce::Array<te::Clip*> pasted;
+
+        for (const auto& copied : clipboard)
+        {
+            for (int i = baseTrack + copied.trackOffset; i < tracks.size(); ++i)
+            {
+                if (clips::canTake (*tracks[i], copied.copy))
+                {
+                    if (auto* clip = clips::insertCopy (*tracks[i], copied.copy, beat + copied.beatOffset))
+                        pasted.add (clip);
+
+                    break;
+                }
+            }
+        }
+
+        setSelection (pasted);
+        clipsDirty = true;
+        changed();
+        return pasted.size();
+    }
+
+    bool ArrangementModel::canPaste()
+    {
+        return ! getClipboard().empty();
+    }
+
+    int ArrangementModel::getNumCopiedClips()
+    {
+        return (int) getClipboard().size();
+    }
+
     void ArrangementModel::makeUnique (te::MidiClip& clip)
     {
         if (! core::clip_links::isLinked (clip))

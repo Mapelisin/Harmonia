@@ -40,6 +40,16 @@ namespace harmonia::audio
         /** Song position (seconds) where the current or last recording started. */
         double getRecordStartSeconds() const noexcept   { return recordStartSeconds; }
 
+        /** Bars of metronome clicks before a recording of audio starts (the song plays them in from
+            further back; the recording itself starts where Play was pressed). A setting of the app,
+            not of the project. */
+        enum class CountIn { off, oneBar, twoBars };
+        void setCountIn (CountIn);
+        CountIn getCountIn() const;
+
+        /** True while a count-in is playing: recording, but not yet where the recording starts. */
+        bool isCountingIn() const;
+
         /** True from Play until Stop, including while waiting for the engine or the device. */
         bool isPlayRequested() const noexcept       { return playRequested; }
 
@@ -59,6 +69,7 @@ namespace harmonia::audio
     private:
         te::Edit& edit;
         bool playRequested = false, recordRequested = false, loopWanted = false;
+        mutable bool countInPending = false, countInStarted = false;
         double recordStartSeconds = 0.0;
         int resumeCount = 0;
         std::vector<double> recentResumeTimesMs;

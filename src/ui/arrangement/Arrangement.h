@@ -27,8 +27,15 @@ namespace harmonia::ui::arrangement
         ClipArea& getClipArea() noexcept            { return clipArea; }
         TrackHeaders& getHeaders() noexcept         { return headers; }
 
-        /** Delete, Ctrl+B (linked copies), Ctrl+Shift+B, Ctrl+A, Ctrl+D / Escape. */
+        /** Delete, Ctrl+B (linked copies), Ctrl+Shift+B, Ctrl+A, Ctrl+D / Escape, Ctrl+C / X / V, Ctrl+E. */
         bool handleShortcut (const juce::KeyPress&);
+
+        /** Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+E, with a word for onMessage. Paste and split go where
+            the playhead is (paste snapped to the grid, on the current track). */
+        void copySelected();
+        void cutSelected();
+        void pasteAtPlayhead();
+        void splitAtPlayhead();
 
         /** A position was clicked on the ruler. */
         std::function<void (double beat)> onPositionChosen;
@@ -70,5 +77,7 @@ namespace harmonia::ui::arrangement
         void updatePlayhead();
         void showClipMenu (te::Clip&, juce::Point<float>);
         void askToRename (te::Clip&);
+        double getPlayheadBeat() const;
+        void tell (const juce::String&, bool isProblem);
     };
 }

@@ -22,7 +22,8 @@ add_executable(harmonia_tests
     ui/NoteInputTests.cpp
     ui/ArrangementTests.cpp
     ui/MixerTests.cpp
-    ui/AudioClipTests.cpp)
+    ui/AudioClipTests.cpp
+    ui/ClipEditTests.cpp)
 
 harmonia_configure_target(harmonia_tests)
 target_link_libraries(harmonia_tests PRIVATE harmonia_ui)

@@ -149,6 +149,54 @@ TEST_SUITE ("audio::recording")
         CHECK (clips::getClips (track).size() == 1);
     }
 
+    TEST_CASE ("a count-in clicks before the recording, which still starts where Play was pressed")
+    {
+        RecordingRig rig;
+        auto& track = rig.addAudioTrack ("Vocals");
+        auto& edit = rig.project->getEdit();
+        audio::Transport transport (edit);
+        AudioInputs inputs (edit);
+
+        // The count-in is a setting of the app: put it back whatever happens.
+        struct Restore
+        {
+            audio::Transport& t;
+            ~Restore()  { t.setCountIn (audio::Transport::CountIn::off); }
+        } restore { transport };
+
+        transport.setCountIn (audio::Transport::CountIn::oneBar);
+        CHECK (transport.getCountIn() == audio::Transport::CountIn::oneBar);
+        AudioInputs::setArmed (track, true);
+        inputs.refresh();
+        edit.dispatchPendingUpdatesSynchronously();
+
+        transport.recordsAudio = [&inputs] { return inputs.anyArmed(); };
+        transport.setPositionSeconds (4.0);   // bar 3
+        transport.play();
+        CHECK (transport.isRecording());
+        CHECK (transport.isCountingIn());
+        CHECK (transport.getPositionSeconds() < 2.5);   // a bar (2 s at 120 BPM) and a bit earlier
+
+        // Only clicks come out while counting in (the input is silent).
+        const auto clicks = rig.process (1.5, 0.0f);
+        CHECK (transport.isCountingIn());
+        CHECK (clicks > 0.001f);
+
+        rig.process (1.0);   // past the start: recording the tone
+        CHECK_FALSE (transport.isCountingIn());
+        rig.process (1.5);
+        transport.stop();
+
+        const auto recorded = clips::getClips (track);
+        REQUIRE (recorded.size() == 1);
+        CHECK (clips::getStartBeat (*recorded[0]) == doctest::Approx (8.0).epsilon (0.02));
+        CHECK (clips::getEndBeat (*recorded[0]) - clips::getStartBeat (*recorded[0]) < 4.5);   // not the count-in
+        CHECK (rmsOf (dynamic_cast<te::AudioClipBase*> (recorded[0])->getCurrentSourceFile()) > 0.2f);
+
+        transport.setCountIn (audio::Transport::CountIn::off);
+        CHECK (edit.getNumCountInBeats() == 0);
+    }
+
     TEST_CASE ("without armed tracks Play just plays")
     {
         RecordingRig rig;

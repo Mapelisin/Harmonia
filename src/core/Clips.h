@@ -58,4 +58,18 @@ namespace harmonia::core::clips
 
     /** Deletes clips. A link group left with one clip stops being a group. */
     void remove (const juce::Array<te::Clip*>&);
+
+    /** Cuts the clip in two at `beat`: the clip keeps the part before, the returned clip is the part
+        after. Nothing moves in the song and nothing is lost: the hidden parts come back if a half is
+        made longer again. The halves of a linked MIDI clip stay linked. nullptr unless `beat` is
+        inside the clip. */
+    te::Clip* split (te::Clip&, double beat);
+
+    /** Can a clip like this (MIDI or audio, see te::ClipCopy::getState) go on this track? MIDI clips
+        go on instrument tracks, audio clips on audio tracks, nothing on return tracks. */
+    bool canTake (const te::AudioTrack&, const te::ClipCopy&);
+
+    /** Inserts a new clip from a copy (what Ctrl+C keeps) on `track` at `startBeat`. The new clip is
+        independent: a copy of a linked MIDI clip doesn't join its group. nullptr if !canTake. */
+    te::Clip* insertCopy (te::AudioTrack& track, const te::ClipCopy&, double startBeat);
 }
