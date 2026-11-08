@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Markers.h"
 #include "core/NoteEditor.h"
 #include "core/NoteOps.h"
 #include "core/Project.h"
@@ -88,6 +89,16 @@ namespace harmonia::ui::pianoroll
 
         /** The clip repeats its loop (see core::clips::setLooping). */
         bool isLooping() const;
+
+        /** Song beats of the whole clip: for a looping clip, all its times round. */
+        juce::Range<double> getWholeClipBeats() const;
+
+        /** A looping clip's loop length (beats); its first time round stays where it is.
+            Start a gesture first (a drag is one undo step). */
+        void setLoopLength (double beats);
+
+        /** The song's markers (added in the arrangement), in time order. */
+        std::vector<core::markers::Marker> getMarkers() const;
 
         //==============================================================================
         // Notes for drawing and hit-testing (rebuilt lazily after changes)

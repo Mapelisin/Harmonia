@@ -12,7 +12,7 @@ namespace harmonia::ui::pianoroll
     namespace
     {
         constexpr int toolbarHeight = 32;
-        constexpr int rulerHeight = 24;
+        constexpr int rulerHeight = 24 + (int) TimeRuler::markerLaneHeight;
         constexpr int keysWidth = 96;
         constexpr int laneHeight = 110;
         constexpr int scrollBarSize = 12;
@@ -316,6 +316,7 @@ namespace harmonia::ui::pianoroll
         if (code == juce::KeyPress::pageDownKey)         { zoomAroundMouse (1.0 / zoomStep); return true; }
         if (code == juce::KeyPress::escapeKey)           { model.deselectAll(); return true; }
         if (letter == 'F')                               { model.cycleLaneProperty (1); return true; }
+        if (letter == 'Z')                               { zoomToFit(); return true; }
 
         for (auto tool : getAllTools())
         {
@@ -372,6 +373,8 @@ namespace harmonia::ui::pianoroll
         menu.addSectionHeader ("Time selection (Ctrl+drag on the ruler)");
         add ("Insert space", "Ctrl+Insert", [this] { model.insertSpace(); }, hasTimeSelection);
         add ("Delete space", "Ctrl+Delete", [this] { model.deleteSpace(); }, hasTimeSelection);
+        menu.addSeparator();
+        add ("Zoom to fit", "Z", [this] { zoomToFit(); }, model.getClip() != nullptr);
         return menu;
     }
 
@@ -431,6 +434,50 @@ namespace harmonia::ui::pianoroll
             else
                 NoteToolWindow::show (std::move (window), *this, toolsButton.getBounds());
         }
+    }
+
+    void PianoRoll::zoomToFit()
+    {
+        if (model.getClip() == nullptr || view.width <= 0.0f || view.height <= 0.0f)
+            return;
+
+        // What to show: the selected notes, or else the clip and every note.
+        const auto& notes = model.getNotes();
+        const auto onlySelected = model.hasSelection();
+        auto start = onlySelected ? std::numeric_limits<double>::max() : model.getClipStartBeat();
+        auto end = onlySelected ? std::numeric_limits<double>::lowest() : model.getClipEndBeat();
+        int lowest = View::numPitches, highest = -1;
+
+        for (const auto& d : notes)
+        {
+            if (onlySelected && ! d.selected)
+                continue;
+
+            start = std::min (start, d.values.startBeat);
+            end = std::max (end, d.values.getEndBeat());
+            lowest = std::min (lowest, d.values.pitch);
+            highest = std::max (highest, d.values.pitch);
+        }
+
+        if (start >= end)
+            return;
+
+        // Across: the range and a little room either side.
+        const auto length = std::max (end - start, 0.25);
+        const auto margin = length * 0.03;
+        view.pixelsPerBeat = juce::jlimit (View::minPixelsPerBeat, View::maxPixelsPerBeat, (double) view.width / (length + margin * 2.0));
+        view.leftBeat = std::max (0.0, start - margin);
+
+        // Up and down: the notes' pitches with two rows of room (the height stays if there are none).
+        if (highest >= 0)
+        {
+            const auto rows = (float) (highest - lowest + 1 + 4);
+            view.rowHeight = juce::jlimit (View::minRowHeight, View::maxRowHeight, view.height / rows);
+            view.centreOnPitch ((lowest + highest + 1) / 2);
+        }
+
+        updateContentLength();
+        viewChanged();
     }
 
     void PianoRoll::showToolsMenu()

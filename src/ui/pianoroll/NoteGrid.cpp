@@ -54,6 +54,7 @@ namespace harmonia::ui::pianoroll
         paintRows (g, area);
         paintGridLines (g, area);
         paintClipAndTimeSelection (g, area);
+        paintMarkers (g, area);
 
         if (model.areGhostsVisible())
             paintGhostNotes (g, area);
@@ -176,11 +177,62 @@ namespace harmonia::ui::pianoroll
         const auto clipStartX = view.beatToX (model.getClipStartBeat());
         const auto clipEndX = view.beatToX (model.getClipEndBeat());
 
-        if (clipStartX > bounds.getX())
-            g.fillRect (bounds.withRight (std::min (bounds.getRight(), clipStartX)));
+        const auto darken = [&] (float left, float right)
+        {
+            left = std::max (bounds.getX(), left);
+            right = std::min (bounds.getRight(), right);
 
-        if (clipEndX < bounds.getRight())
-            g.fillRect (bounds.withLeft (std::max (bounds.getX(), clipEndX)));
+            if (left < right)
+                g.fillRect (bounds.withLeft (left).withRight (right));
+        };
+
+        if (! model.isLooping())
+        {
+            darken (bounds.getX(), clipStartX);
+            darken (clipEndX, bounds.getRight());
+            return;
+        }
+
+        // A looping clip: its repeats play, so they are only half as dark as what's outside it.
+        const auto whole = model.getWholeClipBeats();
+        const auto wholeStartX = view.beatToX (whole.getStart()), wholeEndX = view.beatToX (whole.getEnd());
+        darken (bounds.getX(), wholeStartX);
+        darken (wholeEndX, bounds.getRight());
+
+        g.setColour (colours::outsideClip.withMultipliedAlpha (0.5f));
+        darken (wholeStartX, clipStartX);
+        darken (clipEndX, wholeEndX);
+
+        // Where each time round begins.
+        const auto length = model.getClipEndBeat() - model.getClipStartBeat();
+
+        if (length * view.pixelsPerBeat >= 4.0)
+        {
+            g.setColour (colours::clipRange.withAlpha (0.6f));
+            const auto first = std::ceil ((whole.getStart() - model.getClipStartBeat()) / length - 1.0e-9);
+
+            for (auto beat = model.getClipStartBeat() + first * length; beat < whole.getEnd() - 1.0e-9; beat += length)
+            {
+                const auto x = std::round (view.beatToX (beat));
+
+                if (beat > whole.getStart() + 1.0e-9 && x >= bounds.getX() - 1.0f && x <= bounds.getRight())
+                    g.fillRect (x, bounds.getY(), 1.0f, bounds.getHeight());
+            }
+        }
+    }
+
+    void NoteGrid::paintMarkers (juce::Graphics& g, juce::Rectangle<int> area)
+    {
+        // The song's parts (markers from the arrangement), faint.
+        g.setColour (theme::colour::accent.withAlpha (0.3f));
+
+        for (const auto& marker : model.getMarkers())
+        {
+            const auto x = std::round (view.beatToX (marker.beat));
+
+            if (x >= (float) area.getX() - 1.0f && x <= (float) area.getRight())
+                g.fillRect (x, (float) area.getY(), 1.0f, (float) area.getHeight());
+        }
     }
 
     void NoteGrid::paintGhostNotes (juce::Graphics& g, juce::Rectangle<int> area)

@@ -29,6 +29,11 @@ namespace harmonia::ui::pianoroll
         /** Scrolls so that the clip's start and the notes (or middle C) are in view. */
         void showClip();
 
+        /** Zooms so the selected notes, or else the clip (its loop) and all its notes, fill the view (Z). */
+        void zoomToFit();
+
+        TimeRuler& getRuler() noexcept              { return ruler; }
+
         /** The Tools button's menu: the note commands with their shortcuts. */
         juce::PopupMenu createToolsMenu();
 

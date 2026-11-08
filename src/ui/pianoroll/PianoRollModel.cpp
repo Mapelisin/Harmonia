@@ -134,6 +134,25 @@ namespace harmonia::ui::pianoroll
         return clip != nullptr && core::clips::isLooping (*clip);
     }
 
+    juce::Range<double> PianoRollModel::getWholeClipBeats() const
+    {
+        if (clip == nullptr)
+            return {};
+
+        return { core::clips::getStartBeat (*clip), core::clips::getEndBeat (*clip) };
+    }
+
+    void PianoRollModel::setLoopLength (double beats)
+    {
+        if (canEdit() && isLooping())
+            core::clips::setLoopLengthBeats (*clip, beats);
+    }
+
+    std::vector<core::markers::Marker> PianoRollModel::getMarkers() const
+    {
+        return core::markers::getAll (project.getEdit());
+    }
+
     double PianoRollModel::getBeatsPerBar() const
     {
         return core::clips::getBeatsPerBar (project.getEdit());
@@ -1302,6 +1321,10 @@ namespace harmonia::ui::pianoroll
         else if (isInsideTrackOrTempo (tree))
         {
             ghostsDirty = true;
+        }
+        else if (core::markers::isMarkerTree (tree))
+        {
+            // The song's markers: the ruler shows them.
         }
         else if (tree != getEdit().state)     // the edit's own properties: the scale (undo too)
         {

@@ -41,6 +41,7 @@ namespace harmonia::ui::pianoroll
         void paintRows (juce::Graphics&, juce::Rectangle<int> area);
         void paintGridLines (juce::Graphics&, juce::Rectangle<int> area);
         void paintClipAndTimeSelection (juce::Graphics&, juce::Rectangle<int> area);
+        void paintMarkers (juce::Graphics&, juce::Rectangle<int> area);
         void paintGhostNotes (juce::Graphics&, juce::Rectangle<int> area);
         void paintNotes (juce::Graphics&, juce::Rectangle<int> area);
         void paintOverlays (juce::Graphics&);
