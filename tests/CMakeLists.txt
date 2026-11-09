@@ -10,6 +10,7 @@ add_executable(harmonia_tests
     core/TestProject.h
     core/ProjectTests.cpp
     core/TempoChangeTests.cpp
+    core/TrackFolderTests.cpp
     core/ProjectFilesTests.cpp
     core/NoteTests.cpp
     core/NoteEditorTests.cpp
@@ -59,6 +60,7 @@ add_executable(harmonia_tests
     ui/MixerTests.cpp
     ui/MidiLearnUiTests.cpp
     ui/TakeUiTests.cpp
+    ui/TrackFolderUiTests.cpp
     ui/AudioLoopUiTests.cpp
     ui/PluginWindowTests.cpp
     ui/AudioClipTests.cpp

@@ -62,9 +62,129 @@ namespace harmonia::ui::arrangement
         getEdit().state.removeListener (this);
     }
 
+    juce::Array<te::AudioTrack*> ArrangementModel::getTracks() const
+    {
+        const auto all = project.getTracks();
+        juce::StringArray collapsed;
+
+        for (const auto& folder : core::folders::getAll (project.getEdit()))
+            if (folder.collapsed)
+                collapsed.add (folder.id);
+
+        if (collapsed.isEmpty())
+            return all;
+
+        // Of a collapsed folder, only its first track has a row.
+        juce::Array<te::AudioTrack*> rows;
+        juce::StringArray shown;
+
+        for (auto* track : all)
+        {
+            const auto folder = core::folders::getFolderOf (*track);
+
+            if (folder.has_value() && collapsed.contains (folder->id))
+            {
+                if (shown.contains (folder->id))
+                    continue;
+
+                shown.add (folder->id);
+            }
+
+            rows.add (track);
+        }
+
+        return rows;
+    }
+
     int ArrangementModel::indexOf (const te::Track* track) const
     {
         return getTracks().indexOf (dynamic_cast<te::AudioTrack*> (const_cast<te::Track*> (track)));
+    }
+
+    //==============================================================================
+    std::optional<core::folders::Folder> ArrangementModel::getFolderOf (const te::Track& track) const
+    {
+        return core::folders::getFolderOf (track);
+    }
+
+    bool ArrangementModel::isFoldedRow (const te::Track* track) const
+    {
+        if (track == nullptr)
+            return false;
+
+        const auto folder = core::folders::getFolderOf (*track);
+        return folder.has_value() && folder->collapsed;
+    }
+
+    std::optional<core::folders::Folder> ArrangementModel::newFolder (te::AudioTrack& track)
+    {
+        juce::Array<te::AudioTrack*> tracks { &track };
+
+        for (auto* clip : getSelectedClips())
+            if (auto* clipTrack = dynamic_cast<te::AudioTrack*> (clip->getClipTrack()))
+                tracks.addIfNotAlreadyThere (clipTrack);
+
+        project.beginGesture ("New folder");
+        const auto folder = core::folders::add (getEdit(), tracks, {});
+        clipsDirty = true;
+        changed();
+        return folder;
+    }
+
+    void ArrangementModel::setTrackFolder (te::AudioTrack& track, const juce::String& folderId)
+    {
+        project.beginGesture (folderId.isEmpty() ? "Take out of the folder" : "Move into a folder");
+        core::folders::setFolder (track, folderId);
+        clipsDirty = true;
+        changed();
+    }
+
+    void ArrangementModel::renameFolder (const juce::String& folderId, const juce::String& name)
+    {
+        project.beginGesture ("Rename folder");
+        core::folders::rename (getEdit(), folderId, name);
+        changed();
+    }
+
+    void ArrangementModel::removeFolder (const juce::String& folderId)
+    {
+        project.beginGesture ("Remove folder");
+        core::folders::remove (getEdit(), folderId);
+        clipsDirty = true;
+        changed();
+    }
+
+    void ArrangementModel::setFolderCollapsed (const juce::String& folderId, bool collapsed)
+    {
+        const auto members = core::folders::getMembers (getEdit(), folderId);
+        core::folders::setCollapsed (getEdit(), folderId, collapsed);
+
+        // The current track hidden: the folder's row is current.
+        if (collapsed && members.contains (currentTrack.get()) && currentTrack.get() != members.getFirst())
+            setCurrentTrack (members.getFirst());
+
+        // What's hidden isn't selected.
+        if (collapsed)
+        {
+            auto stillSelected = getSelectedClips();
+            stillSelected.removeIf ([&] (te::Clip* clip) { return members.contains (dynamic_cast<te::AudioTrack*> (clip->getClipTrack())); });
+            setSelection (stillSelected);
+        }
+
+        clipsDirty = true;
+        changed();
+    }
+
+    void ArrangementModel::setFolderMuted (const juce::String& folderId, bool muted)
+    {
+        core::folders::setMuted (getEdit(), folderId, muted);
+        changed();
+    }
+
+    void ArrangementModel::setFolderSoloed (const juce::String& folderId, bool soloed)
+    {
+        core::folders::setSoloed (getEdit(), folderId, soloed);
+        changed();
     }
 
     //==============================================================================
@@ -183,13 +303,23 @@ namespace harmonia::ui::arrangement
             if (open == nullptr)
                 open = getFocusedAudioClip();
 
-            for (int i = 0; i < tracks.size(); ++i)
+            // Every track's clips: those of a collapsed folder in the folder's row.
+            for (auto* track : project.getTracks())
             {
-                for (auto* clip : clips::getClips (*tracks[i]))
+                const auto folder = core::folders::getFolderOf (*track);
+                const auto folded = folder.has_value() && folder->collapsed;
+                const auto row = folded ? tracks.indexOf (core::folders::getMembers (getEdit(), folder->id).getFirst())
+                                        : tracks.indexOf (track);
+
+                if (row < 0)
+                    continue;
+
+                for (auto* clip : clips::getClips (*track))
                 {
                     DrawnClip d;
                     d.clip = clip;
-                    d.trackIndex = i;
+                    d.trackIndex = row;
+                    d.folded = folded;
                     d.startBeat = clips::getStartBeat (*clip);
                     d.endBeat = clips::getEndBeat (*clip);
                     d.selected = isSelected (*clip);
@@ -215,7 +345,7 @@ namespace harmonia::ui::arrangement
 
         // Later clips are drawn over earlier ones.
         for (auto it = all.rbegin(); it != all.rend(); ++it)
-            if (it->trackIndex == trackIndex && beat >= it->startBeat && beat < it->endBeat)
+            if (it->trackIndex == trackIndex && ! it->folded && beat >= it->startBeat && beat < it->endBeat)
                 return &*it;
 
         return nullptr;
@@ -276,8 +406,10 @@ namespace harmonia::ui::arrangement
     {
         juce::Array<te::Clip*> all;
 
+        // Not what's hidden in collapsed folders.
         for (const auto& d : getClips())
-            all.add (d.clip);
+            if (! d.folded)
+                all.add (d.clip);
 
         setSelection (all);
     }
@@ -344,7 +476,7 @@ namespace harmonia::ui::arrangement
         }
 
         project.beginGesture (drums ? "Add drum track" : "Add track");
-        auto* track = project.addTrack (drums ? juce::String ("Drums") : "Track " + juce::String (getNumTracks() + 1));
+        auto* track = project.addTrack (drums ? juce::String ("Drums") : "Track " + juce::String (project.getNumTracks() + 1));
 
         if (track == nullptr)
             return nullptr;
@@ -372,7 +504,7 @@ namespace harmonia::ui::arrangement
     te::AudioTrack* ArrangementModel::addAudioTrack()
     {
         project.beginGesture ("Add audio track");
-        auto* track = createAudioTrack ("Audio " + juce::String (getNumTracks() + 1), nullptr);
+        auto* track = createAudioTrack ("Audio " + juce::String (project.getNumTracks() + 1), nullptr);
 
         if (track != nullptr)
         {
@@ -390,8 +522,8 @@ namespace harmonia::ui::arrangement
 
         const auto start = std::max (0.0, snap::snapFloor (beat, snapMode, getSnapContext()));
         auto* target = getTrack (trackIndex);
-        te::Track* previous = target != nullptr ? target : getTracks().getLast();
-        auto useTarget = target != nullptr && core::tracks::isAudio (*target);
+        te::Track* previous = getTrackToAddAfter (target);
+        auto useTarget = target != nullptr && ! isFoldedRow (target) && core::tracks::isAudio (*target);
 
         project.beginGesture (files.size() == 1 ? "Import audio" : "Import audio files");
         juce::StringArray problems;
@@ -441,9 +573,21 @@ namespace harmonia::ui::arrangement
         return problems.joinIntoString ("; ");
     }
 
+    te::Track* ArrangementModel::getTrackToAddAfter (te::AudioTrack* rowTrack) const
+    {
+        if (rowTrack == nullptr)
+            return project.getTracks().getLast();
+
+        // Below a collapsed folder, not into it.
+        if (isFoldedRow (rowTrack))
+            return core::folders::getMembers (project.getEdit(), core::folders::getFolderOf (*rowTrack)->id).getLast();
+
+        return rowTrack;
+    }
+
     bool ArrangementModel::isSongEmpty() const
     {
-        for (auto* track : getTracks())
+        for (auto* track : project.getTracks())
             for (auto* clip : clips::getClips (*track))
                 if (clips::isAudio (*clip) || ! dynamic_cast<te::MidiClip*> (clip)->getSequence().getNotes().isEmpty())
                     return false;
@@ -458,8 +602,8 @@ namespace harmonia::ui::arrangement
 
         const auto start = std::max (0.0, snap::snapFloor (beat, snapMode, getSnapContext()));
         auto* target = getTrack (trackIndex);
-        te::Track* previous = target != nullptr ? target : getTracks().getLast();
-        auto useTarget = target != nullptr && ! core::tracks::isAudio (*target);
+        te::Track* previous = getTrackToAddAfter (target);
+        auto useTarget = target != nullptr && ! isFoldedRow (target) && ! core::tracks::isAudio (*target);
         auto adoptTempo = isSongEmpty();
 
         project.beginGesture (files.size() == 1 ? "Import MIDI" : "Import MIDI files");
@@ -585,6 +729,7 @@ namespace harmonia::ui::arrangement
         clips::remove (clips::getClips (track));
         audio::sidechain::forgetSource (track);
         getEdit().deleteTrack (&track);
+        core::folders::tidy (getEdit());
 
         const auto remaining = getTracks();
 
@@ -612,7 +757,7 @@ namespace harmonia::ui::arrangement
 
         const auto taken = [this] (const juce::String& candidate)
         {
-            for (auto* track : getTracks())
+            for (auto* track : project.getTracks())
                 if (track->getName() == candidate)
                     return true;
 
@@ -627,7 +772,7 @@ namespace harmonia::ui::arrangement
 
     te::AudioTrack* ArrangementModel::duplicateTrack (te::AudioTrack& track)
     {
-        if (indexOf (&track) < 0)
+        if (! project.getTracks().contains (&track))
             return nullptr;
 
         const auto oldName = track.getName();
@@ -652,6 +797,7 @@ namespace harmonia::ui::arrangement
                 core::clip_links::unlink (*midi);
         }
 
+        core::folders::tidy (getEdit());
         setSelection ({});
         setCurrentTrack (copy);
         clipsDirty = true;
@@ -668,24 +814,44 @@ namespace harmonia::ui::arrangement
         if (oldIndex < 0 || newIndex == oldIndex)
             return;
 
+        // The row of a collapsed folder: all its tracks go.
+        juce::Array<te::AudioTrack*> moved { &track };
+
+        if (isFoldedRow (&track))
+            moved = core::folders::getMembers (getEdit(), core::folders::getFolderOf (track)->id);
+
         others.remove (oldIndex);
         te::Track* preceding = nullptr;
 
         if (newIndex > 0)
         {
-            preceding = others[newIndex - 1];
+            // After the row above, the whole of it if that is a collapsed folder.
+            preceding = getTrackToAddAfter (others[newIndex - 1]);
         }
         else
         {
             // Before the first song track: after whatever the edit has before it (its own tracks).
             auto all = te::getAllTracks (getEdit());
-            all.removeFirstMatchingValue (&track);
+
+            for (auto* m : moved)
+                all.removeFirstMatchingValue (m);
+
             const auto first = all.indexOf (others.getFirst());
             preceding = first > 0 ? all[first - 1] : nullptr;
         }
 
-        project.beginGesture ("Move track");
-        getEdit().moveTrack (&track, te::TrackInsertPoint (nullptr, preceding));
+        project.beginGesture (moved.size() > 1 ? "Move folder" : "Move track");
+
+        for (auto* m : moved)
+        {
+            getEdit().moveTrack (m, te::TrackInsertPoint (nullptr, preceding));
+            preceding = m;
+        }
+
+        if (moved.size() == 1)
+            core::folders::trackMoved (track);
+        else
+            core::folders::tidy (getEdit());
         clipsDirty = true;
         changed();
     }

@@ -171,7 +171,10 @@ namespace harmonia::ui::arrangement
 
         if (p.clicks >= 2 && track >= 0)
         {
-            model.createClip (*model.getTrack (track), view.xToBeat (p.position.x));
+            // Not into a collapsed folder: which of its tracks?
+            if (! model.isFoldedRow (model.getTrack (track)))
+                model.createClip (*model.getTrack (track), view.xToBeat (p.position.x));
+
             return;
         }
 
@@ -346,7 +349,8 @@ namespace harmonia::ui::arrangement
             {
                 auto* destination = tracks[t.trackIndex + candidate];
 
-                if (destination == nullptr || core::tracks::isAudio (*destination) != clips::isAudio (*t.clip))
+                if (destination == nullptr || model.isFoldedRow (destination)
+                     || core::tracks::isAudio (*destination) != clips::isAudio (*t.clip))
                     return false;
             }
 
@@ -512,6 +516,9 @@ namespace harmonia::ui::arrangement
 
         for (const auto& d : model.getClips())
         {
+            if (d.folded)
+                continue;
+
             const auto top = view.trackToY (d.trackIndex);
             const auto bounds = juce::Rectangle<float>::leftTopRightBottom (view.beatToX (d.startBeat), top,
                                                                             view.beatToX (d.endBeat), top + view.trackHeight);

@@ -56,6 +56,7 @@ namespace harmonia::ui::arrangement
         addMarkerButton.onClick = [this] { addMarkerAtPlayhead(); };
         addAndMakeVisible (addMarkerButton);
         ruler.onRenameMarker = [this] (const core::markers::Marker& marker) { askToRenameMarker (marker); };
+        headers.onRenameFolder = [this] (const core::folders::Folder& folder) { askToRenameFolder (folder); };
         ruler.onAskTempo = [this] (double beat, std::optional<int> index) { askForTempo (beat, index); };
 
         ruler.onPositionChosen = [this] (double beat)
@@ -406,7 +407,8 @@ namespace harmonia::ui::arrangement
         ClipArea::DropMarker marker;
         marker.trackIndex = track;
         marker.beat = std::max (0.0, snap::snapFloor (view.xToBeat (std::max (0.0f, local.x)), model.getSnap(), model.getSnapContext()));
-        marker.newTrack = track < 0 || core::tracks::isAudio (*model.getTrack (track)) != ! midi;
+        marker.newTrack = track < 0 || model.isFoldedRow (model.getTrack (track))
+                       || core::tracks::isAudio (*model.getTrack (track)) != ! midi;
         marker.midi = midi;
         return marker;
     }
@@ -775,6 +777,23 @@ namespace harmonia::ui::arrangement
         {
             if (result == 1 && safeThis != nullptr && safeWindow != nullptr)
                 safeThis->model.renameMarker (marker, safeWindow->getTextEditorContents ("name"));
+        }), true);
+    }
+
+    void Arrangement::askToRenameFolder (const core::folders::Folder& folder)
+    {
+        auto* window = new juce::AlertWindow ("Rename folder", {}, juce::MessageBoxIconType::NoIcon, this);
+        window->addTextEditor ("name", folder.name);
+        window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
+        window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+        juce::Component::SafePointer<juce::AlertWindow> safeWindow (window);
+        juce::Component::SafePointer<Arrangement> safeThis (this);
+
+        window->enterModalState (true, juce::ModalCallbackFunction::create ([safeThis, id = folder.id, safeWindow] (int result)
+        {
+            if (result == 1 && safeThis != nullptr && safeWindow != nullptr)
+                safeThis->model.renameFolder (id, safeWindow->getTextEditorContents ("name"));
         }), true);
     }
 

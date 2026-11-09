@@ -172,10 +172,26 @@ namespace harmonia::ui::arrangement
             mute.setTooltip ("Mute");
             mute.onClick = [this]
             {
+                if (const auto folder = getFoldedFolder())
+                {
+                    model.setFolderMuted (folder->id, ! core::folders::isMuted (model.getEdit(), folder->id));
+                    refresh();
+                    return;
+                }
+
                 model.getProject().beginGesture ("Mute track");
                 track->setMute (! track->isMuted (false));
                 refresh();
             };
+
+            fold.setTooltip ("Collapse the folder to one row, or show its tracks again");
+            fold.onClick = [this]
+            {
+                if (const auto folder = model.getFolderOf (*track))
+                    model.setFolderCollapsed (folder->id, ! folder->collapsed);
+            };
+            fold.setWantsKeyboardFocus (false);
+            addChildComponent (fold);
 
             arm.setTooltip ("Record arm: when you record (R, then Play), this track records its input");
             arm.onClick = [this]
@@ -187,6 +203,13 @@ namespace harmonia::ui::arrangement
             solo.setTooltip ("Solo: hear only this track (and other soloed ones)");
             solo.onClick = [this]
             {
+                if (const auto folder = getFoldedFolder())
+                {
+                    model.setFolderSoloed (folder->id, ! core::folders::isSoloed (model.getEdit(), folder->id));
+                    refresh();
+                    return;
+                }
+
                 model.getProject().beginGesture ("Solo track");
                 track->setSolo (! track->isSolo (false));
                 refresh();
@@ -222,9 +245,74 @@ namespace harmonia::ui::arrangement
 
         te::AudioTrack& getTrack() const noexcept  { return *track; }
         juce::Button* getArmButton() noexcept      { return arm.isVisible() ? &arm : nullptr; }
+        juce::Button* getFoldButton() noexcept     { return fold.isVisible() ? &fold : nullptr; }
+        juce::Button& getMuteButton() noexcept     { return mute; }
+        juce::Button& getSoloButton() noexcept     { return solo; }
+        juce::String getShownName() const          { return name.getText(); }
+
+        /** The folder this row stands for (collapsed), if it does. */
+        std::optional<core::folders::Folder> getFoldedFolder() const
+        {
+            const auto folder = model.getFolderOf (*track);
+            return folder.has_value() && folder->collapsed ? folder : std::nullopt;
+        }
+
+        /** The row of a collapsed folder: the folder's name, its tracks counted, mute and solo
+            for all of them. */
+        void refreshFolded (const core::folders::Folder& folder)
+        {
+            const auto members = core::folders::getMembers (model.getEdit(), folder.id);
+            name.setText (folder.name, juce::dontSendNotification);
+            instrument.setText (juce::String (members.size()) + (members.size() == 1 ? " track" : " tracks"), juce::dontSendNotification);
+            instrument.setTooltip ("A collapsed folder: the button on the left shows its tracks");
+
+            const auto muted = core::folders::isMuted (model.getEdit(), folder.id);
+            const auto soloed = core::folders::isSoloed (model.getEdit(), folder.id);
+            mute.setColour (juce::TextButton::buttonColourId, muted ? colours::mute.withAlpha (0.8f) : theme::colour::surfaceRaised);
+            mute.setColour (juce::TextButton::textColourOffId, muted ? theme::colour::background : theme::colour::textSecondary);
+            solo.setColour (juce::TextButton::buttonColourId, soloed ? colours::solo.withAlpha (0.8f) : theme::colour::surfaceRaised);
+            solo.setColour (juce::TextButton::textColourOffId, soloed ? theme::colour::background : theme::colour::textSecondary);
+            mute.setTooltip ("Mute every track of the folder");
+            solo.setTooltip ("Solo every track of the folder");
+            inputMeter.setInput (nullptr);
+        }
 
         void refresh()
         {
+            // A folder's first track has the fold button; collapsed, the row shows the folder.
+            const auto folder = model.getFolderOf (*track);
+            const auto firstOfFolder = folder.has_value()
+                                    && core::folders::getMembers (model.getEdit(), folder->id).getFirst() == track.get();
+            const auto folded = folder.has_value() && folder->collapsed;
+            fold.setButtonText (folded ? ">" : "v");
+
+            if (fold.isVisible() != firstOfFolder || volume.isVisible() == folded || (folded && arm.isVisible())
+                 || (folded && inputMeter.isVisible()))
+            {
+                fold.setVisible (firstOfFolder);
+                volume.setVisible (! folded);
+
+                if (folded)
+                {
+                    arm.setVisible (false);
+                    inputMeter.setVisible (false);
+                }
+
+                resized();
+            }
+
+            folderName = folder.has_value() && ! folded ? folder->name : juce::String();
+
+            if (folded)
+            {
+                refreshFolded (*folder);
+                repaint();
+                return;
+            }
+
+            mute.setTooltip ("Mute");
+            solo.setTooltip ("Solo: hear only this track (and other soloed ones)");
+
             if (! name.isBeingEdited())
                 name.setText (track->getName(), juce::dontSendNotification);
 
@@ -275,6 +363,21 @@ namespace harmonia::ui::arrangement
             g.fillRect (bounds);
             g.setColour (track_colours::getTrackColour (*track, index).withAlpha (isCurrent ? 1.0f : 0.7f));
             g.fillRect (bounds.removeFromLeft (colourStripWidth));
+
+            // In a folder: a second strip, and the folder's name small at the bottom right.
+            if (model.getFolderOf (*track).has_value())
+            {
+                g.setColour (theme::colour::accent.withAlpha (0.75f));
+                g.fillRect (bounds.removeFromLeft (3));
+            }
+
+            if (folderName.isNotEmpty())
+            {
+                g.setColour (theme::colour::accent);
+                g.setFont (juce::FontOptions (theme::size::smallFontSize - 1.0f));
+                g.drawText (folderName, getLocalBounds().reduced (8, 3), juce::Justification::bottomRight, true);
+            }
+
             g.setColour (theme::colour::border);
             g.fillRect (getLocalBounds().removeFromBottom (1));
         }
@@ -292,6 +395,12 @@ namespace harmonia::ui::arrangement
             {
                 arm.setBounds (top.removeFromRight (smallButtonSize));
                 top.removeFromRight (4);
+            }
+
+            if (fold.isVisible())
+            {
+                fold.setBounds (top.removeFromLeft (smallButtonSize));
+                top.removeFromLeft (3);
             }
 
             name.setBounds (top);
@@ -335,8 +444,19 @@ namespace harmonia::ui::arrangement
 
         void mouseDoubleClick (const juce::MouseEvent& e) override
         {
-            if (name.getBounds().contains (e.getPosition()))
-                name.showEditor();
+            if (! name.getBounds().contains (e.getPosition()))
+                return;
+
+            // The row of a collapsed folder shows the folder's name, not the track's.
+            if (const auto folder = getFoldedFolder())
+            {
+                if (auto* owner = findParentComponentOfClass<TrackHeaders>(); owner != nullptr && owner->onRenameFolder != nullptr)
+                    owner->onRenameFolder (*folder);
+
+                return;
+            }
+
+            name.showEditor();
         }
 
     private:
@@ -344,7 +464,8 @@ namespace harmonia::ui::arrangement
         juce::ReferenceCountedObjectPtr<te::AudioTrack> track;   // kept alive while the header shows it
 
         juce::Label name, instrument;
-        juce::TextButton mute { "M" }, solo { "S" }, arm { juce::String::fromUTF8 ("\xe2\x97\x8f") };
+        juce::TextButton mute { "M" }, solo { "S" }, arm { juce::String::fromUTF8 ("\xe2\x97\x8f") }, fold;
+        juce::String folderName;    // shown small on a track in an open folder
         juce::Slider volume;
         InputMeter inputMeter;
         bool dragging = false;
@@ -358,9 +479,47 @@ namespace harmonia::ui::arrangement
     public:
         void startRenaming()
         {
-            name.showEditor();
+            if (! getFoldedFolder().has_value())
+                name.showEditor();
         }
     };
+
+    //==============================================================================
+    juce::PopupMenu TrackHeaders::createFolderMenu (te::AudioTrack& trackToShow)
+    {
+        juce::ReferenceCountedObjectPtr<te::AudioTrack> track (&trackToShow);
+        juce::Component::SafePointer<TrackHeaders> safe (this);
+        const auto folder = model.getFolderOf (*track);
+        juce::PopupMenu menu;
+
+        menu.addItem ("New folder with this track", [&m = model, t = track] { m.newFolder (*t); });
+
+        // The other folders, to move into.
+        juce::PopupMenu others;
+
+        for (const auto& other : core::folders::getAll (model.getEdit()))
+            if (! folder.has_value() || other.id != folder->id)
+                others.addItem (other.name, [&m = model, t = track, id = other.id] { m.setTrackFolder (*t, id); });
+
+        menu.addSubMenu ("Move into folder", others, others.getNumItems() > 0);
+        menu.addItem ("Take out of the folder", folder.has_value(), false, [&m = model, t = track] { m.setTrackFolder (*t, {}); });
+
+        if (folder.has_value())
+        {
+            const auto f = *folder;
+            menu.addSeparator();
+            menu.addSectionHeader (f.name);
+            menu.addItem (f.collapsed ? "Show its tracks" : "Collapse to one row", [&m = model, f] { m.setFolderCollapsed (f.id, ! f.collapsed); });
+            menu.addItem ("Rename folder...", [safe, f]
+            {
+                if (safe != nullptr && safe->onRenameFolder != nullptr)
+                    safe->onRenameFolder (f);
+            });
+            menu.addItem ("Remove the folder (its tracks stay)", [&m = model, f] { m.removeFolder (f.id); });
+        }
+
+        return menu;
+    }
 
     //==============================================================================
     juce::PopupMenu TrackHeaders::createTrackMenu (te::AudioTrack& trackToShow)
@@ -369,6 +528,28 @@ namespace harmonia::ui::arrangement
         juce::Component::SafePointer<TrackHeaders> safe (this);
 
         juce::PopupMenu menu;
+
+        // The row of a collapsed folder: the folder's menu.
+        if (model.isFoldedRow (track.get()))
+        {
+            const auto f = *model.getFolderOf (*track);
+            const auto row = model.indexOf (track.get());
+            menu.addSectionHeader (f.name);
+            menu.addItem ("Show its tracks", [&m = model, f] { m.setFolderCollapsed (f.id, false); });
+            menu.addItem ("Rename folder...", [safe, f]
+            {
+                if (safe != nullptr && safe->onRenameFolder != nullptr)
+                    safe->onRenameFolder (f);
+            });
+            menu.addItem ("Move up", row > 0, false, [&m = model, t = track] { m.moveTrack (*t, m.indexOf (t.get()) - 1); });
+            menu.addItem ("Move down", row < model.getNumTracks() - 1, false,
+                          [&m = model, t = track] { m.moveTrack (*t, m.indexOf (t.get()) + 1); });
+            menu.addItem ("Remove the folder (its tracks stay)", [&m = model, f] { m.removeFolder (f.id); });
+            menu.addSeparator();
+            menu.addSubMenu ("Add track", makeAddTrackMenu (model));
+            return menu;
+        }
+
         menu.addItem ("Rename", [safe, track]
         {
             if (safe != nullptr)
@@ -421,6 +602,7 @@ namespace harmonia::ui::arrangement
                 safe->renderToAudio (*t);
         });
         menu.addSubMenu ("Output (master or a group)", makeOutputMenu (model, *track));
+        menu.addSubMenu ("Folder", createFolderMenu (*track));
         menu.addSeparator();
         menu.addSubMenu ("Add track", makeAddTrackMenu (model));
         menu.addSeparator();
@@ -462,6 +644,30 @@ namespace harmonia::ui::arrangement
     {
         auto* header = headers[index];
         return header != nullptr ? header->getArmButton() : nullptr;
+    }
+
+    juce::Button* TrackHeaders::getFoldButton (int index) const
+    {
+        auto* header = headers[index];
+        return header != nullptr ? header->getFoldButton() : nullptr;
+    }
+
+    juce::Button* TrackHeaders::getMuteButton (int index) const
+    {
+        auto* header = headers[index];
+        return header != nullptr ? &header->getMuteButton() : nullptr;
+    }
+
+    juce::Button* TrackHeaders::getSoloButton (int index) const
+    {
+        auto* header = headers[index];
+        return header != nullptr ? &header->getSoloButton() : nullptr;
+    }
+
+    juce::String TrackHeaders::getShownName (int index) const
+    {
+        auto* header = headers[index];
+        return header != nullptr ? header->getShownName() : juce::String();
     }
 
     void TrackHeaders::refresh()

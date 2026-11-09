@@ -2,6 +2,7 @@
 
 #include "core/Markers.h"
 #include "core/TempoChanges.h"
+#include "core/TrackFolders.h"
 #include "core/SongForms.h"
 #include "core/NoteOps.h"
 #include "core/Project.h"
@@ -20,9 +21,10 @@ namespace harmonia::ui::arrangement
     struct DrawnClip
     {
         te::Clip* clip = nullptr;
-        int trackIndex = 0;
+        int trackIndex = 0;             // the row it is drawn in
         double startBeat = 0.0, endBeat = 0.0;
         bool selected = false, open = false, linked = false, audio = false;
+        bool folded = false;            // in a collapsed folder's row: shown, not edited there
     };
 
     /** Everything the arrangement edits and remembers, without drawing: tracks, the current
@@ -55,10 +57,40 @@ namespace harmonia::ui::arrangement
         //==============================================================================
         // Tracks
 
-        juce::Array<te::AudioTrack*> getTracks() const      { return project.getTracks(); }
-        int getNumTracks() const                            { return project.getNumTracks(); }
+        /** The tracks the arrangement has a row for, top to bottom: every song track, but of a
+            collapsed folder only the first (its row stands for the folder). */
+        juce::Array<te::AudioTrack*> getTracks() const;
+        int getNumTracks() const                            { return getTracks().size(); }
         te::AudioTrack* getTrack (int index) const          { return getTracks()[index]; }
+
+        /** The row of a track; -1 for one hidden in a collapsed folder. */
         int indexOf (const te::Track*) const;
+
+        /** Every song track, those hidden in collapsed folders too. */
+        juce::Array<te::AudioTrack*> getAllTracks() const   { return project.getTracks(); }
+
+        //==============================================================================
+        // Folders of tracks (core::folders): neighbouring tracks under a name, collapsed to one
+        // row, muted and soloed together. Each change is one undo step (collapsing isn't one).
+
+        std::optional<core::folders::Folder> getFolderOf (const te::Track&) const;
+
+        /** The track's row stands for its whole collapsed folder. */
+        bool isFoldedRow (const te::Track*) const;
+
+        /** A new folder of the track (and the tracks of the selected clips), named by the next
+            free name. */
+        std::optional<core::folders::Folder> newFolder (te::AudioTrack&);
+
+        /** Into a folder (after its last track), or with an empty ID out of its folder. */
+        void setTrackFolder (te::AudioTrack&, const juce::String& folderId);
+        void renameFolder (const juce::String& folderId, const juce::String& name);
+
+        /** The folder is forgotten; its tracks stay. */
+        void removeFolder (const juce::String& folderId);
+        void setFolderCollapsed (const juce::String& folderId, bool);
+        void setFolderMuted (const juce::String& folderId, bool);
+        void setFolderSoloed (const juce::String& folderId, bool);
 
         //==============================================================================
         // The current track (its instrument is shown and played by the keyboards) and the clip
@@ -160,7 +192,9 @@ namespace harmonia::ui::arrangement
             One undo step. */
         te::AudioTrack* duplicateTrack (te::AudioTrack&);
 
-        /** Moves the track to `newIndex` among the song tracks. One undo step. */
+        /** Moves the track to row `newIndex`; the row of a collapsed folder moves the whole folder.
+            A track moved away from its folder leaves it, one moved into a folder joins it.
+            One undo step. */
         void moveTrack (te::AudioTrack&, int newIndex);
 
         /** "Render to audio": the track as it sounds through its instrument and effects (with its
@@ -338,6 +372,10 @@ namespace harmonia::ui::arrangement
         std::optional<core::note_ops::BeatRange> loopRegion;
 
         std::vector<DrawnClip> drawn;
+
+        /** The track a new track goes after when asked for below this row's track (the last
+            song track for none; the last of a collapsed folder for its row). */
+        te::Track* getTrackToAddAfter (te::AudioTrack* rowTrack) const;
         bool clipsDirty = true;
 
         juce::ListenerList<Listener> listeners;

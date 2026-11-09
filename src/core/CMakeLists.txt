@@ -20,6 +20,8 @@ add_library(harmonia_core STATIC
     Controllers.cpp
     Tracks.h
     Tracks.cpp
+    TrackFolders.h
+    TrackFolders.cpp
     Snap.h
     Snap.cpp
     Tempo.h

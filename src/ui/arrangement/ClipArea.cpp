@@ -176,6 +176,16 @@ namespace harmonia::ui::arrangement
                                                              view.beatToX (d.endBeat), top + view.trackHeight - 2.0f);
         r.setWidth (std::max (r.getWidth(), 3.0f));
 
+        // In a collapsed folder's row: a plain block of its own track's colour, one over another.
+        if (d.folded)
+        {
+            const auto all = model.getAllTracks();
+            const auto place = all.indexOf (dynamic_cast<te::AudioTrack*> (d.clip->getClipTrack()));
+            g.setColour (track_colours::getClipColour (*d.clip, std::max (0, place)).withMultipliedBrightness (0.7f).withAlpha (0.55f));
+            g.fillRect (r.reduced (0.0f, 6.0f));
+            return;
+        }
+
         const auto colour = track_colours::getClipColour (*d.clip, d.trackIndex);
         const auto header = r.withHeight (headerHeight);
         const auto body = r.withTrimmedTop (headerHeight);

@@ -83,6 +83,7 @@ namespace harmonia::ui::arrangement
 
         /** Asks for the marker's new name. */
         void askToRenameMarker (const core::markers::Marker&);
+        void askToRenameFolder (const core::folders::Folder&);
 
         /** Asks for the tempo of a change at `beat`: a new one, or that of `index`. */
         void askForTempo (double beat, std::optional<int> index);

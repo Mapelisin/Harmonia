@@ -87,6 +87,10 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   начинает вызывающий). Мышь панели — `ui/automation/AutomationGestures` (тесты без окна).
 - Посылы и возвратные дорожки — только через `audio::sends`. `Project::getTracks` — дорожки песни (без
   возвратных и групп, `core::tracks::isBus`), `getReturnTracks` — возвратные, `getGroupTracks` — группы.
+- Папки дорожек — только через `core::folders` (после переноса дорожки — `trackMoved`, после удаления или
+  копии — `tidy`). `ArrangementModel::getTracks / getTrack / indexOf` — строки аранжировки (без дорожек,
+  спрятанных в свёрнутой папке); все дорожки песни — `getAllTracks()` или `Project::getTracks()`.
+  Строка свёрнутой папки (`isFoldedRow`) не правится: клипы в ней — `DrawnClip::folded`.
 - Группы — только через `audio::groups` (выход дорожки в группу — `setGroup`; хранится по ID, патч 0002),
   сайдчейн — через `audio::sidechain` (удаляешь дорожку — `forgetSource`). Рендер части песни берёт источники
   сайдчейна беззвучно (`sidechain::getSourcesFor`).
