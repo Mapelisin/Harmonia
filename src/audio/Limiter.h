@@ -63,6 +63,7 @@ namespace harmonia::audio::limiter
         int getNumOutputChannelsGivenInputs (int numInputChannels) override     { return juce::jmin (numInputChannels, 2); }
         BusLayout getBusses() const override                                    { return BusLayout::singleStereoInOut(); }
         void applyToBuffer (const te::PluginRenderContext&) override;
+        void restorePluginStateFromValueTree (const juce::ValueTree&) override;
 
         juce::CachedValue<float> gainValue, ceilingValue, releaseValue;
         te::AutomatableParameter::Ptr gain, ceiling, release;

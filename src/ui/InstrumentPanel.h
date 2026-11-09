@@ -5,8 +5,8 @@
 
 namespace harmonia::ui
 {
-    /** Chooses the instrument of one track: built-in synth or a scanned plugin,
-        opens its editor and scans for new plugins (the folders: Settings > Plugins). */
+    /** Chooses the instrument of one track: built-in synth or a scanned plugin, opens its
+        editor, its presets, and scans for new plugins (the folders: Settings > Plugins). */
     class InstrumentPanel final : public juce::Component,
                                   private juce::ValueTree::Listener,
                                   private juce::ChangeListener,
@@ -29,6 +29,7 @@ namespace harmonia::ui
         juce::Label titleLabel;
         juce::ComboBox instrumentBox;
         juce::TextButton editorButton { "Show editor" };
+        juce::TextButton presetsButton { "Presets" };
         juce::TextButton scanButton { "Scan plugins" };
         juce::TextButton foldersButton { "Folders..." };
         juce::Label messageLabel;
@@ -39,6 +40,7 @@ namespace harmonia::ui
         void refreshList();
         void showCurrent();
         void editorClicked();
+        void showPresets();
         void instrumentChosen();
         void startScan();
         void showMessage (const juce::String&, bool isProblem);

@@ -113,6 +113,14 @@ namespace harmonia::audio::limiter
         release->detachFromCurrentValue();
     }
 
+    void Plugin::restorePluginStateFromValueTree (const juce::ValueTree& v)
+    {
+        te::copyPropertiesToCachedValues (v, gainValue, ceilingValue, releaseValue);
+
+        for (auto* parameter : getAutomatableParameters())
+            parameter->updateFromAttachedValue();
+    }
+
     void Plugin::initialise (const te::PluginInitialisationInfo& info)
     {
         sampleRate = info.sampleRate;

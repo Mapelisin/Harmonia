@@ -21,6 +21,8 @@ add_library(harmonia_ui STATIC
     DragNumber.cpp
     ParameterPanel.h
     ParameterPanel.cpp
+    PresetMenu.h
+    PresetMenu.cpp
     PluginWindow.h
     PluginWindow.cpp
     PhysicalKeys.h

@@ -1,4 +1,6 @@
 #include "ui/ParameterPanel.h"
+#include "audio/Presets.h"
+#include "ui/PresetMenu.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui
@@ -107,8 +109,29 @@ namespace harmonia::ui
     };
 
     //==============================================================================
-    ParameterPanel::ParameterPanel (te::Plugin& plugin)
+    ParameterPanel::ParameterPanel (te::Plugin& p)
+        : plugin (p)
     {
+        presetsButton.setWantsKeyboardFocus (false);
+        presetsButton.setEnabled (audio::presets::canHavePresets (plugin));
+        presetsButton.setTooltip ("Save these settings as a preset, or load one");
+        presetsButton.onClick = [this]
+        {
+            preset_menu::make (plugin, [safe = juce::Component::SafePointer<ParameterPanel> (this)] (const juce::String& text, bool isProblem)
+            {
+                if (safe == nullptr)
+                    return;
+
+                safe->message.setColour (juce::Label::textColourId, isProblem ? theme::colour::warning : theme::colour::textSecondary);
+                safe->message.setText (text, juce::dontSendNotification);
+            }).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&presetsButton));
+        };
+        addAndMakeVisible (presetsButton);
+
+        message.setFont (juce::FontOptions (theme::size::smallFontSize));
+        message.setColour (juce::Label::textColourId, theme::colour::textSecondary);
+        addAndMakeVisible (message);
+
         for (auto& control : audio::PluginControl::getAll (plugin))
             content.addAndMakeVisible (rows.add (std::make_unique<Row> (std::move (control))));
 
@@ -128,7 +151,7 @@ namespace harmonia::ui
 
     int ParameterPanel::getIdealHeight() const
     {
-        return std::max (1, rows.size()) * rowHeight + 2 * margin;
+        return barHeight + std::max (1, rows.size()) * rowHeight + 2 * margin;
     }
 
     void ParameterPanel::paint (juce::Graphics& g)
@@ -139,15 +162,22 @@ namespace harmonia::ui
         {
             g.setColour (theme::colour::textSecondary);
             g.setFont (juce::FontOptions (theme::size::fontSize));
-            g.drawText ("This plugin has no settings.", getLocalBounds(), juce::Justification::centred);
+            g.drawText ("This plugin has no settings.", getLocalBounds().withTrimmedTop (barHeight), juce::Justification::centred);
         }
     }
 
     void ParameterPanel::resized()
     {
-        viewport.setBounds (getLocalBounds());
-        const auto width = getWidth() - (getIdealHeight() > getHeight() ? viewport.getScrollBarThickness() : 0);
-        content.setSize (width, getIdealHeight());
+        auto area = getLocalBounds();
+        auto bar = area.removeFromTop (barHeight).reduced (margin, 4);
+        presetsButton.setBounds (bar.removeFromLeft (90));
+        bar.removeFromLeft (margin);
+        message.setBounds (bar);
+
+        viewport.setBounds (area);
+        const auto rowsHeight = getIdealHeight() - barHeight;
+        const auto width = getWidth() - (rowsHeight > area.getHeight() ? viewport.getScrollBarThickness() : 0);
+        content.setSize (width, rowsHeight);
 
         for (int i = 0; i < rows.size(); ++i)
             rows[i]->setBounds (0, margin + i * rowHeight, width, rowHeight);

@@ -1,0 +1,31 @@
+diff --git a/modules/tracktion_engine/plugins/effects/tracktion_LowPass.cpp b/modules/tracktion_engine/plugins/effects/tracktion_LowPass.cpp
+index f569feea368..9f900051feb 100644
+--- a/modules/tracktion_engine/plugins/effects/tracktion_LowPass.cpp
++++ b/modules/tracktion_engine/plugins/effects/tracktion_LowPass.cpp
+@@ -33,6 +33,14 @@ LowPassPlugin::~LowPassPlugin()
+ 
+ const char* LowPassPlugin::xmlTypeName = "lowpass";
+ 
++void LowPassPlugin::restorePluginStateFromValueTree (const juce::ValueTree& v)
++{
++    copyPropertiesToCachedValues (v, frequencyValue, mode);
++
++    for (auto p : getAutomatableParameters())
++        p->updateFromAttachedValue();
++}
++
+ void LowPassPlugin::updateFilters()
+ {
+     const float newFreq = frequency->getCurrentValue();
+diff --git a/modules/tracktion_engine/plugins/effects/tracktion_LowPass.h b/modules/tracktion_engine/plugins/effects/tracktion_LowPass.h
+index 9f3cff26ba4..caab69e56c3 100644
+--- a/modules/tracktion_engine/plugins/effects/tracktion_LowPass.h
++++ b/modules/tracktion_engine/plugins/effects/tracktion_LowPass.h
+@@ -31,6 +31,7 @@ public:
+     int getNumOutputChannelsGivenInputs (int numInputChannels) override  { return juce::jmin (numInputChannels, 2); }
+     BusLayout getBusses() const override   { return BusLayout::singleStereoInOut(); }
+     void applyToBuffer (const PluginRenderContext&) override;
++    void restorePluginStateFromValueTree (const juce::ValueTree&) override;
+ 
+     bool isLowPass() const noexcept                     { return mode.get() != "highpass"; }
+ 

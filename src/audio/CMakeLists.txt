@@ -42,6 +42,8 @@ add_library(harmonia_audio STATIC
     PluginScanner.cpp
     PluginSafety.h
     PluginSafety.cpp
+    Presets.h
+    Presets.cpp
     Groups.h
     Groups.cpp
     Sidechain.h

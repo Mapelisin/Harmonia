@@ -5,6 +5,7 @@
 #include "audio/Sends.h"
 #include "audio/Sidechain.h"
 #include "core/Tracks.h"
+#include "ui/PresetMenu.h"
 #include "ui/Theme.h"
 #include "ui/arrangement/TrackHeaders.h"
 
@@ -738,6 +739,14 @@ namespace harmonia::ui::mixer
 
         menu.addItem ("Open", run ([] (te::Plugin& p) { effects::showEditor (p); }));
         menu.addItem (bypassed ? "Turn on" : "Turn off (bypass)", run ([bypassed] (te::Plugin& p) { effects::setBypassed (p, ! bypassed); }));
+
+        if (audio::presets::canHavePresets (plugin))
+            menu.addSubMenu ("Presets", preset_menu::make (plugin, [safe] (const juce::String& text, bool isProblem)
+            {
+                if (safe != nullptr)
+                    safe->tell (text, isProblem);
+            }));
+
         menu.addSeparator();
         menu.addItem ("Move up", index > 0, false, run ([index] (te::Plugin& p) { effects::move (p, index - 1); }));
         menu.addItem ("Move down", index >= 0 && index < chain.size() - 1, false,

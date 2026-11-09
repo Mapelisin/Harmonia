@@ -5,11 +5,13 @@
 #include "audio/Groups.h"
 #include "audio/Instruments.h"
 #include "audio/PluginControls.h"
+#include "audio/Presets.h"
 #include "audio/Sends.h"
 #include "audio/Sidechain.h"
 #include "core/Project.h"
 #include "ui/MainComponent.h"
 #include "ui/ParameterPanel.h"
+#include "ui/PresetMenu.h"
 #include "ui/arrangement/TrackHeaders.h"
 #include "ui/mixer/Mixer.h"
 
@@ -576,5 +578,78 @@ TEST_SUITE ("mixer: main window")
             out.truncate();
             juce::PNGImageFormat().writeImageToStream (image, out);
         }
+    }
+}
+
+TEST_SUITE ("preset menu")
+{
+    TEST_CASE ("an effect's slot menu and the knobs window have the presets")
+    {
+        MixerFixture f;
+        auto* strip = f.mixer->getTrackStrip (0);
+        strip->addEffect (builtIn ("Compressor"));
+        auto* compressor = effects::get (f.firstTrack().pluginList).getFirst();
+        REQUIRE (compressor != nullptr);
+
+        CHECK (findItem (strip->makeSlotMenu (*compressor), "Presets/Save preset...") != nullptr);
+        CHECK (findItem (strip->makeSlotMenu (*compressor), "Presets/Show presets folder") != nullptr);
+
+        ui::ParameterPanel panel (*compressor);
+        CHECK (panel.getPresetsButton().isEnabled());
+        CHECK (panel.getIdealHeight() == ui::ParameterPanel::barHeight + panel.getNumRows() * ui::ParameterPanel::rowHeight + 20);
+        CHECK (panel.createComponentSnapshot (panel.getLocalBounds()).isValid());
+    }
+
+    TEST_CASE ("the menu lists the presets saved, loads one, puts the first settings back")
+    {
+        MixerFixture f;
+        juce::String error;
+        auto* compressor = effects::add (f.firstTrack().pluginList, builtIn ("Compressor"), error);
+        REQUIRE (compressor != nullptr);
+        f.project->clearUndoHistory();
+
+        const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getNonexistentChildFile ("harmonia-presets", {});
+        const juce::ScopeGuard removeFolder { [folder] { folder.deleteRecursively(); } };
+        juce::StringArray told;
+        const auto tell = [&told] (const juce::String& text, bool isProblem) { told.add ((isProblem ? "! " : "") + text); };
+
+        auto menu = ui::preset_menu::make (*compressor, tell, folder);
+        REQUIRE (findItem (menu, "No presets saved yet") != nullptr);
+        CHECK_FALSE (findItem (menu, "No presets saved yet")->isEnabled);
+        CHECK (findItem (menu, "Reset to first settings") != nullptr);
+        CHECK (findItem (menu, "Presets of Compressor") == nullptr);   // a plugin's own, it has none
+
+        auto controls = audio::PluginControl::getAll (*compressor);
+        REQUIRE (! controls.empty());
+        auto& threshold = controls.front();
+        const auto first = threshold.getValue();
+        const auto inPreset = threshold.getRange().convertFrom0to1 (0.2f);
+
+        threshold.beginChange();
+        threshold.setValue (inPreset);
+        threshold.endChange();
+        REQUIRE (audio::presets::save (*compressor, "Vocal", folder).isEmpty());
+
+        threshold.beginChange();
+        threshold.setValue (threshold.getRange().convertFrom0to1 (0.9f));
+        threshold.endChange();
+
+        menu = ui::preset_menu::make (*compressor, tell, folder);
+        CHECK (findItem (menu, "No presets saved yet") == nullptr);
+        REQUIRE (findItem (menu, "Vocal") != nullptr);
+        CHECK (findItem (menu, "Vocal")->isTicked);     // the one last saved
+
+        choose (menu, "Vocal");
+        CHECK (told.joinIntoString ("|") == "Preset: Vocal");
+        CHECK (threshold.getValue() == doctest::Approx (inPreset));
+        CHECK (f.undoManager().getUndoDescription() == "Preset Vocal");
+
+        choose (ui::preset_menu::make (*compressor, tell, folder), "Reset to first settings");
+        CHECK (told[1] == "Compressor: first settings");
+        CHECK (threshold.getValue() == doctest::Approx (first));
+        CHECK_FALSE (findItem (ui::preset_menu::make (*compressor, tell, folder), "Vocal")->isTicked);
+
+        f.project->undo();
+        CHECK (threshold.getValue() == doctest::Approx (inPreset));
     }
 }

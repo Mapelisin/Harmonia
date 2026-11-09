@@ -51,8 +51,8 @@ namespace harmonia::ui::mixer
         /** Where a song track plays ("-> Master", "-> Drums"); hidden on the other strips. */
         juce::TextButton& getOutputButton() noexcept    { return output; }
 
-        /** What a right-click on an effect's slot offers: open, bypass, move, what it listens to
-            (sidechain), remove. */
+        /** What a right-click on an effect's slot offers: open, bypass, presets, move, what it
+            listens to (sidechain), remove. */
         juce::PopupMenu makeSlotMenu (te::Plugin&);
 
         /** Starts a crashed plugin again, and says how that went. */

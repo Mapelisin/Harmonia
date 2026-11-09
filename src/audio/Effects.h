@@ -20,7 +20,7 @@ namespace harmonia::audio::effects
         bool isBuiltIn() const noexcept         { return builtInType.isNotEmpty(); }
     };
 
-    /** The effects that come with Harmonia: EQ, compressor, limiter, reverb, delay, chorus, phaser, filter. */
+    /** The effects that come with Harmonia: EQ, compressor, limiter, reverb, delay, chorus, phaser, filter, pump. */
     juce::Array<EffectType> getBuiltIn();
 
     /** Scanned plugins that are effects (not instruments), sorted by name. */

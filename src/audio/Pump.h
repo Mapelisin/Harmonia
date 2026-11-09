@@ -69,6 +69,7 @@ namespace harmonia::audio::pump
         int getNumOutputChannelsGivenInputs (int numInputChannels) override     { return juce::jmin (numInputChannels, 2); }
         BusLayout getBusses() const override                                    { return BusLayout::singleStereoInOut(); }
         void applyToBuffer (const te::PluginRenderContext&) override;
+        void restorePluginStateFromValueTree (const juce::ValueTree&) override;
 
         juce::CachedValue<float> depthValue, rateValue, lengthValue;
         te::AutomatableParameter::Ptr depth, rate, length;

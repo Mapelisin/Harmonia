@@ -612,6 +612,14 @@ namespace harmonia::audio::drum_kit
         decay->detachFromCurrentValue();
     }
 
+    void Plugin::restorePluginStateFromValueTree (const juce::ValueTree& v)
+    {
+        te::copyPropertiesToCachedValues (v, kitValue, tuneValue, decayValue);
+
+        for (auto* parameter : getAutomatableParameters())
+            parameter->updateFromAttachedValue();
+    }
+
     Kit Plugin::getKit() const
     {
         return getKits()[(size_t) juce::jlimit (0, (int) getKits().size() - 1, juce::roundToInt (kit->getCurrentValue()))];

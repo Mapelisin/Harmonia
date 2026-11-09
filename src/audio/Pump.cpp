@@ -115,6 +115,14 @@ namespace harmonia::audio::pump
         length->detachFromCurrentValue();
     }
 
+    void Plugin::restorePluginStateFromValueTree (const juce::ValueTree& v)
+    {
+        te::copyPropertiesToCachedValues (v, depthValue, rateValue, lengthValue);
+
+        for (auto* parameter : getAutomatableParameters())
+            parameter->updateFromAttachedValue();
+    }
+
     Rate Plugin::getRate() const
     {
         return getRates()[(size_t) juce::jlimit (0, (int) getRates().size() - 1, juce::roundToInt (rate->getCurrentValue()))];

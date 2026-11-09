@@ -1,7 +1,9 @@
 #include "ui/InstrumentPanel.h"
 #include "audio/Effects.h"
 #include "audio/Instruments.h"
+#include "audio/Presets.h"
 #include "core/Tracks.h"
+#include "ui/PresetMenu.h"
 #include "ui/Theme.h"
 #include "ui/settings/SettingsPanel.h"
 
@@ -41,16 +43,19 @@ namespace harmonia::ui
         // Keyboard focus stays with the piano roll, so its shortcuts and Space keep working.
         instrumentBox.setWantsKeyboardFocus (false);
         editorButton.setWantsKeyboardFocus (false);
+        presetsButton.setWantsKeyboardFocus (false);
+        presetsButton.setTooltip ("Save the instrument's settings as a preset, or load one");
         scanButton.setWantsKeyboardFocus (false);
         foldersButton.setWantsKeyboardFocus (false);
         foldersButton.setTooltip ("Settings > Plugins: the folders the scan looks in (add your own, such as E:\\VST)");
 
         instrumentBox.onChange = [this] { instrumentChosen(); };
         editorButton.onClick = [this] { editorClicked(); };
+        presetsButton.onClick = [this] { showPresets(); };
         scanButton.onClick = [this] { startScan(); };
         foldersButton.onClick = [this] { SettingsPanel::show (session, SettingsPanel::Tab::plugins); };
 
-        for (auto* c : std::initializer_list<juce::Component*> { &titleLabel, &instrumentBox, &editorButton,
+        for (auto* c : std::initializer_list<juce::Component*> { &titleLabel, &instrumentBox, &editorButton, &presetsButton,
                                                                  &scanButton, &foldersButton, &messageLabel })
             addAndMakeVisible (c);
 
@@ -59,7 +64,7 @@ namespace harmonia::ui
         {
             titleLabel.setText ("Audio track", juce::dontSendNotification);
 
-            for (auto* c : std::initializer_list<juce::Component*> { &instrumentBox, &editorButton, &scanButton, &foldersButton })
+            for (auto* c : std::initializer_list<juce::Component*> { &instrumentBox, &editorButton, &presetsButton, &scanButton, &foldersButton })
                 c->setVisible (false);
 
             showMessage ("Plays sound files: drag WAV, MP3, FLAC... from Explorer onto its row, or File > Import audio.", false);
@@ -107,6 +112,8 @@ namespace harmonia::ui
         row.removeFromLeft (theme::size::padding);
         editorButton.setBounds (row.removeFromLeft (110));
         row.removeFromLeft (theme::size::padding);
+        presetsButton.setBounds (row.removeFromLeft (80));
+        row.removeFromLeft (theme::size::padding);
         scanButton.setBounds (row.removeFromLeft (110));
         row.removeFromLeft (theme::size::padding);
         foldersButton.setBounds (row.removeFromLeft (90));
@@ -151,6 +158,7 @@ namespace harmonia::ui
 
         instrumentBox.setSelectedId (selectedId, juce::dontSendNotification);
         editorButton.setEnabled (current != nullptr);
+        presetsButton.setEnabled (current != nullptr && audio::presets::canHavePresets (*current));
 
         const auto crashed = current != nullptr && audio::plugin_safety::getStatus (*current) == audio::plugin_safety::Status::crashed;
         editorButton.setButtonText (crashed ? "Reload plugin" : "Show editor");
@@ -179,6 +187,20 @@ namespace harmonia::ui
             showMessage (current->getName() + " reloaded", false);
 
         showCurrent();
+    }
+
+    void InstrumentPanel::showPresets()
+    {
+        auto* current = audio::instruments::get (track);
+
+        if (current == nullptr)
+            return;
+
+        preset_menu::make (*current, [safe = juce::Component::SafePointer<InstrumentPanel> (this)] (const juce::String& text, bool isProblem)
+        {
+            if (safe != nullptr)
+                safe->showMessage (text, isProblem);
+        }).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&presetsButton));
     }
 
     void InstrumentPanel::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree& child)

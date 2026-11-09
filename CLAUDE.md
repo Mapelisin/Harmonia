@@ -94,6 +94,9 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   (хранит Tracktion); плагины в своих процессах вкл/выкл — `Session::setPluginSandboxOn` (в тестах включено на
   старте). Скан плагинов — один на программу (`PluginScanner::startScan` вернёт false).
 - Эффекты — через `audio::effects` (порядок в списке плагинов: инструмент, эффекты, громкость, индикатор).
+- Пресеты — только через `audio::presets` (меню — `ui::preset_menu`, папка в тестах — своя временная). Новый
+  встроенный плагин должен уметь `restorePluginStateFromValueTree` (иначе jassert); настройки VST грузятся
+  своим действием undo, не `restorePluginStateFromValueTree` напрямую.
   Ручки плагинов — через `audio::PluginControl` (у Chorus/Phaser/времени Delay/типа фильтра нет параметров).
 - Исправления Tracktion — патчи в `external/patches/tracktion_engine` (решение 21), их накладывает настройка CMake.
   Правишь движок — потом `git -C external/tracktion_engine diff > <патч>`; меняешь готовый патч — сначала

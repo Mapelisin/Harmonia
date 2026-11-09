@@ -97,6 +97,7 @@ namespace harmonia::audio::drum_kit
         bool producesAudioWhenNoAudioInput() override           { return true; }
         double getTailLength() const override                   { return 3.0; }
         void applyToBuffer (const te::PluginRenderContext&) override;
+        void restorePluginStateFromValueTree (const juce::ValueTree&) override;
 
         juce::CachedValue<float> kitValue, tuneValue, decayValue;
         te::AutomatableParameter::Ptr kit, tune, decay;
