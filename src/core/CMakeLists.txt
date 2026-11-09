@@ -24,6 +24,8 @@ add_library(harmonia_core STATIC
     Snap.cpp
     Tempo.h
     Tempo.cpp
+    TempoChanges.h
+    TempoChanges.cpp
     MidiFiles.h
     MidiFiles.cpp
     Autosave.h

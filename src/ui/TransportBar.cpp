@@ -1,4 +1,5 @@
 #include "ui/TransportBar.h"
+#include "core/TempoChanges.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui
@@ -94,10 +95,10 @@ namespace harmonia::ui
         tempoBox.setRange (core::tempo::minBpm, core::tempo::maxBpm);
         tempoBox.setSteps (1.0, 0.1);
         tempoBox.textFromValue = [] (double bpm) { return core::tempo::toText (bpm); };
-        tempoBox.setTooltip ("Tempo: drag up / down (Shift: finer), mouse wheel, or double-click and type.\n"
+        tempoBox.setTooltip ("Tempo where the song is: drag up / down (Shift: finer), mouse wheel, or double-click and type.\n"
                              "Clips, notes and automation stay on their beats; audio clips keep their speed.");
         tempoBox.onGestureStart = [&project] { project.beginGesture ("Change tempo"); };
-        tempoBox.onValueChange = [&project] (double bpm) { project.setTempoBpm (bpm); };
+        tempoBox.onValueChange = [this] (double bpm) { core::tempo_changes::setBpm (edit, getTempoChangeIndex(), bpm); };
 
         timeSigButton.setTooltip ("Time signature: beats per bar");
         timeSigButton.onClick = [this] { showTimeSigMenu(); };
@@ -172,14 +173,22 @@ namespace harmonia::ui
         {
             auto& project = arrangementModel.getProject();
 
-            if (std::abs (*bpm - project.getTempoBpm()) >= 0.05)
+            const auto index = getTempoChangeIndex();
+
+            if (std::abs (*bpm - core::tempo_changes::getAll (edit)[(size_t) index].bpm) >= 0.05)
             {
                 project.beginGesture ("Tap tempo");
-                project.setTempoBpm (*bpm);
+                core::tempo_changes::setBpm (edit, index, *bpm);
             }
         }
 
         refresh();
+    }
+
+    int TransportBar::getTempoChangeIndex() const
+    {
+        const auto beat = edit.tempoSequence.toBeats (te::TimePosition::fromSeconds (transport.getPositionSeconds())).inBeats();
+        return core::tempo_changes::getIndexAt (edit, beat);
     }
 
     void TransportBar::setBeatsPerBar (int beats)
@@ -301,7 +310,8 @@ namespace harmonia::ui
         }
 
         auto& project = arrangementModel.getProject();
-        tempoBox.setValue (project.getTempoBpm());
+        // The tempo where the song is: with tempo changes, that of the one in effect there.
+        tempoBox.setValue (core::tempo_changes::getAll (edit)[(size_t) getTempoChangeIndex()].bpm);
         const auto timeSig = juce::String (project.getBeatsPerBar()) + "/4";
 
         if (timeSigButton.getButtonText() != timeSig)

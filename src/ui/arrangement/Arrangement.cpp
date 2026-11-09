@@ -8,6 +8,7 @@
 #include "core/Tracks.h"
 #include "ui/ComputerKeyboard.h"
 #include "ui/FileDrag.h"
+#include "core/Tempo.h"
 #include "ui/TakeMenu.h"
 #include "ui/Theme.h"
 
@@ -54,6 +55,7 @@ namespace harmonia::ui::arrangement
         addMarkerButton.onClick = [this] { addMarkerAtPlayhead(); };
         addAndMakeVisible (addMarkerButton);
         ruler.onRenameMarker = [this] (const core::markers::Marker& marker) { askToRenameMarker (marker); };
+        ruler.onAskTempo = [this] (double beat, std::optional<int> index) { askForTempo (beat, index); };
 
         ruler.onPositionChosen = [this] (double beat)
         {
@@ -759,6 +761,43 @@ namespace harmonia::ui::arrangement
         {
             if (result == 1 && safeThis != nullptr && safeWindow != nullptr)
                 safeThis->model.renameMarker (marker, safeWindow->getTextEditorContents ("name"));
+        }), true);
+    }
+
+    std::optional<double> Arrangement::parseTempo (const juce::String& text)
+    {
+        const auto number = text.replaceCharacter (',', '.').retainCharacters ("0123456789.");
+        const auto bpm = number.getDoubleValue();
+        return number.isNotEmpty() && bpm >= core::tempo::minBpm && bpm <= core::tempo::maxBpm ? std::optional<double> (bpm)
+                                                                                                 : std::nullopt;
+    }
+
+    void Arrangement::askForTempo (double beat, std::optional<int> index)
+    {
+        const auto current = core::tempo_changes::getBpmAt (model.getEdit(), beat);
+        auto* window = new juce::AlertWindow (index.has_value() ? "Set tempo" : "Tempo change",
+                                              "The tempo from here on, in BPM (" + juce::String (juce::roundToInt (core::tempo::minBpm)) + " to "
+                                                  + juce::String (juce::roundToInt (core::tempo::maxBpm)) + "):",
+                                              juce::MessageBoxIconType::NoIcon, this);
+        window->addTextEditor ("bpm", core::tempo::toText (current).upToFirstOccurrenceOf (" ", false, false));
+        window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
+        window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+        juce::Component::SafePointer<juce::AlertWindow> safeWindow (window);
+        juce::Component::SafePointer<Arrangement> safeThis (this);
+
+        window->enterModalState (true, juce::ModalCallbackFunction::create ([safeThis, beat, index, safeWindow] (int result)
+        {
+            if (result != 1 || safeThis == nullptr || safeWindow == nullptr)
+                return;
+
+            if (const auto bpm = parseTempo (safeWindow->getTextEditorContents ("bpm")))
+            {
+                if (index.has_value())
+                    safeThis->model.setTempoChangeBpm (*index, *bpm);
+                else
+                    safeThis->model.addTempoChange (beat, *bpm);
+            }
         }), true);
     }
 

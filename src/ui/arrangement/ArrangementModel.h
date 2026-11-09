@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Markers.h"
+#include "core/TempoChanges.h"
 #include "core/SongForms.h"
 #include "core/NoteOps.h"
 #include "core/Project.h"
@@ -293,6 +294,19 @@ namespace harmonia::ui::arrangement
         core::markers::Marker addMarker (double beat, const juce::String& name);
         void renameMarker (const core::markers::Marker&, const juce::String& name);
         void removeMarker (const core::markers::Marker&);
+
+        //==============================================================================
+        // Tempo changes along the song (core::tempo_changes); each call is one undo step, except
+        // moveTempoChange (a drag: the caller starts the gesture).
+
+        std::vector<core::tempo_changes::Change> getTempoChanges() const;
+
+        /** A change at `beat` (or the tempo of the one there). Returns its index. */
+        int addTempoChange (double beat, double bpm);
+        void setTempoChangeBpm (int index, double bpm);
+        void moveTempoChange (int index, double beat);
+        void setTempoChangeGradual (int index, bool);
+        void removeTempoChange (int index);
 
         /** A name for a new marker: the first suggestion not used yet ("Intro", "Verse"...), else
             "Marker N". */

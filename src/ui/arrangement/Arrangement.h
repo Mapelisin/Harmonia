@@ -84,6 +84,12 @@ namespace harmonia::ui::arrangement
         /** Asks for the marker's new name. */
         void askToRenameMarker (const core::markers::Marker&);
 
+        /** Asks for the tempo of a change at `beat`: a new one, or that of `index`. */
+        void askForTempo (double beat, std::optional<int> index);
+
+        /** What was typed as a tempo ("92,5", "90 bpm"), if it is one. */
+        static std::optional<double> parseTempo (const juce::String&);
+
     private:
         ArrangementModel& model;
         audio::Transport& transport;

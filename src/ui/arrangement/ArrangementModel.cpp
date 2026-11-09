@@ -1016,6 +1016,46 @@ namespace harmonia::ui::arrangement
         return core::markers::getAll (project.getEdit());
     }
 
+    std::vector<core::tempo_changes::Change> ArrangementModel::getTempoChanges() const
+    {
+        return core::tempo_changes::getAll (project.getEdit());
+    }
+
+    int ArrangementModel::addTempoChange (double beat, double bpm)
+    {
+        project.beginGesture ("Tempo change");
+        const auto index = core::tempo_changes::add (getEdit(), beat, bpm);
+        changed();
+        return index;
+    }
+
+    void ArrangementModel::setTempoChangeBpm (int index, double bpm)
+    {
+        project.beginGesture ("Change tempo");
+        core::tempo_changes::setBpm (getEdit(), index, bpm);
+        changed();
+    }
+
+    void ArrangementModel::moveTempoChange (int index, double beat)
+    {
+        core::tempo_changes::move (getEdit(), index, beat);
+        changed();
+    }
+
+    void ArrangementModel::setTempoChangeGradual (int index, bool gradual)
+    {
+        project.beginGesture (gradual ? "Glide to the tempo" : "Jump to the tempo");
+        core::tempo_changes::setGradual (getEdit(), index, gradual);
+        changed();
+    }
+
+    void ArrangementModel::removeTempoChange (int index)
+    {
+        project.beginGesture ("Remove tempo change");
+        core::tempo_changes::remove (getEdit(), index);
+        changed();
+    }
+
     core::markers::Marker ArrangementModel::addMarker (double beat, const juce::String& name)
     {
         project.beginGesture ("Add marker");

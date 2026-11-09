@@ -1,5 +1,6 @@
 #include "core/MidiFiles.h"
 #include "core/Clips.h"
+#include "core/TempoChanges.h"
 #include "core/Tracks.h"
 
 namespace harmonia::core::midi_files
@@ -72,17 +73,41 @@ namespace harmonia::core::midi_files
             return (int) std::llround (beats * ticksPerBeat);
         }
 
-        juce::MidiMessageSequence makeConductor (te::Edit& edit, const juce::String& name)
+        /** The tempo of the song where the file starts (`fromBeat`); for a whole song, every
+            tempo change after it too, a glide as a step each half beat. */
+        juce::MidiMessageSequence makeConductor (te::Edit& edit, const juce::String& name, double fromBeat, bool withChanges)
         {
             juce::MidiMessageSequence track;
 
             if (name.isNotEmpty())
                 track.addEvent (juce::MidiMessage::textMetaEvent (3, name), 0.0);
 
-            const auto bpm = edit.tempoSequence.getTempo (0)->getBpm();
-            track.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::llround (60000000.0 / bpm)), 0.0);
+            const auto addTempo = [&] (double beat)
+            {
+                const auto bpm = tempo_changes::getBpmAt (edit, beat);
+                track.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::llround (60000000.0 / bpm)), toTicks (beat - fromBeat));
+            };
+
+            addTempo (fromBeat);
+
+            if (withChanges)
+            {
+                const auto changes = tempo_changes::getAll (edit);
+
+                for (size_t i = 1; i < changes.size(); ++i)
+                {
+                    if (changes[i].gradual)
+                        for (auto beat = changes[i - 1].beat + 0.5; beat < changes[i].beat - 1.0e-6; beat += 0.5)
+                            if (beat > fromBeat)
+                                addTempo (beat);
+
+                    if (changes[i].beat > fromBeat)
+                        addTempo (changes[i].beat);
+                }
+            }
+
             track.addEvent (juce::MidiMessage::timeSignatureMetaEvent (edit.tempoSequence.getTimeSig (0)->numerator, 4), 0.0);
-            track.addEvent (juce::MidiMessage::endOfTrack(), 0.0);
+            track.addEvent (juce::MidiMessage::endOfTrack(), track.getEndTime());
             return track;
         }
 
@@ -296,7 +321,7 @@ namespace harmonia::core::midi_files
 
         juce::MidiFile midi;
         midi.setTicksPerQuarterNote (ticksPerBeat);
-        midi.addTrack (makeConductor (clip.edit, clip.getName()));
+        midi.addTrack (makeConductor (clip.edit, clip.getName(), clips::getStartBeat (clip), false));
 
         SongControllers moves;
         addPlayedControllers (moves, clip);
@@ -308,7 +333,7 @@ namespace harmonia::core::midi_files
     {
         juce::MidiFile midi;
         midi.setTicksPerQuarterNote (ticksPerBeat);
-        midi.addTrack (makeConductor (project.getEdit(), file.getFileNameWithoutExtension()));
+        midi.addTrack (makeConductor (project.getEdit(), file.getFileNameWithoutExtension(), 0.0, true));
         auto anyNotes = false;
 
         for (auto* track : project.getTracks())

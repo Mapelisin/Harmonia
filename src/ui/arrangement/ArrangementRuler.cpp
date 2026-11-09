@@ -1,4 +1,5 @@
 #include "ui/arrangement/ArrangementRuler.h"
+#include "core/Tempo.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui::arrangement
@@ -46,6 +47,7 @@ namespace harmonia::ui::arrangement
         }
 
         paintMarkers (g);
+        paintTempoChanges (g);
 
         const auto beatsPerBar = model.getBeatsPerBar();
         const auto barWidth = (float) (beatsPerBar * view.pixelsPerBeat);
@@ -117,6 +119,83 @@ namespace harmonia::ui::arrangement
         }
     }
 
+    juce::Rectangle<float> ArrangementRuler::getTempoFlag (int index) const
+    {
+        const auto changes = model.getTempoChanges();
+
+        if (index <= 0 || index >= (int) changes.size())
+            return {};
+
+        const auto& change = changes[(size_t) index];
+        const auto text = (change.gradual ? "~" : "") + core::tempo::toText (change.bpm).upToFirstOccurrenceOf (" ", false, false);
+        const auto width = juce::GlyphArrangement::getStringWidth (juce::Font (markerFont()), text) + flagPadding * 2.0f;
+        auto x = view.beatToX (change.beat);
+
+        // Next to a marker that is at the same place.
+        for (const auto& marker : model.getMarkers())
+            if (std::abs (marker.beat - change.beat) < 1.0e-6)
+                x = getFlag (marker, nullptr).getRight() + 2.0f;
+
+        return { x, 1.0f, width, markerLaneHeight - 2.0f };
+    }
+
+    void ArrangementRuler::paintTempoChanges (juce::Graphics& g)
+    {
+        const auto changes = model.getTempoChanges();
+        g.setFont (markerFont());
+
+        for (int i = 1; i < (int) changes.size(); ++i)
+        {
+            const auto flag = getTempoFlag (i);
+
+            if (flag.getRight() < 0.0f || flag.getX() > (float) getWidth())
+                continue;
+
+            const auto& change = changes[(size_t) i];
+            const auto colour = draggedTempo == i ? theme::colour::warning.brighter (0.2f) : theme::colour::warning;
+            g.setColour (colour.withAlpha (0.9f));
+            g.fillRoundedRectangle (flag, 3.0f);
+            g.fillRect (view.beatToX (change.beat), 1.0f, 2.0f, (float) getHeight() - 1.0f);
+            g.setColour (theme::colour::background);
+            g.drawText ((change.gradual ? "~" : "") + core::tempo::toText (change.bpm).upToFirstOccurrenceOf (" ", false, false),
+                        flag, juce::Justification::centred, false);
+        }
+    }
+
+    std::optional<int> ArrangementRuler::findTempoChangeAt (juce::Point<float> position) const
+    {
+        if (position.y >= markerLaneHeight)
+            return std::nullopt;
+
+        std::optional<int> found;
+
+        for (int i = 1; i < (int) model.getTempoChanges().size(); ++i)
+            if (getTempoFlag (i).expanded (2.0f, 0.0f).contains (position.x, 2.0f))
+                found = i;
+
+        return found;
+    }
+
+    void ArrangementRuler::addTempoItems (juce::PopupMenu& menu, double beat, std::optional<int> tempoChange)
+    {
+        const auto changes = model.getTempoChanges();
+
+        if (tempoChange.has_value() && *tempoChange > 0 && *tempoChange < (int) changes.size())
+        {
+            const auto index = *tempoChange;
+            const auto change = changes[(size_t) index];
+            menu.addSectionHeader ("Tempo, " + core::tempo_changes::describe (model.getEdit(), change));
+            menu.addItem ("Set tempo...", [this, index, change] { if (onAskTempo != nullptr) onAskTempo (change.beat, index); });
+            menu.addItem ("Glide to it from the tempo before", true, change.gradual,
+                          [this, index, change] { model.setTempoChangeGradual (index, ! change.gradual); });
+            menu.addItem ("Remove tempo change", [this, index] { model.removeTempoChange (index); });
+            menu.addSeparator();
+            return;
+        }
+
+        menu.addItem ("Tempo change here...", beat > 0.0, false, [this, beat] { if (onAskTempo != nullptr) onAskTempo (beat, std::nullopt); });
+    }
+
     std::optional<core::markers::Marker> ArrangementRuler::findMarkerAt (juce::Point<float> position) const
     {
         if (position.y >= markerLaneHeight)
@@ -133,9 +212,12 @@ namespace harmonia::ui::arrangement
     }
 
     juce::PopupMenu ArrangementRuler::createMenu (double beat, std::optional<core::markers::Marker> marker,
-                                                  std::optional<double> clickedBeat)
+                                                  std::optional<double> clickedBeat, std::optional<int> tempoChange)
     {
         juce::PopupMenu menu;
+
+        if (tempoChange.has_value())
+            addTempoItems (menu, beat, tempoChange);
 
         if (marker.has_value())
         {
@@ -162,6 +244,10 @@ namespace harmonia::ui::arrangement
         });
 
         menu.addSubMenu ("Add marker here", names);
+
+        if (! tempoChange.has_value())
+            addTempoItems (menu, beat, std::nullopt);
+
         menu.addSeparator();
         addBarItems (menu, std::max (0.0, clickedBeat.value_or (beat)));
         return menu;
@@ -237,13 +323,23 @@ namespace harmonia::ui::arrangement
     void ArrangementRuler::mouseDown (const juce::MouseEvent& e)
     {
         draggedMarker.reset();
-        markerMoved = false;
-        const auto marker = findMarkerAt (e.position);
+        draggedTempo.reset();
+        markerMoved = tempoMoved = false;
+        const auto tempoChange = findTempoChangeAt (e.position);
+        const auto marker = tempoChange.has_value() ? std::nullopt : findMarkerAt (e.position);
 
         if (e.mods.isPopupMenu())
         {
-            createMenu (snapped (e), marker, view.xToBeat (e.position.x)).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this)
-                                                                                      .withMousePosition());
+            createMenu (snapped (e), marker, view.xToBeat (e.position.x), tempoChange)
+                .showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMousePosition());
+            return;
+        }
+
+        // A tempo change: drag it.
+        if (tempoChange.has_value())
+        {
+            draggedTempo = tempoChange;
+            dragOffsetBeats = model.getTempoChanges()[(size_t) *tempoChange].beat - view.xToBeat (e.position.x);
             return;
         }
 
@@ -264,6 +360,31 @@ namespace harmonia::ui::arrangement
 
     void ArrangementRuler::mouseDrag (const juce::MouseEvent& e)
     {
+        if (draggedTempo.has_value())
+        {
+            const auto changes = model.getTempoChanges();
+
+            if (! e.mouseWasDraggedSinceMouseDown() || *draggedTempo >= (int) changes.size())
+                return;
+
+            const auto mode = e.mods.isAltDown() ? snap::Mode::none : model.getSnap();
+            const auto beat = std::max (0.0, snap::snapNearest (view.xToBeat (e.position.x) + dragOffsetBeats, mode,
+                                                                model.getSnapContext()));
+
+            if (std::abs (beat - changes[(size_t) *draggedTempo].beat) > 1.0e-9)
+            {
+                // One undo step for the whole drag.
+                if (! tempoMoved)
+                    model.getProject().beginGesture ("Move tempo change");
+
+                tempoMoved = true;
+                model.moveTempoChange (*draggedTempo, beat);
+                repaint();
+            }
+
+            return;
+        }
+
         if (draggedMarker.has_value())
         {
             if (! e.mouseWasDraggedSinceMouseDown())
@@ -308,6 +429,13 @@ namespace harmonia::ui::arrangement
 
     void ArrangementRuler::mouseUp (const juce::MouseEvent& e)
     {
+        if (draggedTempo.has_value())
+        {
+            draggedTempo.reset();
+            repaint();
+            return;
+        }
+
         if (draggedMarker.has_value())
         {
             // A click on a marker plays from there.
@@ -333,6 +461,15 @@ namespace harmonia::ui::arrangement
     {
         if (e.position.y >= markerLaneHeight || e.mods.isPopupMenu())
             return;
+
+        // On a tempo change: type its tempo.
+        if (const auto tempoChange = findTempoChangeAt (e.position))
+        {
+            if (onAskTempo != nullptr)
+                onAskTempo (model.getTempoChanges()[(size_t) *tempoChange].beat, tempoChange);
+
+            return;
+        }
 
         // On a marker: rename it. Elsewhere in the lane: a new one there.
         if (const auto marker = findMarkerAt (e.position))

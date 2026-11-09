@@ -3,6 +3,7 @@
 #include "TestSession.h"
 #include "audio/Instruments.h"
 #include "core/Project.h"
+#include "core/TempoChanges.h"
 #include "ui/DragNumber.h"
 #include "ui/MainComponent.h"
 
@@ -149,5 +150,131 @@ TEST_SUITE ("ui: tempo")
         CHECK (f.main->getArrangementModel().getBeatsPerBar() == doctest::Approx (3.0));
         f.project->undo();
         CHECK (f.project->getBeatsPerBar() == 4);
+    }
+}
+
+TEST_SUITE ("ui: tempo changes")
+{
+    namespace changes = core::tempo_changes;
+
+    std::optional<juce::PopupMenu::Item> findItem (const juce::PopupMenu& menu, const juce::String& text)
+    {
+        for (juce::PopupMenu::MenuItemIterator it (menu, true); it.next();)
+            if (it.getItem().text.startsWith (text))
+                return it.getItem();
+
+        return std::nullopt;
+    }
+
+    juce::MouseEvent mouseAt (juce::Component& component, juce::Point<float> position, bool dragged)
+    {
+        const juce::ModifierKeys left (juce::ModifierKeys::leftButtonModifier);
+        return { juce::Desktop::getInstance().getMainMouseSource(), position, left, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                 &component, &component, juce::Time::getCurrentTime(), position, juce::Time::getCurrentTime(), 1, dragged };
+    }
+
+    TEST_CASE ("the ruler: tempo changes are flags to drag; the menu adds, glides and removes them")
+    {
+        MainFixture f;
+        auto& model = f.main->getArrangementModel();
+        auto& edit = f.project->getEdit();
+        auto& ruler = f.main->getArrangement().getRuler();
+        auto& view = f.main->getArrangement().getView();
+        f.project->clearUndoHistory();
+
+        // The menu of the ruler offers a change where it was clicked (not at the very start).
+        CHECK (findItem (ruler.createMenu (8.0, std::nullopt), "Tempo change here...")->isEnabled);
+        CHECK_FALSE (findItem (ruler.createMenu (0.0, std::nullopt), "Tempo change here...")->isEnabled);
+
+        CHECK (model.addTempoChange (8.0, 90.0) == 1);
+        CHECK (model.addTempoChange (16.0, 150.0) == 2);
+        CHECK (f.project->getUndoDescription() == "Tempo change");
+        dispatch();
+
+        // Its flag is in the markers' strip at its beat; the first tempo has none.
+        const juce::Point<float> onFlag (view.beatToX (8.0) + 4.0f, 6.0f);
+        REQUIRE (ruler.findTempoChangeAt (onFlag).has_value());
+        CHECK (*ruler.findTempoChangeAt (onFlag) == 1);
+        CHECK_FALSE (ruler.findTempoChangeAt ({ view.beatToX (0.0) + 4.0f, 6.0f }).has_value());
+        CHECK_FALSE (ruler.findTempoChangeAt ({ onFlag.x, 30.0f }).has_value());      // on the bar numbers
+        CHECK (f.main->createComponentSnapshot (f.main->getLocalBounds()).isValid());
+
+        // Dragged two bars later: one undo step, and not past the next change.
+        f.project->clearUndoHistory();
+        ruler.mouseDown (mouseAt (ruler, onFlag, false));
+        ruler.mouseDrag (mouseAt (ruler, { view.beatToX (10.0) + 4.0f, 6.0f }, true));
+        ruler.mouseDrag (mouseAt (ruler, { view.beatToX (12.0) + 4.0f, 6.0f }, true));
+        ruler.mouseDrag (mouseAt (ruler, { view.beatToX (40.0) + 4.0f, 6.0f }, true));
+        CHECK (model.getTempoChanges()[1].beat == doctest::Approx (16.0 - changes::minGapBeats));
+        ruler.mouseDrag (mouseAt (ruler, { view.beatToX (12.0) + 4.0f, 6.0f }, true));
+        ruler.mouseUp (mouseAt (ruler, { view.beatToX (12.0) + 4.0f, 6.0f }, true));
+        CHECK (model.getTempoChanges()[1].beat == doctest::Approx (12.0));
+        CHECK (f.project->getUndoDescription() == "Move tempo change");
+        f.project->undo();
+        CHECK (model.getTempoChanges()[1].beat == doctest::Approx (8.0));
+        CHECK_FALSE (f.project->canUndo());
+
+        // The menu of a flag.
+        const auto index = 1;
+        auto menu = ruler.createMenu (8.0, std::nullopt, 8.0, index);
+        CHECK (findItem (menu, "Set tempo...").has_value());
+        CHECK_FALSE (findItem (menu, "Tempo change here...").has_value());
+        REQUIRE (findItem (menu, "Glide to it from the tempo before").has_value());
+        CHECK_FALSE (findItem (menu, "Glide to it from the tempo before")->isTicked);
+        findItem (menu, "Glide to it from the tempo before")->action();
+        CHECK (model.getTempoChanges()[1].gradual);
+        CHECK (findItem (ruler.createMenu (8.0, std::nullopt, 8.0, index), "Glide to it from the tempo before")->isTicked);
+        f.project->undo();
+        CHECK_FALSE (model.getTempoChanges()[1].gradual);
+
+        model.setTempoChangeBpm (1, 72.5);
+        CHECK (model.getTempoChanges()[1].bpm == doctest::Approx (72.5));
+
+        findItem (ruler.createMenu (8.0, std::nullopt, 8.0, 2), "Remove tempo change")->action();
+        CHECK (model.getTempoChanges().size() == 2);
+        f.project->undo();
+        CHECK (model.getTempoChanges().size() == 3);
+        CHECK (changes::getAll (edit)[2].bpm == doctest::Approx (150.0));
+    }
+
+    TEST_CASE ("a typed tempo: a number within the limits, with a comma or \"bpm\" too")
+    {
+        using ui::arrangement::Arrangement;
+        CHECK (*Arrangement::parseTempo ("90") == doctest::Approx (90.0));
+        CHECK (*Arrangement::parseTempo (" 92,5 bpm") == doctest::Approx (92.5));
+        CHECK_FALSE (Arrangement::parseTempo ("fast").has_value());
+        CHECK_FALSE (Arrangement::parseTempo ("").has_value());
+        CHECK_FALSE (Arrangement::parseTempo ("5").has_value());
+        CHECK_FALSE (Arrangement::parseTempo ("900").has_value());
+    }
+
+    TEST_CASE ("the tempo box shows and sets the tempo where the song is")
+    {
+        MainFixture f;
+        auto& model = f.main->getArrangementModel();
+        auto& edit = f.project->getEdit();
+        auto& bar = f.main->getTransportBar();
+        auto& transport = f.main->getTransport();
+        model.addTempoChange (8.0, 90.0);
+        f.project->clearUndoHistory();
+
+        bar.refresh();
+        CHECK (bar.getTempoChangeIndex() == 0);
+        CHECK (bar.getTempoBox().getValue() == doctest::Approx (120.0));
+
+        // After the change (beat 8 is at 4 seconds).
+        transport.setPositionSeconds (6.0);
+        bar.refresh();
+        CHECK (bar.getTempoChangeIndex() == 1);
+        CHECK (bar.getTempoBox().getValue() == doctest::Approx (90.0));
+
+        bar.getTempoBox().typeValue ("100");
+        CHECK (changes::getAll (edit)[1].bpm == doctest::Approx (100.0));
+        CHECK (changes::getAll (edit)[0].bpm == doctest::Approx (120.0));
+        CHECK (f.project->getTempoBpm() == doctest::Approx (120.0));    // the song's first tempo
+
+        f.project->undo();
+        CHECK (changes::getAll (edit)[1].bpm == doctest::Approx (90.0));
+        transport.setPositionSeconds (0.0);
     }
 }

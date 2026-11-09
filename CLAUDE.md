@@ -78,6 +78,9 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Запись звука: готовность/вход — только через `audio::AudioInputs`; запись — `audio::Transport` (`recordsAudio`).
   Тесты записи и живого звука — `test::AudioRig` (`tests/TestAudioRig.h`: свой `core::Session` с
   `HostedAudioDeviceInterface`, тест сам гонит звук и меряет выход), общий тестовый движок без устройств не трогать.
+- Смены темпа по ходу песни — только через `core::tempo_changes` (держит клипы, ноты и автоматизацию на
+  долях; не `tempoSequence.insertTempo` напрямую). Темп «на всю песню» больше не один: где нужен темп
+  в месте — `tempo_changes::getBpmAt`, длины считать в долях. Размер по-прежнему один (`getTimeSig (0)`).
 - Дубли аудиоклипа — только через `core::takes` (не `te::WaveAudioClip::setCurrentTake`: дубли Tracktion
   требуют его проектов и рендерят в фоне). Запись по кругу включает `Transport::setRecordsTakes`.
 - Автоматизация — только через `audio::automation` (доли и 0..1; правки в текущую транзакцию undo — жест

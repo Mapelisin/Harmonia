@@ -5,20 +5,36 @@ namespace harmonia::core::audio_tempo
 {
     namespace
     {
-        /** The song's beats per second where the clip starts (the tempo is one for the whole song). */
+        /** The song's beats per second where the clip starts (its offset is counted at that tempo). */
         double getSongBeatsPerSecond (const te::Clip& clip)
         {
             return clip.edit.tempoSequence.getBeatsPerSecondAt (clip.getPosition().getStart());
         }
 
-        /** Sets the clip's length and offset scaled by `factor`, its start kept. */
-        void scaleTime (te::AudioClipBase& clip, double factor)
+        double getLengthBeats (const te::Clip& clip)
+        {
+            return (clip.getEndBeat() - clip.getStartBeat()).inBeats();
+        }
+
+        /** The clip from its start for that many beats of the song (whatever the tempo does on
+            the way), its offset scaled by `offsetFactor`. */
+        void setLengthBeats (te::AudioClipBase& clip, double beats, double offsetFactor)
+        {
+            const auto& tempo = clip.edit.tempoSequence;
+            const auto position = clip.getPosition();
+            const auto start = position.getStart();
+            const auto end = tempo.toTime (tempo.toBeats (start) + te::BeatDuration::fromBeats (beats));
+            const auto offset = te::TimeDuration::fromSeconds (position.getOffset().inSeconds() * offsetFactor);
+            clip.setPosition (te::ClipPosition { { start, end }, offset });
+        }
+
+        /** The clip from its start for that many seconds, its offset scaled. */
+        void setLengthSeconds (te::AudioClipBase& clip, double seconds, double offsetFactor)
         {
             const auto position = clip.getPosition();
             const auto start = position.getStart();
-            const auto length = te::TimeDuration::fromSeconds (position.getLength().inSeconds() * factor);
-            const auto offset = te::TimeDuration::fromSeconds (position.getOffset().inSeconds() * factor);
-            clip.setPosition (te::ClipPosition { { start, start + length }, offset });
+            const auto offset = te::TimeDuration::fromSeconds (position.getOffset().inSeconds() * offsetFactor);
+            clip.setPosition (te::ClipPosition { { start, start + te::TimeDuration::fromSeconds (seconds) }, offset });
         }
     }
 
@@ -87,21 +103,23 @@ namespace harmonia::core::audio_tempo
             // Following first: until then the clip can't be longer than the file at its own speed.
             if (previous.has_value())
             {
-                scaleTime (clip, bpm / *previous);
+                setLengthBeats (clip, getLengthBeats (clip) * bpm / *previous, bpm / *previous);
             }
             else
             {
+                const auto seconds = clip.getPosition().getLength().inSeconds();
                 clip.setAutoTempo (true);
-                scaleTime (clip, bpm / 60.0 / songBps);
+                setLengthBeats (clip, seconds * bpm / 60.0, bpm / 60.0 / songBps);
             }
 
             audio_clips::prepareForPlayback (clip);
         }
         else if (const auto previous = getLoopBpm (clip))
         {
-            const auto factor = songBps / (*previous / 60.0);
+            // Its beats played at the loop's own tempo again.
+            const auto seconds = getLengthBeats (clip) / (*previous / 60.0);
             clip.setAutoTempo (false);
-            scaleTime (clip, factor);
+            setLengthSeconds (clip, seconds, songBps / (*previous / 60.0));
             audio_clips::prepareForPlayback (clip);
         }
     }

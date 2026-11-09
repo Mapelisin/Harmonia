@@ -49,6 +49,9 @@ namespace harmonia::ui
         /** A tap of the Tap button at `seconds`: from the second tap on, sets the tempo. */
         void tap (double seconds);
 
+        /** The tempo change in effect where the song is (what the tempo box sets). */
+        int getTempoChangeIndex() const;
+
         /** Time signature n/4 (one undo step). */
         void setBeatsPerBar (int);
 

@@ -1,10 +1,12 @@
 #include <doctest.h>
 
 #include "TestAudioFiles.h"
+#include "TestSession.h"
 #include "core/Clips.h"
 #include "core/MidiFiles.h"
 #include "core/NoteEditor.h"
 #include "core/Project.h"
+#include "core/TempoChanges.h"
 #include "core/Tracks.h"
 
 using namespace harmonia;
@@ -273,5 +275,42 @@ TEST_SUITE ("core::midi_files")
         // Nothing to write without notes.
         auto empty = core::Project::createEmpty (test::session());
         CHECK (midi_files::writeSong (*empty, temp.getFile ("Nothing.mid")).startsWith ("Nothing to export"));
+    }
+}
+
+TEST_SUITE ("core::midi files: tempo changes")
+{
+    TEST_CASE ("the song's file has every tempo change at its beat")
+    {
+        harmonia::test::TempFolder temp;
+        auto project = harmonia::core::Project::createEmpty (harmonia::test::session());
+        auto& edit = project->getEdit();
+        auto& track = *project->getTracks().getFirst();
+        project->setTempoBpm (120.0);
+        auto* clip = project->addMidiClip (track, 0.0, 16.0, "Notes");
+        REQUIRE (clip != nullptr);
+        clip->getSequence().addNote (60, te::BeatPosition::fromBeats (0.0), te::BeatDuration::fromBeats (1.0), 100, 0, nullptr);
+        harmonia::core::tempo_changes::add (edit, 8.0, 60.0);
+
+        const auto file = temp.getFile ("Song.mid");
+        REQUIRE (harmonia::core::midi_files::writeSong (*project, file).isEmpty());
+
+        juce::FileInputStream in (file);
+        juce::MidiFile midi;
+        REQUIRE (midi.readFrom (in));
+        REQUIRE (midi.getNumTracks() >= 1);
+
+        std::vector<std::pair<double, double>> tempos;     // beat, BPM
+
+        for (auto* event : *midi.getTrack (0))
+            if (event->message.isTempoMetaEvent())
+                tempos.push_back ({ event->message.getTimeStamp() / midi.getTimeFormat(),
+                                    60.0 / event->message.getTempoSecondsPerQuarterNote() });
+
+        REQUIRE (tempos.size() == 2);
+        CHECK (tempos[0].first == doctest::Approx (0.0));
+        CHECK (tempos[0].second == doctest::Approx (120.0));
+        CHECK (tempos[1].first == doctest::Approx (8.0));
+        CHECK (tempos[1].second == doctest::Approx (60.0));
     }
 }
