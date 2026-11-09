@@ -108,20 +108,29 @@ namespace harmonia::ui::arrangement
         if (focusedAudioClip.get() != &clip)
         {
             focusedAudioClip = &clip;
+            clipsDirty = true;
             changed();
         }
 
         setCurrent (dynamic_cast<te::AudioTrack*> (clip.getClipTrack()), nullptr);
     }
 
-    te::Clip* ArrangementModel::getFocusedAudioClip() const
+    te::AudioClipBase* ArrangementModel::getFocusedAudioClip() const
     {
-        auto* clip = focusedAudioClip.get();
+        auto* track = getCurrentTrack();
 
-        if (clip == nullptr || ! clips::isInEdit (*clip) || clip->getClipTrack() != getCurrentTrack())
+        if (track == nullptr)
             return nullptr;
 
-        return clip;
+        if (auto* clip = dynamic_cast<te::AudioClipBase*> (focusedAudioClip.get());
+            clip != nullptr && clips::isInEdit (*clip) && clip->getClipTrack() == track)
+            return clip;
+
+        for (auto* clip : clips::getClips (*track))
+            if (auto* audio = dynamic_cast<te::AudioClipBase*> (clip))
+                return audio;
+
+        return nullptr;
     }
 
     void ArrangementModel::setCurrent (te::AudioTrack* track, te::MidiClip* clip)
@@ -169,7 +178,10 @@ namespace harmonia::ui::arrangement
         {
             drawn.clear();
             const auto tracks = getTracks();
-            auto* open = getOpenClip();
+            te::Clip* open = getOpenClip();
+
+            if (open == nullptr)
+                open = getFocusedAudioClip();
 
             for (int i = 0; i < tracks.size(); ++i)
             {

@@ -292,9 +292,12 @@ TEST_SUITE ("sound browser")
             juce::PNGImageFormat().writeImageToStream (image, out);
         }
 
+        // F7: the editor of the current track, the audio track the sounds went onto.
         CHECK (main->keyPressed (juce::KeyPress (juce::KeyPress::F7Key)));
         CHECK_FALSE (main->getFilePreview().isPlaying());
-        CHECK (main->getPianoRoll().isVisible());
+        CHECK (main->editsAudio());
+        CHECK (main->getAudioEditor().isVisible());
+        CHECK_FALSE (main->getPianoRoll().isVisible());
 
         main.reset();
     }

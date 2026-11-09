@@ -54,7 +54,7 @@ namespace harmonia::ui::arrangement
         {
             const auto near = [position] (juce::Point<float> centre)
             {
-                const auto reach = handleSize / 2.0f + 2.0f;
+                const auto reach = audio_handles::size / 2.0f + 2.0f;
                 return std::abs (position.x - centre.x) <= reach && std::abs (position.y - centre.y) <= reach;
             };
 
@@ -427,10 +427,8 @@ namespace harmonia::ui::arrangement
             const auto top = view.trackToY (model.indexOf (clip->getClipTrack()));
             const auto body = juce::Rectangle<float> (0.0f, top + 2.0f + clipHeaderHeight, 1.0f,
                                                       view.trackHeight - 4.0f - clipHeaderHeight);
-            const auto db = yToGain (grabbedGainY + (p.position.y - downPointer.position.y), body);
-
-            // Fine steps: 0.1 dB, and a little catch at 0 dB.
-            clips::setGainDb (*clip, std::abs (db) < 0.3f ? 0.0f : std::round (db * 10.0f) / 10.0f);
+            const auto db = audio_handles::yToGain (grabbedGainY + (p.position.y - downPointer.position.y), body);
+            clips::setGainDb (*clip, audio_handles::roundDraggedGain (db));
             return;
         }
 
@@ -465,21 +463,12 @@ namespace harmonia::ui::arrangement
             return {};
 
         if (kind == Kind::gain)
-        {
-            const auto db = clips::getGainDb (*clip);
-            const auto text = db <= clips::silentGainDb + 0.5f ? juce::String ("Gain: silent")
-                                                               : "Gain " + juce::String (db > 0.0f ? "+" : "") + juce::String (db, 1) + " dB";
-            return std::pair { text, handles->gain };
-        }
+            return std::pair { audio_handles::describeGain (clips::getGainDb (*clip)), handles->gain };
 
-        const auto beats = kind == Kind::fadeIn ? clips::getFadeInBeats (*clip) : clips::getFadeOutBeats (*clip);
-        const auto seconds = kind == Kind::fadeIn ? clip->getFadeIn().inSeconds() : clip->getFadeOut().inSeconds();
-        const auto text = juce::String (kind == Kind::fadeIn ? "Fade in " : "Fade out ") + juce::String (beats, 2)
-                        + " beats (" + juce::String (seconds, 2) + " s)";
-        return std::pair { text, kind == Kind::fadeIn ? handles->fadeIn : handles->fadeOut };
+        return std::pair { audio_handles::describeFade (*clip, kind == Kind::fadeIn), kind == Kind::fadeIn ? handles->fadeIn : handles->fadeOut };
     }
 
-    std::optional<ArrangementGestures::AudioHandles> ArrangementGestures::getAudioHandles (const DrawnClip& d, const ArrangementView& view)
+    std::optional<audio_handles::Handles> ArrangementGestures::getAudioHandles (const DrawnClip& d, const ArrangementView& view)
     {
         auto* clip = dynamic_cast<te::AudioClipBase*> (d.clip);
 
@@ -490,38 +479,12 @@ namespace harmonia::ui::arrangement
         const auto r = juce::Rectangle<float>::leftTopRightBottom (view.beatToX (d.startBeat), top + 2.0f,
                                                                    view.beatToX (d.endBeat), top + view.trackHeight - 2.0f);
 
-        if (r.getWidth() < minHandlesWidth)
+        if (r.getWidth() < audio_handles::minWidth)
             return {};
 
-        AudioHandles h;
-        h.body = r.withTrimmedTop (clipHeaderHeight);
-        h.fadeInX = view.beatToX (d.startBeat + clips::getFadeInBeats (*clip));
-        h.fadeOutX = view.beatToX (d.endBeat - clips::getFadeOutBeats (*clip));
-
-        const auto half = handleSize / 2.0f;
-        const auto y = h.body.getY() + half + 1.0f;
-        h.fadeIn = { juce::jlimit (h.body.getX() + half + 1.0f, h.body.getRight() - half - 1.0f, h.fadeInX), y };
-        h.fadeOut = { juce::jlimit (h.body.getX() + half + 1.0f, h.body.getRight() - half - 1.0f, h.fadeOutX), y };
-        h.gain = { h.body.getCentreX(), gainToY (clips::getGainDb (*clip), h.body) };
-        return h;
-    }
-
-    float ArrangementGestures::gainToY (float db, juce::Rectangle<float> body)
-    {
-        const auto half = handleSize / 2.0f + 1.0f;
-        const auto position = juce::jlimit (0.0f, 1.0f, te::decibelsToVolumeFaderPosition (db));
-        return body.getBottom() - half - position * std::max (1.0f, body.getHeight() - 2.0f * half);
-    }
-
-    float ArrangementGestures::yToGain (float y, juce::Rectangle<float> body)
-    {
-        const auto half = handleSize / 2.0f + 1.0f;
-        const auto position = juce::jlimit (0.0f, 1.0f, (body.getBottom() - half - y) / std::max (1.0f, body.getHeight() - 2.0f * half));
-
-        if (position <= 0.0f)
-            return clips::silentGainDb;
-
-        return juce::jlimit (clips::silentGainDb, clips::maxGainDb, te::volumeFaderPositionToDB (position));
+        return audio_handles::place (*clip, r.withTrimmedTop (clipHeaderHeight),
+                                     view.beatToX (d.startBeat + clips::getFadeInBeats (*clip)),
+                                     view.beatToX (d.endBeat - clips::getFadeOutBeats (*clip)));
     }
 
     void ArrangementGestures::eraseAlong (juce::Point<float> from, juce::Point<float> to)

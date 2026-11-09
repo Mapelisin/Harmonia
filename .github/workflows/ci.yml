@@ -59,7 +59,7 @@ jobs:
 
       - name: Keep the installer
         if: matrix.preset == 'windows-release'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Harmonia-Setup
           path: build/installer/Harmonia-Setup-*.exe

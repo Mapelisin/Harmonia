@@ -128,7 +128,9 @@ namespace harmonia::ui
                                                 { Panel::automation, "Automation", "F8" },
                                                 { Panel::mixer, "Mixer", "F9" } })
         {
-            menu.addItem (makeItem (name, key, true, on (main, [p = panel] (MainComponent& m) { m.showLowerPanel (p); }), panel == shown));
+            // The editor is the piano roll, or the audio clip editor on an audio track.
+            const auto title = panel == Panel::pianoRoll ? main.getEditorName() : juce::String (name);
+            menu.addItem (makeItem (title, key, true, on (main, [p = panel] (MainComponent& m) { m.showLowerPanel (p); }), panel == shown));
         }
 
         menu.addSeparator();

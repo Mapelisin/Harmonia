@@ -215,10 +215,16 @@ namespace harmonia::ui
 
         if (editor == nullptr)
         {
-            g.setColour (theme::colour::textPrimary);
+            // Disabled (nothing it could change now): greyed, like a disabled button.
+            g.setColour (isEnabled() ? theme::colour::textPrimary : theme::colour::textSecondary.withAlpha (0.6f));
             g.setFont (juce::FontOptions (theme::size::fontSize));
             g.drawText (getText(), getLocalBounds().reduced (4, 0), juce::Justification::centred, true);
         }
+    }
+
+    void DragNumber::enablementChanged()
+    {
+        repaint();
     }
 
     void DragNumber::resized()

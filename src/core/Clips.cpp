@@ -392,9 +392,9 @@ namespace harmonia::core::clips
         return clip.getGainDB();
     }
 
-    void setGainDb (te::AudioClipBase& clip, float db)
+    void setGainDb (te::AudioClipBase& clip, float db, float maxDb)
     {
-        clip.setGainDB (juce::jlimit (silentGainDb, maxGainDb, db));
+        clip.setGainDB (juce::jlimit (silentGainDb, std::max (silentGainDb, maxDb), db));
     }
 
     std::optional<float> getPeakDb (const te::AudioClipBase& clip)

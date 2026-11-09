@@ -2,6 +2,7 @@
 
 #include "ui/arrangement/ArrangementModel.h"
 #include "ui/arrangement/ArrangementView.h"
+#include "ui/AudioClipHandles.h"
 
 namespace harmonia::ui::arrangement
 {
@@ -55,23 +56,9 @@ namespace harmonia::ui::arrangement
         /** A clip's header (name, menu mark) is as tall as the menu mark; its body is below. */
         static constexpr float clipHeaderHeight = menuMarkSize;
 
-        /** The fade and gain handles of audio clips at least `minHandlesWidth` pixels wide. */
-        static constexpr float handleSize = 7.0f, minHandlesWidth = 40.0f;
-
-        struct AudioHandles
-        {
-            juce::Rectangle<float> body;                // the waveform, below the header
-            juce::Point<float> fadeIn, fadeOut, gain;   // handle centres
-            float fadeInX = 0.0f, fadeOutX = 0.0f;      // where the fades end and start
-        };
-
-        /** Where an audio clip's handles are drawn (clip-area pixels); none for other clips and
-            clips too narrow for them. */
-        static std::optional<AudioHandles> getAudioHandles (const DrawnClip&, const ArrangementView&);
-
-        /** The clip's gain as a height in its body: the fader's curve, top +6 dB, bottom silence. */
-        static float gainToY (float db, juce::Rectangle<float> body);
-        static float yToGain (float y, juce::Rectangle<float> body);
+        /** Where an audio clip's handles are drawn (clip-area pixels; the body is the waveform below
+            the header); none for other clips and clips too narrow for them. */
+        static std::optional<audio_handles::Handles> getAudioHandles (const DrawnClip&, const ArrangementView&);
 
         /** While a fade or the gain is dragged: what to show by the handle ("Fade in 1.5 beats"). */
         std::optional<std::pair<juce::String, juce::Point<float>>> getReadout();

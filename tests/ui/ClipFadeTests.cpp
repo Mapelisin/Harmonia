@@ -10,6 +10,7 @@
 using namespace harmonia;
 using namespace harmonia::ui::arrangement;
 namespace clips = core::clips;
+namespace audio_handles = harmonia::ui::audio_handles;
 
 namespace
 {
@@ -44,7 +45,7 @@ namespace
             project->clearUndoHistory();
         }
 
-        ArrangementGestures::AudioHandles handles()
+        audio_handles::Handles handles()
         {
             for (const auto& d : model.getClips())
                 if (d.clip == clip)
@@ -227,7 +228,7 @@ TEST_SUITE ("audio clips: fades and gain")
         f.drag (h.gain, h.gain + juce::Point<float> (0.0f, 8.0f));
         const auto lowered = clips::getGainDb (*f.clip);
         CHECK (lowered < -2.0f);
-        CHECK (ArrangementGestures::gainToY (lowered, h.body) == doctest::Approx (h.gain.y + 8.0f).epsilon (0.05));
+        CHECK (audio_handles::gainToY (lowered, h.body) == doctest::Approx (h.gain.y + 8.0f).epsilon (0.05));
 
         f.project->undo();
         CHECK (clips::getGainDb (*f.clip) == doctest::Approx (0.0f));
@@ -249,10 +250,10 @@ TEST_SUITE ("audio clips: fades and gain")
         const juce::Rectangle<float> body (0.0f, 20.0f, 100.0f, 38.0f);
 
         for (const auto db : { -24.0f, -6.0f, 0.0f, 3.0f, 6.0f })
-            CHECK (ArrangementGestures::yToGain (ArrangementGestures::gainToY (db, body), body) == doctest::Approx (db).epsilon (0.01));
+            CHECK (audio_handles::yToGain (audio_handles::gainToY (db, body), body) == doctest::Approx (db).epsilon (0.01));
 
-        CHECK (ArrangementGestures::yToGain (body.getBottom() + 10.0f, body) == clips::silentGainDb);
-        CHECK (ArrangementGestures::yToGain (body.getY() - 10.0f, body) == doctest::Approx (clips::maxGainDb));
+        CHECK (audio_handles::yToGain (body.getBottom() + 10.0f, body) == clips::silentGainDb);
+        CHECK (audio_handles::yToGain (body.getY() - 10.0f, body) == doctest::Approx (clips::maxGainDb));
 
         FadeFixture f;
         f.view.pixelsPerBeat = 4.0;   // the clip is 32 pixels wide

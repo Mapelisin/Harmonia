@@ -18,6 +18,7 @@
 #include "ui/StatusBar.h"
 #include "ui/TransportBar.h"
 #include "ui/arrangement/Arrangement.h"
+#include "ui/audioeditor/AudioEditor.h"
 #include "ui/automation/AutomationPanel.h"
 #include "ui/browser/SoundBrowser.h"
 #include "ui/mixer/Mixer.h"
@@ -27,8 +28,9 @@ namespace harmonia::ui
 {
     /** Root of the main window: the menu bar (with the audio load), the transport, the current
         track's instrument, the arrangement and below it (a draggable divider between them)
-        the sound browser, the piano roll of the open clip, the automation of the current track
-        or the mixer (F6 / F7 / F8 / F9), and the status bar. */
+        the sound browser, the editor (the piano roll of the open clip, or on an audio track the
+        audio clip editor), the automation of the current track or the mixer (F6 / F7 / F8 / F9),
+        and the status bar. */
     class MainComponent final : public juce::Component,
                                 public juce::DragAndDropContainer,
                                 private pianoroll::PianoRollModel::Listener,
@@ -78,6 +80,7 @@ namespace harmonia::ui
         static juce::String describeBars (core::note_ops::BeatRange, double beatsPerBar);
         arrangement::Arrangement& getArrangement() noexcept             { return arrangement; }
         pianoroll::PianoRoll& getPianoRoll() noexcept                   { return pianoRoll; }
+        audioeditor::AudioEditor& getAudioEditor() noexcept             { return audioEditor; }
         NoteInput& getNoteInput() noexcept                              { return noteInput; }
         audio::Transport& getTransport() noexcept                       { return transport; }
         TransportBar& getTransportBar() noexcept                        { return transportBar; }
@@ -133,10 +136,17 @@ namespace harmonia::ui
         /** Help → About: the version, and what Harmonia is made with. */
         void showAbout();
 
-        /** What the lower part of the window shows. */
+        /** What the lower part of the window shows. `pianoRoll` is the editor of the current
+            track: the piano roll, or on an audio track the audio clip editor. */
         enum class LowerPanel { pianoRoll, automation, mixer, sounds };
         void showLowerPanel (LowerPanel);
         LowerPanel getLowerPanel() const noexcept                       { return lowerPanel; }
+
+        /** The current track is an audio track: its editor (F7) is the audio clip editor. */
+        bool editsAudio() const;
+
+        /** The name of the editor panel: "Piano roll" or "Audio clip". */
+        juce::String getEditorName() const;
 
     private:
         /** Plays edited notes on the current track's instrument, but not over the playing song. */
@@ -186,6 +196,7 @@ namespace harmonia::ui
         juce::StretchableLayoutManager splitLayout;
         juce::StretchableLayoutResizerBar splitter { &splitLayout, 1, false };
         pianoroll::PianoRoll pianoRoll { pianoRollModel, transport };
+        audioeditor::AudioEditor audioEditor { arrangementModel, transport };
         mixer::Mixer mixer { session, arrangementModel };
         automation::AutomationPanel automationPanel { arrangementModel, arrangement.getView(), transport };
         browser::SoundBrowser soundBrowser { session, filePreview };
@@ -197,6 +208,9 @@ namespace harmonia::ui
         // A plugin's process crashed (a warning; the mixer marks its slot) or came back.
         audio::plugin_safety::Watcher pluginWatcher { session, [this] (te::Plugin& plugin) { pluginStatusChanged (plugin); } };
         void pluginStatusChanged (te::Plugin&);
+
+        /** The piano roll or the audio clip editor, as the current track needs. */
+        void updateEditor();
 
         /** The arrangement's current track or open clip changed: the piano roll, the keyboards
             and the instrument row follow. */

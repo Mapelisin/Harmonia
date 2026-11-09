@@ -95,6 +95,12 @@ Tracktion останавливает воспроизведение, когда 
   с инструментом. Звуковые файлы: `Project::addAudioClip` (клип ссылается на файл на месте),
   `ArrangementModel::importAudio` (куда класть), перетаскивание — `Arrangement` (`FileDragAndDropTarget`),
   волна — `ClipArea` (`te::SmartThumbnail` на клип, только видимая часть).
+- **Редактор аудиоклипа** (`src/ui/audioeditor`, нижняя панель аудиодорожки вместо piano roll):
+  `AudioEditorModel` — клип (`ArrangementModel::getFocusedAudioClip`: кликнутый или первый на дорожке), перевод
+  секунд файла в доли песни и обратно (как рисует аранжировка: от начала файла в песне, со скоростью растяжения)
+  и команды; `AudioEditorGestures` — мышь (края, фейды, громкость, клик, колесо); `View` — масштаб в секундах
+  файла; `WaveformView` и `AudioEditor` (панель) только рисуют и передают ввод. Ручки фейдов и громкости —
+  общие с аранжировкой (`ui/AudioClipHandles`: где они, что делает перетаскивание, как выглядят).
 - **Запись звука:** `audio/AudioInputs` — готовность к записи и вход аудиодорожки (свойства дорожки
   `hRecordArmed`, `hRecordInput`) и назначение входов движка (`InputDeviceInstance::setTarget` +
   `setRecordingEnabled`) только готовым дорожкам. `audio::Transport::play` записывает (`TransportControl::record`),

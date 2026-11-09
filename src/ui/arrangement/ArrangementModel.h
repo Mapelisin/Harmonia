@@ -76,6 +76,11 @@ namespace harmonia::ui::arrangement
             current (nothing open) and is what clip mode plays. */
         void focusClip (te::Clip&);
 
+        /** The audio clip shown in the audio clip editor, played in clip mode and drawn as open:
+            the one last clicked on the current track, else the current track's first audio clip
+            (none on an instrument track). */
+        te::AudioClipBase* getFocusedAudioClip() const;
+
         /** The current track or the open clip changed (called right away, before returning). */
         std::function<void()> onCurrentChanged;
 
@@ -325,7 +330,6 @@ namespace harmonia::ui::arrangement
 
         void setCurrent (te::AudioTrack*, te::MidiClip*);
         te::AudioTrack* createAudioTrack (const juce::String& name, te::Track* after);
-        te::Clip* getFocusedAudioClip() const;
         void changed();
         void validateCurrent();
 

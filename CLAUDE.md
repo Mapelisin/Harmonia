@@ -62,6 +62,9 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Аранжировка: поведение — в `ui/arrangement/ArrangementModel` и `ArrangementGestures` (тесты без окна).
   Открытый клип и текущая дорожка живут в `ArrangementModel`; `MainComponent` переносит их в piano roll.
   Перед сменой клипа piano roll — `NoteInput::finishTake()`.
+- Редактор аудиоклипа (нижняя панель аудиодорожки): поведение — `ui/audioeditor/AudioEditorModel` (клип —
+  `ArrangementModel::getFocusedAudioClip`, секунды файла ↔ доли песни, команды) и `AudioEditorGestures` (мышь),
+  тесты без окна. Ручки фейдов и громкости аудиоклипа (и в аранжировке) — общий `ui/AudioClipHandles`.
 - Несохранённые изменения считает `core::Project` (любое действие в undo); `clearUndoHistory()` и `save()` их сбрасывают.
 - Undo/redo — только через `core::Project::undo/redo` (не `UndoManager` напрямую): Tracktion после undo не
   переносит значения в параметры плагинов, `Project` их синхронизирует.

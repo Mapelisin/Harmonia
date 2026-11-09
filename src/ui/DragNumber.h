@@ -52,6 +52,7 @@ namespace harmonia::ui
         //==============================================================================
         void paint (juce::Graphics&) override;
         void resized() override;
+        void enablementChanged() override;
         void mouseDown (const juce::MouseEvent&) override;
         void mouseDrag (const juce::MouseEvent&) override;
         void mouseUp (const juce::MouseEvent&) override;

@@ -35,6 +35,8 @@ add_library(harmonia_ui STATIC
     RecentProjects.cpp
     ExportOptions.h
     ExportOptions.cpp
+    AudioClipHandles.h
+    AudioClipHandles.cpp
     settings/AudioSettingsTab.h
     settings/AudioSettingsTab.cpp
     settings/MidiSettingsTab.h
@@ -82,6 +84,16 @@ add_library(harmonia_ui STATIC
     arrangement/TrackHeaders.cpp
     arrangement/Arrangement.h
     arrangement/Arrangement.cpp
+    audioeditor/AudioEditorView.h
+    audioeditor/AudioEditorView.cpp
+    audioeditor/AudioEditorModel.h
+    audioeditor/AudioEditorModel.cpp
+    audioeditor/AudioEditorGestures.h
+    audioeditor/AudioEditorGestures.cpp
+    audioeditor/WaveformView.h
+    audioeditor/WaveformView.cpp
+    audioeditor/AudioEditor.h
+    audioeditor/AudioEditor.cpp
     mixer/LevelMeter.h
     mixer/LevelMeter.cpp
     mixer/ChannelStrip.h

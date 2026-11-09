@@ -138,11 +138,12 @@ namespace harmonia::core::clips
     FadeShape getFadeShape (const te::AudioClipBase&);
     void setFadeShape (te::AudioClipBase&, FadeShape);
 
-    /** Gain of the clip before its track's effects and fader; at most +6 dB, -100 is silence. */
-    float getGainDb (const te::AudioClipBase&);
-    void setGainDb (te::AudioClipBase&, float db);
+    inline constexpr float maxGainDb = 6.0f, silentGainDb = -100.0f, maxNormalizeGainDb = 24.0f;
 
-    inline constexpr float maxGainDb = 6.0f, silentGainDb = -100.0f;
+    /** Gain of the clip before its track's effects and fader; -100 is silence. At most `maxDb`:
+        the gain handle goes up to +6 dB, a typed gain up to +24 (as far as normalize goes). */
+    float getGainDb (const te::AudioClipBase&);
+    void setGainDb (te::AudioClipBase&, float db, float maxDb = maxGainDb);
 
     /** The loudest point of what the clip plays from its file, in dBFS, before the clip's gain
         (-100 for silence); nothing if the file can't be read (yet). */
@@ -152,8 +153,6 @@ namespace harmonia::core::clips
         +24 dB: a quiet recording can be brought up further than the gain handle goes). False if
         the file can't be read or is silent. */
     bool normalize (te::AudioClipBase&, float targetDb = -0.1f);
-
-    inline constexpr float maxNormalizeGainDb = 24.0f;
 
     /** Plays the sound backwards. The engine writes a reversed copy in the background: until
         it is there (`isReversing`) the clip is silent. */

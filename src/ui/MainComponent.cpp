@@ -62,7 +62,7 @@ namespace harmonia::ui
 
         // The lower part shows the sounds, the piano roll, the automation or the mixer (F6 / F7 / F8 / F9).
         soundsTab.setTooltip ("Sounds: your folders of samples and loops; listen, then drag them onto the tracks (F6)");
-        pianoRollTab.setTooltip ("Piano roll of the open clip (F7)");
+        pianoRollTab.setTooltip ("Piano roll of the open clip; on an audio track, the audio clip editor (F7)");
         automationTab.setTooltip ("Automation: lines that change volume, pan, sends or effects over the song (F8)");
         mixerTab.setTooltip ("Mixer: effects, volume, pan (F9)");
 
@@ -79,6 +79,20 @@ namespace harmonia::ui
         mixerTab.onClick = [this] { showLowerPanel (LowerPanel::mixer); };
         soundsTab.onClick = [this] { showLowerPanel (LowerPanel::sounds); };
         soundBrowser.onAddToSong = [this] (const juce::File& file) { addFilesAtPlayhead ({ file }); };
+
+        // A click on the audio clip editor's waveform moves the playhead (the play mode stays).
+        audioEditor.onPositionChosen = [this] (double beat)
+        {
+            transport.setPositionSeconds (project.getEdit().tempoSequence.toTime (te::BeatPosition::fromBeats (beat)).inSeconds());
+            transportBar.refresh();
+        };
+        audioEditor.onMessage = [this] (const juce::String& text, bool isProblem)
+        {
+            if (isProblem)
+                statusBar.setWarning (text);
+            else
+                statusBar.setMessage (text);
+        };
 
         // The automation lane scrolls and zooms with the arrangement.
         arrangement.onViewChanged = [this] { automationPanel.getLane().repaint(); };
@@ -116,6 +130,7 @@ namespace harmonia::ui
                                                                  &statusBar })
             addAndMakeVisible (c);
 
+        addChildComponent (audioEditor);
         addChildComponent (mixer);
         addChildComponent (automationPanel);
         addChildComponent (soundBrowser);
@@ -183,9 +198,9 @@ namespace harmonia::ui
         }
 
         trackNameLabel.setText (track != nullptr ? track->getName() : juce::String ("No track"), juce::dontSendNotification);
-        pianoRoll.getGrid().setEmptyText (track != nullptr && core::tracks::isAudio (*track)
-                                              ? "Audio track: its clips are sound files. The piano roll edits the MIDI clips of instrument tracks."
-                                              : pianoroll::NoteGrid::getDefaultEmptyText());
+
+        updateEditor();
+        audioEditor.refresh();
 
         if (clip != pianoRollModel.getClip())
         {
@@ -256,7 +271,33 @@ namespace harmonia::ui
 
     bool MainComponent::isArrangementTheEditTarget() const
     {
-        return arrangement.hasKeyboardFocus (true) || lowerPanel != LowerPanel::pianoRoll;
+        return arrangement.hasKeyboardFocus (true) || lowerPanel != LowerPanel::pianoRoll || editsAudio();
+    }
+
+    void MainComponent::updateEditor()
+    {
+        // An audio track's clips are sound files: the audio clip editor takes the piano roll's place.
+        const auto audio = editsAudio();
+        const auto pianoRollHadFocus = pianoRoll.hasKeyboardFocus (true);
+
+        pianoRollTab.setButtonText (getEditorName());
+        pianoRoll.setVisible (lowerPanel == LowerPanel::pianoRoll && ! audio);
+        audioEditor.setVisible (lowerPanel == LowerPanel::pianoRoll && audio);
+
+        // Keys keep working when the piano roll goes.
+        if (pianoRollHadFocus && ! pianoRoll.isVisible() && isShowing())
+            grabKeyboardFocus();
+    }
+
+    bool MainComponent::editsAudio() const
+    {
+        auto* track = arrangementModel.getCurrentTrack();
+        return track != nullptr && core::tracks::isAudio (*track);
+    }
+
+    juce::String MainComponent::getEditorName() const
+    {
+        return editsAudio() ? "Audio clip" : "Piano roll";
     }
 
     void MainComponent::playFrom (double beat)
@@ -351,6 +392,7 @@ namespace harmonia::ui
 
         juce::Component* parts[] = { &arrangement, &splitter, &pianoRoll };
         splitLayout.layOutComponents (parts, 3, area.getX(), area.getY(), area.getWidth(), area.getHeight(), true, true);
+        audioEditor.setBounds (pianoRoll.getBounds());
         mixer.setBounds (pianoRoll.getBounds());
         automationPanel.setBounds (pianoRoll.getBounds());
         soundBrowser.setBounds (pianoRoll.getBounds());
@@ -358,15 +400,16 @@ namespace harmonia::ui
 
     void MainComponent::showLowerPanel (LowerPanel panel)
     {
-        const auto hadFocus = pianoRoll.hasKeyboardFocus (true) || mixer.hasKeyboardFocus (true)
+        const auto hadFocus = pianoRoll.hasKeyboardFocus (true) || mixer.hasKeyboardFocus (true) || audioEditor.hasKeyboardFocus (true)
                            || automationPanel.hasKeyboardFocus (true) || soundBrowser.hasKeyboardFocus (true);
+        const auto audio = editsAudio();
 
         lowerPanel = panel;
         pianoRollTab.setToggleState (panel == LowerPanel::pianoRoll, juce::dontSendNotification);
         automationTab.setToggleState (panel == LowerPanel::automation, juce::dontSendNotification);
         mixerTab.setToggleState (panel == LowerPanel::mixer, juce::dontSendNotification);
         soundsTab.setToggleState (panel == LowerPanel::sounds, juce::dontSendNotification);
-        pianoRoll.setVisible (panel == LowerPanel::pianoRoll);
+        updateEditor();
         automationPanel.setVisible (panel == LowerPanel::automation);
         mixer.setVisible (panel == LowerPanel::mixer);
         soundBrowser.setVisible (panel == LowerPanel::sounds);
@@ -378,11 +421,11 @@ namespace harmonia::ui
             automationPanel.refresh();
 
         // Keys keep working: the piano roll takes them back, or this component does.
-        if (panel == LowerPanel::pianoRoll && (hadFocus || ! hasKeyboardFocus (true)) && pianoRoll.isShowing())
+        if (panel == LowerPanel::pianoRoll && ! audio && (hadFocus || ! hasKeyboardFocus (true)) && pianoRoll.isShowing())
             pianoRoll.grabKeyboardFocus();
         else if (panel == LowerPanel::sounds && soundBrowser.isShowing())
             soundBrowser.getList().grabKeyboardFocus();     // Up / Down go through the sounds
-        else if (panel != LowerPanel::pianoRoll && hadFocus && isShowing())
+        else if ((panel != LowerPanel::pianoRoll || audio) && hadFocus && isShowing())
             grabKeyboardFocus();
     }
 
@@ -515,8 +558,9 @@ namespace harmonia::ui
             return pianoRoll.keyPressed (key);
 
         // The arrangement had its go already (it's focused): its keys don't edit notes.
-        // Nor do they while the piano roll is hidden behind the mixer or the automation.
-        if (arrangement.hasKeyboardFocus (true) || lowerPanel != LowerPanel::pianoRoll)
+        // Nor do they while the piano roll is hidden behind the mixer, the automation or the
+        // audio clip editor.
+        if (arrangement.hasKeyboardFocus (true) || lowerPanel != LowerPanel::pianoRoll || editsAudio())
             return false;
 
         // Editing shortcuts work even when the piano roll itself doesn't have focus.
