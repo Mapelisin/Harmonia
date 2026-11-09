@@ -2,6 +2,60 @@
 
 namespace harmonia::audio
 {
+    namespace
+    {
+        const juce::String foldersKey ("pluginFolders");
+
+        void saveFolders (core::Session& session, const juce::StringArray& folders)
+        {
+            auto& settings = session.getEngine().getPropertyStorage().getPropertiesFile();
+            settings.setValue (foldersKey, folders.joinIntoString ("\n"));
+            settings.saveIfNeeded();
+        }
+    }
+
+    juce::StringArray PluginScanner::getOwnFolders (core::Session& session)
+    {
+        auto folders = juce::StringArray::fromLines (session.getEngine().getPropertyStorage().getPropertiesFile().getValue (foldersKey));
+        folders.removeEmptyStrings();
+        return folders;
+    }
+
+    void PluginScanner::addFolder (core::Session& session, const juce::File& folder)
+    {
+        if (! folder.isDirectory())
+            return;
+
+        auto folders = getOwnFolders (session);
+
+        for (const auto& path : folders)
+            if (juce::File (path) == folder)
+                return;
+
+        folders.add (folder.getFullPathName());
+        saveFolders (session, folders);
+    }
+
+    void PluginScanner::removeFolder (core::Session& session, const juce::String& path)
+    {
+        auto folders = getOwnFolders (session);
+        folders.removeString (path, true);
+        saveFolders (session, folders);
+    }
+
+    juce::FileSearchPath PluginScanner::getSearchPath (core::Session& session, juce::AudioPluginFormat& format)
+    {
+        auto path = format.getDefaultLocationsToSearch();
+
+        // Plugins in folders of one's own are VST3 (other formats are found where the system keeps them).
+        if (format.getName() == "VST3")
+            for (const auto& folder : getOwnFolders (session))
+                if (const juce::File directory (folder); directory.isDirectory())
+                    path.addIfNotAlreadyThere (directory);
+
+        return path;
+    }
+
     PluginScanner::PluginScanner (core::Session& s)
         : juce::Thread ("Harmonia plugin scan"),
           session (s)
@@ -68,7 +122,7 @@ namespace harmonia::audio
         for (auto* format : getFormatsToScan())
         {
             // No dead-man's-pedal file: crashes are contained by the child process.
-            juce::PluginDirectoryScanner scanner (list, *format, format->getDefaultLocationsToSearch(),
+            juce::PluginDirectoryScanner scanner (list, *format, getSearchPath (session, *format),
                                                   true, juce::File(), false);
 
             while (! threadShouldExit())

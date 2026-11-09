@@ -1,6 +1,7 @@
 #include "audio/Effects.h"
 
 #include "audio/Limiter.h"
+#include "audio/PluginSafety.h"
 #include "audio/Pump.h"
 
 namespace harmonia::audio::effects
@@ -223,5 +224,8 @@ namespace harmonia::audio::effects
     void showEditor (te::Plugin& plugin)
     {
         plugin.showWindowExplicitly();
+
+        // Tracktion gives Harmonia's window the focus back, which would hide another process's window.
+        plugin_safety::bringWindowToFront (plugin);
     }
 }

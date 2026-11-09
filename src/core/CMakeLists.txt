@@ -54,4 +54,4 @@ add_library(harmonia_core STATIC
     AudioClips.cpp)
 
 harmonia_configure_target(harmonia_core)
-target_link_libraries(harmonia_core PUBLIC harmonia_juce)
+target_link_libraries(harmonia_core PUBLIC harmonia_sandbox)

@@ -545,6 +545,19 @@ namespace harmonia::ui
         statusBar.setMessage (text);
     }
 
+    void MainComponent::pluginStatusChanged (te::Plugin& plugin)
+    {
+        if (&plugin.edit != &project.getEdit())
+            return;
+
+        if (audio::plugin_safety::getStatus (plugin) == audio::plugin_safety::Status::crashed)
+            showWarning (audio::plugin_safety::describeCrash (plugin));
+        else
+            showWarning ({});
+
+        mixer.refresh();
+    }
+
     //==============================================================================
     juce::PopupMenu MainComponent::createFileMenu()
     {

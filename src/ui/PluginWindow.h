@@ -26,6 +26,23 @@ namespace harmonia::ui
         JUCE_DECLARE_NON_COPYABLE (PluginWindow)
     };
 
+    /** Stands for the window of a plugin that runs in a process of its own: that process shows
+        the plugin's editor, this is what Tracktion keeps as its window (never on screen). Closing
+        one closes the other. */
+    class RemotePluginWindow final : public juce::Component
+    {
+    public:
+        /** Shows the editor: nullptr (and nothing shown) if it couldn't. */
+        static std::unique_ptr<RemotePluginWindow> open (te::Plugin&);
+        ~RemotePluginWindow() override;
+
+    private:
+        explicit RemotePluginWindow (te::Plugin&);
+        te::Plugin& plugin;
+
+        JUCE_DECLARE_NON_COPYABLE (RemotePluginWindow)
+    };
+
     /** Tells Tracktion how Harmonia opens plugin windows. */
     class HarmoniaUIBehaviour final : public te::UIBehaviour
     {

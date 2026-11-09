@@ -29,6 +29,7 @@ add_subdirectory("${HARMONIA_TE_DIR}/modules" "${CMAKE_BINARY_DIR}/external/trac
 include(cmake/HarmoniaJuce.cmake)
 include(cmake/HarmoniaTarget.cmake)
 
+add_subdirectory(src/sandbox)
 add_subdirectory(src/core)
 add_subdirectory(src/audio)
 add_subdirectory(src/ui)

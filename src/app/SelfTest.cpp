@@ -12,6 +12,7 @@
 #include "audio/Groups.h"
 #include "audio/NotePreview.h"
 #include "audio/PlaybackClock.h"
+#include "audio/PluginSafety.h"
 #include "audio/PluginScanner.h"
 #include "audio/Sidechain.h"
 #include "audio/Transport.h"
@@ -990,6 +991,10 @@ namespace harmonia::app
 
                 if (error.isNotEmpty())
                     return;
+
+                if (auto* plugin = audio::instruments::get (track))
+                    report.check (audio::plugin_safety::getStatus (*plugin) == audio::plugin_safety::Status::running,
+                                  "'" + instrument->name + "' runs in a process of its own (its crash won't stop Harmonia)");
 
                 if (options.useDevice)
                 {

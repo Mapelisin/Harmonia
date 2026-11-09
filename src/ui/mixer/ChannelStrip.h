@@ -55,6 +55,9 @@ namespace harmonia::ui::mixer
             (sidechain), remove. */
         juce::PopupMenu makeSlotMenu (te::Plugin&);
 
+        /** Starts a crashed plugin again, and says how that went. */
+        void reload (te::Plugin&);
+
         /** Something to tell the user (e.g. a plugin failed to load). */
         std::function<void (const juce::String& text, bool isProblem)> onMessage;
 

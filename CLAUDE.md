@@ -75,6 +75,12 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Группы — только через `audio::groups` (выход дорожки в группу — `setGroup`; хранится по ID, патч 0002),
   сайдчейн — через `audio::sidechain` (удаляешь дорожку — `forgetSource`). Рендер части песни берёт источники
   сайдчейна беззвучно (`sidechain::getSourcesFor`).
+- Внешние плагины работают в своих процессах (`src/sandbox`, решение 23): `Session` подменяет
+  `PluginManager::createPluginInstance`, процесс — тот же exe с `--harmonia-plugin-host` (и тестовая программа
+  тоже: `main` проверяет ключ первым). Упавшие плагины, перезапуск, окно поверх — `audio::plugin_safety`; окно
+  плагина показывает его процесс (`ui::RemotePluginWindow`), у такого плагина не звать `createEditor`. Тесты
+  плагинов — тестовые плагины формата HarmoniaTest (`tests/sandbox/TestPlugins.h`, умеют падать и зависать;
+  песня с ними — `TestPluginSong.h`). Свои папки скана — `PluginScanner::addFolder` (настройки).
 - Эффекты — через `audio::effects` (порядок в списке плагинов: инструмент, эффекты, громкость, индикатор).
   Ручки плагинов — через `audio::PluginControl` (у Chorus/Phaser/времени Delay/типа фильтра нет параметров).
 - Исправления Tracktion — патчи в `external/patches/tracktion_engine` (решение 21), их накладывает настройка CMake.

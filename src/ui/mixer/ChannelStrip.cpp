@@ -1,6 +1,7 @@
 #include "ui/mixer/ChannelStrip.h"
 #include "ui/TrackColours.h"
 #include "audio/Groups.h"
+#include "audio/PluginSafety.h"
 #include "audio/Sends.h"
 #include "audio/Sidechain.h"
 #include "core/Tracks.h"
@@ -69,10 +70,17 @@ namespace harmonia::ui::mixer
         void refresh()
         {
             auto* source = audio::sidechain::getSource (*plugin);
-            setTooltip (effects::getDisplayName (*plugin) + (source != nullptr ? " (listens to " + source->getName() + ")" : juce::String())
-                        + ": click to open, the light turns it off and on, right-click for more");
+
+            if (hasCrashed())
+                setTooltip (audio::plugin_safety::describeCrash (*plugin));
+            else
+                setTooltip (effects::getDisplayName (*plugin) + (source != nullptr ? " (listens to " + source->getName() + ")" : juce::String())
+                            + ": click to open, the light turns it off and on, right-click for more");
+
             repaint();
         }
+
+        bool hasCrashed() const    { return audio::plugin_safety::getStatus (*plugin) == audio::plugin_safety::Status::crashed; }
 
         void paint (juce::Graphics& g) override
         {
@@ -81,6 +89,17 @@ namespace harmonia::ui::mixer
 
             g.setColour (bypassed ? theme::mixer::slotBypassed : theme::mixer::slot);
             g.fillRoundedRectangle (area, theme::size::cornerRadius);
+
+            // A crashed plugin: a warning frame and a "!" where the light is; a click reloads it.
+            if (hasCrashed())
+            {
+                g.setColour (theme::colour::warning);
+                g.drawRoundedRectangle (area.reduced (0.5f), theme::size::cornerRadius, 1.0f);
+                g.setFont (juce::FontOptions (theme::size::smallFontSize, juce::Font::bold));
+                g.drawText ("!", area.removeFromLeft ((float) ledWidth), juce::Justification::centred, false);
+                g.drawText (effects::getDisplayName (*plugin), area.reduced (2.0f, 0.0f), juce::Justification::centredLeft, true);
+                return;
+            }
 
             auto led = area.removeFromLeft ((float) ledWidth).withSizeKeepingCentre (6.0f, 6.0f);
             g.setColour (bypassed ? theme::colour::textSecondary.withAlpha (0.4f) : theme::mixer::slotOn);
@@ -103,6 +122,8 @@ namespace harmonia::ui::mixer
         {
             if (e.mods.isPopupMenu())
                 owner.makeSlotMenu (*plugin).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this));
+            else if (hasCrashed())
+                owner.reload (*plugin);
             else if (e.x < ledWidth)
                 toggleBypass();
             else
@@ -704,6 +725,17 @@ namespace harmonia::ui::mixer
 
         juce::PopupMenu menu;
         menu.addSectionHeader (effects::getDisplayName (plugin));
+
+        if (audio::plugin_safety::getStatus (plugin) == audio::plugin_safety::Status::crashed)
+        {
+            menu.addItem ("Reload plugin", [safe, p = te::Plugin::Ptr (&plugin)]
+            {
+                if (safe != nullptr)
+                    safe->reload (*p);
+            });
+            menu.addSeparator();
+        }
+
         menu.addItem ("Open", run ([] (te::Plugin& p) { effects::showEditor (p); }));
         menu.addItem (bypassed ? "Turn on" : "Turn off (bypass)", run ([bypassed] (te::Plugin& p) { effects::setBypassed (p, ! bypassed); }));
         menu.addSeparator();
@@ -738,6 +770,18 @@ namespace harmonia::ui::mixer
         menu.addSeparator();
         menu.addItem ("Remove", run ([] (te::Plugin& p) { effects::remove (p); }));
         return menu;
+    }
+
+    void ChannelStrip::reload (te::Plugin& plugin)
+    {
+        const auto pluginName = effects::getDisplayName (plugin);
+
+        if (const auto error = audio::plugin_safety::reload (plugin); error.isNotEmpty())
+            tell (pluginName + " could not be reloaded: " + error, true);
+        else
+            tell (pluginName + " reloaded", false);
+
+        refresh();
     }
 
     void ChannelStrip::tell (const juce::String& text, bool isProblem)

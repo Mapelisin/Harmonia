@@ -4,6 +4,8 @@
 #include "audio/DrumKit.h"
 #include "audio/Limiter.h"
 #include "audio/Pump.h"
+#include "sandbox/Host.h"
+#include "sandbox/Platform.h"
 #include "ui/PluginWindow.h"
 #include "ui/Theme.h"
 
@@ -17,12 +19,19 @@ namespace harmonia::app
             return commandLine.contains ("PluginScan");
         }
 
+        /** ...and as the process each plugin runs in. */
+        std::optional<sandbox::Host::Options> getPluginHostOptions (const juce::String& commandLine)
+        {
+            return sandbox::Host::fromCommandLine (juce::StringArray::fromTokens (commandLine, true));
+        }
+
         std::unique_ptr<core::Session> createSession (bool openDevices)
         {
             core::Session::Options options;
             options.openDevices = openDevices;
             options.uiBehaviour = std::make_unique<ui::HarmoniaUIBehaviour>();
             options.scanPluginsOutOfProcess = true;
+            options.pluginHost = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
             auto session = std::make_unique<core::Session> (std::move (options));
             audio::limiter::registerType (session->getEngine());
             audio::pump::registerType (session->getEngine());
@@ -40,13 +49,23 @@ namespace harmonia::app
         bool moreThanOneInstanceAllowed() override
         {
             const auto commandLine = getCommandLineParameters();
-            return isPluginScanChild (commandLine) || SelfTestOptions::fromCommandLine (commandLine).has_value();
+            return isPluginScanChild (commandLine) || getPluginHostOptions (commandLine).has_value()
+                    || SelfTestOptions::fromCommandLine (commandLine).has_value();
         }
 
         void initialise (const juce::String& commandLine) override
         {
             if (te::PluginManager::startChildProcessPluginScan (commandLine))
                 return;
+
+            if (auto hostOptions = getPluginHostOptions (commandLine))
+            {
+                sandbox::platform::prepareHostProcess();
+                hostOptions->addFormats = [] (juce::AudioPluginFormatManager& formats) { juce::addDefaultFormatsToManager (formats); };
+                hostOptions->onFinished = [] { juce::JUCEApplication::quit(); };
+                pluginHost = std::make_unique<sandbox::Host> (std::move (*hostOptions));
+                return;
+            }
 
             juce::LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
 
@@ -84,6 +103,7 @@ namespace harmonia::app
 
         void shutdown() override
         {
+            pluginHost.reset();
             mainWindow.reset();
             session.reset();
             juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
@@ -101,6 +121,7 @@ namespace harmonia::app
         ui::theme::LookAndFeel lookAndFeel;
         std::unique_ptr<core::Session> session;
         std::unique_ptr<MainWindow> mainWindow;
+        std::unique_ptr<sandbox::Host> pluginHost;
     };
 }
 

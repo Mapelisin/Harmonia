@@ -5,6 +5,7 @@
 #include "audio/FilePreview.h"
 #include "audio/MidiInputs.h"
 #include "audio/NotePreview.h"
+#include "audio/PluginSafety.h"
 #include "audio/PlaybackClock.h"
 #include "audio/Transport.h"
 #include "core/Project.h"
@@ -190,6 +191,10 @@ namespace harmonia::ui
         StatusBar statusBar { session };
         ShortcutsPanel shortcuts;
         std::unique_ptr<juce::FileChooser> importChooser;
+
+        // A plugin's process crashed (a warning; the mixer marks its slot) or came back.
+        audio::plugin_safety::Watcher pluginWatcher { session, [this] (te::Plugin& plugin) { pluginStatusChanged (plugin); } };
+        void pluginStatusChanged (te::Plugin&);
 
         /** The arrangement's current track or open clip changed: the piano roll, the keyboards
             and the instrument row follow. */

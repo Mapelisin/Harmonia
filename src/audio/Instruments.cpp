@@ -1,5 +1,6 @@
 #include "audio/Instruments.h"
 #include "audio/DrumKit.h"
+#include "audio/Effects.h"
 #include "core/Drums.h"
 #include "core/Tracks.h"
 
@@ -134,6 +135,6 @@ namespace harmonia::audio::instruments
     void showEditor (te::AudioTrack& track)
     {
         if (auto* plugin = get (track))
-            plugin->showWindowExplicitly();
+            effects::showEditor (*plugin);
     }
 }

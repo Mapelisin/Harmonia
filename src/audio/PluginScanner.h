@@ -23,7 +23,8 @@ namespace harmonia::audio
             std::function<void (int numPluginsKnown)> onFinished;
         };
 
-        /** Scans the standard plugin folders. Does nothing if a scan is already running. */
+        /** Scans the standard plugin folders and the user's own (see addFolder). Does nothing if
+            a scan is already running. */
         void startScan (Callbacks);
         void cancelScan();
         bool isScanning() const;
@@ -31,13 +32,24 @@ namespace harmonia::audio
         /** Scans one plugin file on the calling thread and returns what it contains. */
         juce::Array<juce::PluginDescription> scanFile (const juce::String& path);
 
+        /** Folders of plugins outside the standard ones (E:\VST...) a scan also looks in, every
+            folder inside them included: chosen by the user, kept in the settings. */
+        static juce::StringArray getOwnFolders (core::Session&);
+        static void addFolder (core::Session&, const juce::File&);
+        static void removeFolder (core::Session&, const juce::String& path);
+
+        /** Where a scan looks for this format's plugins: its standard folders, then the user's. */
+        static juce::FileSearchPath getSearchPath (core::Session&, juce::AudioPluginFormat&);
+
+        /** The plugin formats a scan looks for (VST3; AU on macOS). */
+        juce::Array<juce::AudioPluginFormat*> getFormatsToScan() const;
+
     private:
         core::Session& session;
         Callbacks callbacks;
         juce::WeakReference<PluginScanner> self;
 
         void run() override;
-        juce::Array<juce::AudioPluginFormat*> getFormatsToScan() const;
 
         JUCE_DECLARE_WEAK_REFERENCEABLE (PluginScanner)
         JUCE_DECLARE_NON_COPYABLE (PluginScanner)

@@ -1,4 +1,5 @@
 #include "core/Session.h"
+#include "sandbox/RemotePlugin.h"
 
 namespace harmonia::core
 {
@@ -51,6 +52,30 @@ namespace harmonia::core
                                                std::make_unique<HarmoniaEngineBehaviour> (openDevices,
                                                                                           options.scanPluginsOutOfProcess,
                                                                                           options.recordingsFolder));
+
+        if (options.pluginHost != juce::File())
+        {
+            pluginSandbox = std::make_unique<sandbox::Sandbox> (sandbox::Sandbox::Options { options.pluginHost,
+                                                                                           options.pluginHangLimitMs });
+            auto& plugins = engine->getPluginManager();
+
+            plugins.createPluginInstance = [this, &plugins] (const juce::PluginDescription& description, double sampleRate,
+                                                             int blockSize, juce::String& error)
+                -> std::unique_ptr<juce::AudioPluginInstance>
+            {
+                // A plugin whose file is gone needs no process to find that out.
+                for (auto* format : plugins.pluginFormatManager.getFormats())
+                {
+                    if (format->getName() == description.pluginFormatName && ! format->doesPluginStillExist (description))
+                    {
+                        error = "The plugin's file is missing: " + description.fileOrIdentifier;
+                        return {};
+                    }
+                }
+
+                return pluginSandbox->createInstance (description, sampleRate, blockSize, error);
+            };
+        }
     }
 
     juce::File Session::getFileForNewRecording (const te::Track& track, const juce::String& extension,

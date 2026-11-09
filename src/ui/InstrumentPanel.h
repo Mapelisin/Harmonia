@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/PluginSafety.h"
 #include "audio/PluginScanner.h"
 
 namespace harmonia::ui
@@ -28,12 +29,20 @@ namespace harmonia::ui
         juce::ComboBox instrumentBox;
         juce::TextButton editorButton { "Show editor" };
         juce::TextButton scanButton { "Scan plugins" };
+        juce::TextButton foldersButton { "Folders..." };
         juce::Label messageLabel;
+        std::unique_ptr<juce::FileChooser> folderChooser;
+
+        // The instrument's process crashed or came back: the editor button becomes "Reload" and back.
+        audio::plugin_safety::Watcher crashWatcher;
 
         void refreshList();
         void showCurrent();
+        void editorClicked();
         void instrumentChosen();
         void startScan();
+        void showFolders();
+        void chooseFolder();
         void showMessage (const juce::String&, bool isProblem);
 
         void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;

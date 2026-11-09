@@ -179,6 +179,47 @@ TEST_SUITE ("audio without a device")
 
         CHECK (scanner.scanFile (notAPlugin.getFile().getFullPathName()).isEmpty());
     }
+
+    TEST_CASE ("a scan also looks in the plugin folders of one's own, kept in the settings")
+    {
+        auto& session = test::session();
+        const auto before = audio::PluginScanner::getOwnFolders (session);
+        const juce::TemporaryFile folder;
+        REQUIRE (folder.getFile().createDirectory());
+
+        audio::PluginScanner::addFolder (session, folder.getFile());
+        audio::PluginScanner::addFolder (session, folder.getFile());
+        audio::PluginScanner::addFolder (session, folder.getFile().getChildFile ("missing"));
+
+        const auto own = audio::PluginScanner::getOwnFolders (session);
+        CHECK (own.size() == before.size() + 1);
+        CHECK (own.contains (folder.getFile().getFullPathName()));
+
+        audio::PluginScanner scanner (session);
+        auto* vst3 = scanner.getFormatsToScan().getFirst();
+        REQUIRE (vst3 != nullptr);
+
+        const auto searches = [&]
+        {
+            const auto path = audio::PluginScanner::getSearchPath (session, *vst3);
+
+            for (int i = 0; i < path.getNumPaths(); ++i)
+                if (path[i] == folder.getFile())
+                    return true;
+
+            return false;
+        };
+
+        CHECK (audio::PluginScanner::getSearchPath (session, *vst3).getNumPaths()
+                 == vst3->getDefaultLocationsToSearch().getNumPaths() + 1);
+        CHECK (searches());
+
+        audio::PluginScanner::removeFolder (session, folder.getFile().getFullPathName());
+        CHECK (audio::PluginScanner::getOwnFolders (session) == before);
+        CHECK (! searches());
+
+        folder.getFile().deleteRecursively();
+    }
 }
 
 TEST_SUITE ("audio::PlaybackClock")

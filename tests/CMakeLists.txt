@@ -3,6 +3,10 @@ add_executable(harmonia_tests
     TestSession.h
     TestAudioFiles.h
     TestAudioRig.h
+    sandbox/TestPlugins.h
+    sandbox/TestPlugins.cpp
+    sandbox/TestPluginSong.h
+    sandbox/SandboxTests.cpp
     core/TestProject.h
     core/ProjectTests.cpp
     core/NoteTests.cpp
@@ -40,11 +44,13 @@ add_executable(harmonia_tests
     audio/DrumKitTests.cpp
     audio/MixCheckTests.cpp
     audio/AudioTempoTests.cpp
+    audio/PluginSafetyTests.cpp
     ui/PianoRollTests.cpp
     ui/PianoRollViewTests.cpp
     ui/NoteInputTests.cpp
     ui/ArrangementTests.cpp
     ui/MixerTests.cpp
+    ui/PluginWindowTests.cpp
     ui/AudioClipTests.cpp
     ui/ClipEditTests.cpp
     ui/AutomationPanelTests.cpp
