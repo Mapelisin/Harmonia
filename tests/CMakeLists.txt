@@ -9,6 +9,7 @@ add_executable(harmonia_tests
     sandbox/SandboxTests.cpp
     core/TestProject.h
     core/ProjectTests.cpp
+    core/ProjectFilesTests.cpp
     core/NoteTests.cpp
     core/NoteEditorTests.cpp
     core/ClipLinksTests.cpp

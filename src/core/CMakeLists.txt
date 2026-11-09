@@ -24,6 +24,8 @@ add_library(harmonia_core STATIC
     MidiFiles.cpp
     Autosave.h
     Autosave.cpp
+    ProjectFiles.h
+    ProjectFiles.cpp
     NoteOps.h
     NoteOps.cpp
     NoteTools.h

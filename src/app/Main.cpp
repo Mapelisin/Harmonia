@@ -4,6 +4,7 @@
 #include "audio/DrumKit.h"
 #include "audio/Limiter.h"
 #include "audio/Pump.h"
+#include "core/ProjectFiles.h"
 #include "sandbox/Host.h"
 #include "sandbox/Platform.h"
 #include "ui/PluginWindow.h"
@@ -91,9 +92,7 @@ namespace harmonia::app
             // (double-clicked in Explorer).
             mainWindow->offerToRestore ([this, commandLine]
             {
-                if (const juce::File file (commandLine.unquoted().trim()); commandLine.isNotEmpty()
-                        && juce::File::isAbsolutePath (file.getFullPathName()) && file.existsAsFile()
-                        && file.hasFileExtension (MainWindow::fileExtension))
+                if (const auto file = core::project_files::fromCommandLine (commandLine); file != juce::File())
                     mainWindow->open (file);
             });
 
@@ -107,6 +106,22 @@ namespace harmonia::app
             mainWindow.reset();
             session.reset();
             juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
+        }
+
+        /** A project double-clicked while Harmonia is open: JUCE hands its command line here (the
+            second Harmonia quits), and it opens in this window after asking about unsaved changes. */
+        void anotherInstanceStarted (const juce::String& commandLine) override
+        {
+            if (mainWindow == nullptr)
+                return;
+
+            if (mainWindow->isMinimised())
+                mainWindow->setMinimised (false);
+
+            mainWindow->toFront (true);
+
+            if (const auto file = core::project_files::fromCommandLine (commandLine); file != juce::File())
+                mainWindow->openRecentProject (file);
         }
 
         void systemRequestedQuit() override

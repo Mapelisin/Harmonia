@@ -34,6 +34,9 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - C++: MSVC + CMake + Ninja из Visual Studio 2026 через `vcvars64.bat`.
 - **Одна команда:** `tools\build.cmd [windows-release|windows-debug]` — настройка, сборка и тесты (её же запускает CI).
   Пресеты — в `CMakePresets.json`. Программа: `build\windows-release\src\app\Harmonia_artefacts\Release\Harmonia.exe`.
+- Установщик (решение 25): после сборки Release — `tools\make-installer.cmd` (Inno Setup 6) → `build\installer`;
+  проверка — `tools\test-installer.ps1 -Installer <exe>` (ставит «для себя» во временную папку и удаляет; где Harmonia
+  установлена — отказывается). Версия — одна, в `CMakeLists.txt` (0.<номер этапа>.0); `AppId` в `.iss` не менять.
 - Структура: `src/core` (модель проекта, без GUI), `src/audio` (движок, устройства), `src/ui` (интерфейс),
   `src/app` (точка входа), `tests/` (doctest, по папке на модуль). JUCE+Tracktion компилируются один раз
   в библиотеку `harmonia_juce` (`cmake/HarmoniaJuce.cmake`); новые цели настраивать через `harmonia_configure_target`.

@@ -3,6 +3,7 @@
 #include "audio/ExportFormat.h"
 #include "core/Autosave.h"
 #include "core/Project.h"
+#include "core/ProjectFiles.h"
 #include "ui/FileCommands.h"
 #include "ui/RecentProjects.h"
 
@@ -38,7 +39,7 @@ namespace harmonia::app
         /** Where projects and exports go by default: Documents/Harmonia. */
         static juce::File getDefaultFolder();
 
-        static constexpr const char* fileExtension = ".harmonia";
+        static constexpr const char* fileExtension = core::project_files::extension;
 
         // ui::FileCommands
         void newProject() override;

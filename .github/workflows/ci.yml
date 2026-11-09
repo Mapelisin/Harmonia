@@ -41,3 +41,26 @@ jobs:
       - name: Build and test (${{ matrix.preset }})
         shell: cmd
         run: tools\build.cmd ${{ matrix.preset }}
+
+      # The installer of the Release build: made, installed, run, uninstalled, then kept for download.
+      - name: Installer
+        if: matrix.preset == 'windows-release'
+        shell: pwsh
+        run: |
+          $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe")
+          if (-not (Get-Command ISCC.exe -ErrorAction SilentlyContinue) -and -not ($iscc | Where-Object { Test-Path $_ })) {
+            choco install innosetup -y --no-progress
+          }
+          & tools\make-installer.cmd
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $setup = Get-ChildItem build\installer\Harmonia-Setup-*.exe | Select-Object -First 1
+          & tools\test-installer.ps1 -Installer $setup.FullName
+          exit $LASTEXITCODE
+
+      - name: Keep the installer
+        if: matrix.preset == 'windows-release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Harmonia-Setup
+          path: build/installer/Harmonia-Setup-*.exe
+          if-no-files-found: error
