@@ -1,8 +1,11 @@
 #include "ui/mixer/ChannelStrip.h"
 #include "ui/TrackColours.h"
+#include "audio/Groups.h"
 #include "audio/Sends.h"
+#include "audio/Sidechain.h"
 #include "core/Tracks.h"
 #include "ui/Theme.h"
+#include "ui/arrangement/TrackHeaders.h"
 
 namespace harmonia::ui::mixer
 {
@@ -10,7 +13,7 @@ namespace harmonia::ui::mixer
 
     namespace
     {
-        constexpr int nameHeight = 24, slotHeight = 20, panHeight = 58, valueHeight = 16, buttonRowHeight = 26;
+        constexpr int nameHeight = 24, slotHeight = 20, panHeight = 58, valueHeight = 16, buttonRowHeight = 26, outputHeight = 22;
         constexpr int ledWidth = 14, colourStripHeight = 3, meterWidth = 12;
         constexpr int sendHeight = 18, maxVisibleSendRows = 4;
 
@@ -58,10 +61,18 @@ namespace harmonia::ui::mixer
         Slot (ChannelStrip& o, te::Plugin& p)
             : owner (o), plugin (&p)
         {
-            setTooltip (effects::getDisplayName (p) + ": click to open, the light turns it off and on, right-click for more");
+            refresh();
         }
 
         te::Plugin& getPlugin() const noexcept   { return *plugin; }
+
+        void refresh()
+        {
+            auto* source = audio::sidechain::getSource (*plugin);
+            setTooltip (effects::getDisplayName (*plugin) + (source != nullptr ? " (listens to " + source->getName() + ")" : juce::String())
+                        + ": click to open, the light turns it off and on, right-click for more");
+            repaint();
+        }
 
         void paint (juce::Graphics& g) override
         {
@@ -75,15 +86,23 @@ namespace harmonia::ui::mixer
             g.setColour (bypassed ? theme::colour::textSecondary.withAlpha (0.4f) : theme::mixer::slotOn);
             g.fillEllipse (led);
 
-            g.setColour (bypassed ? theme::colour::textSecondary.withAlpha (0.6f) : theme::colour::textPrimary);
             g.setFont (juce::FontOptions (theme::size::smallFontSize));
+
+            // "SC": it listens to another track (the tooltip says which).
+            if (audio::sidechain::getSource (*plugin) != nullptr)
+            {
+                g.setColour (theme::mixer::sidechain.withAlpha (bypassed ? 0.5f : 1.0f));
+                g.drawText ("SC", area.removeFromRight (18.0f), juce::Justification::centred, false);
+            }
+
+            g.setColour (bypassed ? theme::colour::textSecondary.withAlpha (0.6f) : theme::colour::textPrimary);
             g.drawText (effects::getDisplayName (*plugin), area.reduced (2.0f, 0.0f), juce::Justification::centredLeft, true);
         }
 
         void mouseDown (const juce::MouseEvent& e) override
         {
             if (e.mods.isPopupMenu())
-                owner.showSlotMenu (*plugin);
+                owner.makeSlotMenu (*plugin).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this));
             else if (e.x < ledWidth)
                 toggleBypass();
             else
@@ -176,7 +195,7 @@ namespace harmonia::ui::mixer
     //==============================================================================
     void ChannelStrip::ClickWatcher::mouseDown (const juce::MouseEvent&)
     {
-        if (owner.track != nullptr && ! owner.isReturn())
+        if (owner.track != nullptr && ! owner.isBus())
             owner.model.setCurrentTrack (owner.track.get());
     }
 
@@ -282,6 +301,15 @@ namespace harmonia::ui::mixer
             addAndMakeVisible (solo);
         }
 
+        if (track != nullptr && ! isBus())
+        {
+            output.setTooltip ("Where this track plays: straight to the master, or through a group track "
+                               "(its effects and fader). Click to choose");
+            output.onClick = [this] { arrangement::makeOutputMenu (model, *track).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&output)); };
+            output.setWantsKeyboardFocus (false);
+            addAndMakeVisible (output);
+        }
+
         for (auto* c : std::initializer_list<juce::Component*> { &name, &slotView, &sendView, &pan, &panText, &volume, &volumeText, &meter })
             addAndMakeVisible (c);
 
@@ -292,6 +320,9 @@ namespace harmonia::ui::mixer
         if (isReturn())
             name.setTooltip ("Return track: plays what the tracks send to it (the send bars on their strips) "
                              "through its effects. Right-click for its menu");
+        else if (isGroup())
+            name.setTooltip ("Group track: plays the tracks set to it (the Output button on their strips) through "
+                             "its effects and fader. Right-click for its menu");
 
         addMouseListener (&clickWatcher, true);
         refresh();
@@ -315,12 +346,25 @@ namespace harmonia::ui::mixer
         if (isReturn())
             return theme::mixer::returnTrack;
 
+        if (isGroup())
+            return theme::mixer::group;
+
         return track_colours::getTrackColour (*track, model.indexOf (track.get()));
     }
 
     bool ChannelStrip::isReturn() const
     {
         return track != nullptr && core::tracks::isReturn (*track);
+    }
+
+    bool ChannelStrip::isGroup() const
+    {
+        return track != nullptr && core::tracks::isGroup (*track);
+    }
+
+    bool ChannelStrip::isBus() const
+    {
+        return track != nullptr && core::tracks::isBus (*track);
     }
 
     juce::Slider* ChannelStrip::getSendSlider (int index) const
@@ -340,13 +384,24 @@ namespace harmonia::ui::mixer
     {
         name.setText (isMaster() ? juce::String ("Master") : track->getName(), juce::dontSendNotification);
 
-        if (! isReturn())
+        if (! isBus())
             name.setTooltip (name.getText());
 
         refreshSlots();
         refreshSends();
         refreshValues();
+        refreshOutput();
         repaint();
+    }
+
+    void ChannelStrip::refreshOutput()
+    {
+        if (track == nullptr || isBus())
+            return;
+
+        auto* group = audio::groups::getGroup (*track);
+        output.setButtonText (juce::String (juce::CharPointer_UTF8 ("\xe2\x86\x92 ")) + (group != nullptr ? group->getName() : juce::String ("Master")));
+        output.setColour (juce::TextButton::textColourOffId, group != nullptr ? theme::mixer::group : theme::colour::textSecondary);
     }
 
     void ChannelStrip::refreshSends()
@@ -359,7 +414,7 @@ namespace harmonia::ui::mixer
             resized();
         }
 
-        // Only song tracks send (a return sending to a return could feed itself).
+        // Song and group tracks send (a return sending to a return could feed itself).
         juce::Array<te::AudioTrack*> targets;
 
         if (track != nullptr && ! isReturn())
@@ -406,7 +461,7 @@ namespace harmonia::ui::mixer
         else
         {
             for (auto* slot : slots)
-                slot->repaint();
+                slot->refresh();
         }
 
         addButton.setEnabled (effects::canAdd (getChain()));
@@ -453,6 +508,10 @@ namespace harmonia::ui::mixer
     {
         auto area = getLocalBounds().withTrimmedRight (1).withTrimmedTop (colourStripHeight).reduced (4, 0);
         name.setBounds (area.removeFromTop (nameHeight));
+
+        // Every strip keeps the output's row, so that the faders line up.
+        auto outputRow = area.removeFromBottom (outputHeight).reduced (0, 2);
+        output.setBounds (outputRow);
 
         auto buttons = area.removeFromBottom (buttonRowHeight).reduced (0, 3);
 
@@ -521,29 +580,35 @@ namespace harmonia::ui::mixer
     //==============================================================================
     void ChannelStrip::mouseDown (const juce::MouseEvent& e)
     {
-        if (e.mods.isPopupMenu() && isReturn())
-            showReturnMenu();
+        if (e.mods.isPopupMenu() && isBus())
+            showBusMenu();
     }
 
-    void ChannelStrip::showReturnMenu()
+    void ChannelStrip::showBusMenu()
     {
         juce::Component::SafePointer<ChannelStrip> safe (this);
+        const auto kind = isGroup() ? juce::String ("Group track ") : juce::String ("Return track ");
         juce::PopupMenu menu;
-        menu.addSectionHeader ("Return track " + track->getName());
-        menu.addItem ("Rename...", [safe] { if (safe != nullptr) safe->askToRenameReturn(); });
-        menu.addItem ("Delete (and the sends to it)", [safe, &project = model.getProject(), t = track]
+        menu.addSectionHeader (kind + track->getName());
+        menu.addItem ("Rename...", [safe] { if (safe != nullptr) safe->askToRenameBus(); });
+        menu.addItem (isGroup() ? "Delete (its tracks play to the master)" : "Delete (and the sends to it)",
+                      [safe, kind, &project = model.getProject(), t = track]
         {
-            audio::sends::removeReturnTrack (project, *t);
+            if (core::tracks::isGroup (*t))
+                audio::groups::removeGroup (project, *t);
+            else
+                audio::sends::removeReturnTrack (project, *t);
 
             if (safe != nullptr)
-                safe->tell ("Return track " + t->getName() + " deleted (Ctrl+Z brings it back)", false);
+                safe->tell (kind + t->getName() + " deleted (Ctrl+Z brings it back)", false);
         });
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&name));
     }
 
-    void ChannelStrip::askToRenameReturn()
+    void ChannelStrip::askToRenameBus()
     {
-        auto* window = new juce::AlertWindow ("Rename return track", {}, juce::MessageBoxIconType::NoIcon, this);
+        auto* window = new juce::AlertWindow (isGroup() ? "Rename group track" : "Rename return track", {},
+                                              juce::MessageBoxIconType::NoIcon, this);
         window->addTextEditor ("name", track->getName());
         window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
         window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
@@ -552,8 +617,15 @@ namespace harmonia::ui::mixer
         window->enterModalState (true, juce::ModalCallbackFunction::create (
             [safeWindow, &project = model.getProject(), t = track] (int result)
             {
-                if (result == 1 && safeWindow != nullptr && t->state.getParent().isValid())
-                    audio::sends::renameReturnTrack (project, *t, safeWindow->getTextEditorContents ("name"));
+                if (result != 1 || safeWindow == nullptr || ! t->state.getParent().isValid())
+                    return;
+
+                const auto newName = safeWindow->getTextEditorContents ("name");
+
+                if (core::tracks::isGroup (*t))
+                    audio::groups::renameGroup (project, *t, newName);
+                else
+                    audio::sends::renameReturnTrack (project, *t, newName);
             }), true);
     }
 
@@ -612,7 +684,7 @@ namespace harmonia::ui::mixer
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&addButton));
     }
 
-    void ChannelStrip::showSlotMenu (te::Plugin& plugin)
+    juce::PopupMenu ChannelStrip::makeSlotMenu (te::Plugin& plugin)
     {
         const auto chain = effects::get (getChain());
         const auto index = chain.indexOf (&plugin);
@@ -638,9 +710,34 @@ namespace harmonia::ui::mixer
         menu.addItem ("Move up", index > 0, false, run ([index] (te::Plugin& p) { effects::move (p, index - 1); }));
         menu.addItem ("Move down", index >= 0 && index < chain.size() - 1, false,
                       run ([index] (te::Plugin& p) { effects::move (p, index + 1); }));
+        if (const auto sources = audio::sidechain::getPossibleSources (model.getProject(), plugin);
+            audio::sidechain::canListen (plugin) && ! sources.isEmpty())
+        {
+            auto& project = model.getProject();
+            auto* current = audio::sidechain::getSource (plugin);
+            const auto listen = [&project, run] (te::AudioTrack* source)
+            {
+                return run ([&project, s = juce::ReferenceCountedObjectPtr<te::AudioTrack> (source)] (te::Plugin& p)
+                {
+                    if (s == nullptr || s->state.getParent().isValid())
+                        audio::sidechain::setSource (project, p, s.get());
+                });
+            };
+
+            juce::PopupMenu sidechain;
+            sidechain.addItem ("Nothing (its own track)", true, current == nullptr, listen (nullptr));
+            sidechain.addSeparator();
+
+            for (auto* source : sources)
+                sidechain.addItem (source->getName(), true, source == current, listen (source));
+
+            menu.addSeparator();
+            menu.addSubMenu ("Listen to (sidechain)", sidechain);
+        }
+
         menu.addSeparator();
         menu.addItem ("Remove", run ([] (te::Plugin& p) { effects::remove (p); }));
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this));
+        return menu;
     }
 
     void ChannelStrip::tell (const juce::String& text, bool isProblem)

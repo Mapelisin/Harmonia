@@ -66,7 +66,7 @@ namespace harmonia::audio::instruments
 
     bool isUntouched (te::AudioTrack& track)
     {
-        if (core::tracks::isAudio (track) || core::tracks::isReturn (track))
+        if (core::tracks::isAudio (track) || core::tracks::isBus (track))
             return false;
 
         if (auto* instrument = get (track); instrument != nullptr && dynamic_cast<te::FourOscPlugin*> (instrument) == nullptr)

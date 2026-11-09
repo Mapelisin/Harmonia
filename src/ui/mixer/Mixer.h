@@ -5,9 +5,10 @@
 
 namespace harmonia::ui::mixer
 {
-    /** The mixer: a strip per track, then the return tracks' strips (scrolls sideways), and the
-        master strip on the right. "+ Track" adds tracks and return tracks (Reverb, Delay...).
-        Follows the edit: tracks coming and going, effects, sends, volumes, undo. */
+    /** The mixer: a strip per track, then the group tracks' and the return tracks' strips
+        (scrolls sideways), and the master strip on the right. "+ Track" adds tracks, group tracks
+        and return tracks (Reverb, Delay...). Follows the edit: tracks coming and going, effects,
+        sends, volumes, undo. */
     class Mixer final : public juce::Component,
                         private arrangement::ArrangementModel::Listener,
                         private juce::ValueTree::Listener,
@@ -27,8 +28,13 @@ namespace harmonia::ui::mixer
 
         int getNumTrackStrips() const noexcept          { return strips.size(); }
         ChannelStrip* getTrackStrip (int index) const   { return strips[index]; }
+        int getNumGroupStrips() const noexcept          { return groupStrips.size(); }
+        ChannelStrip* getGroupStrip (int index) const   { return groupStrips[index]; }
         int getNumReturnStrips() const noexcept         { return returnStrips.size(); }
         ChannelStrip* getReturnStrip (int index) const  { return returnStrips[index]; }
+
+        /** Adds an empty group track (what "+ Track" offers). */
+        te::AudioTrack* addGroupTrack();
 
         /** Adds a return track with that effect (what "+ Track" offers); problems go to onMessage. */
         te::AudioTrack* addReturnTrack (audio::sends::Preset);
@@ -44,7 +50,7 @@ namespace harmonia::ui::mixer
 
         juce::Viewport viewport;
         juce::Component stripRow;
-        juce::OwnedArray<ChannelStrip> strips, returnStrips;
+        juce::OwnedArray<ChannelStrip> strips, groupStrips, returnStrips;
         juce::TextButton addTrackButton { "+ Track" };
         ChannelStrip master;
         bool needsRefresh = false;

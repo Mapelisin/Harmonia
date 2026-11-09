@@ -39,7 +39,7 @@ namespace harmonia::audio::mix_check
             int count = 0;
 
             for (auto* track : te::getAudioTracks (edit))
-                if (! core::tracks::isReturn (*track) && ++count == number)
+                if (! core::tracks::isBus (*track) && ++count == number)
                     return { track->getName().trim().isNotEmpty() ? track->getName().trim() : "Track " + juce::String (number),
                              track->itemID };
 

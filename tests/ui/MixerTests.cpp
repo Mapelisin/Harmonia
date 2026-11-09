@@ -2,12 +2,15 @@
 
 #include "TestSession.h"
 #include "audio/Effects.h"
+#include "audio/Groups.h"
 #include "audio/Instruments.h"
 #include "audio/PluginControls.h"
 #include "audio/Sends.h"
+#include "audio/Sidechain.h"
 #include "core/Project.h"
 #include "ui/MainComponent.h"
 #include "ui/ParameterPanel.h"
+#include "ui/arrangement/TrackHeaders.h"
 #include "ui/mixer/Mixer.h"
 
 using namespace harmonia;
@@ -62,6 +65,38 @@ namespace
         std::unique_ptr<Mixer> mixer;
         juce::StringArray messages;
     };
+
+    /** The item at `path` ("Listen to (sidechain)/Kick": a submenu, then its item), or nullptr. */
+    const juce::PopupMenu::Item* findItem (const juce::PopupMenu& menu, const juce::String& path)
+    {
+        const auto name = path.upToFirstOccurrenceOf ("/", false, false);
+        const auto rest = path.fromFirstOccurrenceOf ("/", false, false);
+
+        for (juce::PopupMenu::MenuItemIterator it (menu); it.next();)
+        {
+            const auto& item = it.getItem();
+
+            if (item.text != name)
+                continue;
+
+            if (rest.isEmpty())
+                return &item;
+
+            return item.subMenu != nullptr ? findItem (*item.subMenu, rest) : nullptr;
+        }
+
+        return nullptr;
+    }
+
+    /** Picks the item at `path`, as a click on it would. */
+    void choose (const juce::PopupMenu& menu, const juce::String& path)
+    {
+        const auto* item = findItem (menu, path);
+        REQUIRE_MESSAGE (item != nullptr, path.toStdString());
+        REQUIRE (item->isEnabled);
+        REQUIRE (item->action != nullptr);
+        item->action();
+    }
 
     /** A slider moved by hand: drag start, values, drag end. */
     void drag (juce::Slider& slider, double value)
@@ -279,6 +314,111 @@ TEST_SUITE ("mixer: sends")
         CHECK (f.mixer->getTrackStrip (0)->getNumSends() == 1);
     }
 
+    TEST_CASE ("group tracks get strips between the tracks and the returns; a track's Output chooses its group")
+    {
+        MixerFixture f;
+        auto* bass = f.model.addTrack();
+        REQUIRE (bass != nullptr);
+        REQUIRE (f.mixer->addReturnTrack (audio::sends::Preset::reverb) != nullptr);
+
+        auto* group = f.mixer->addGroupTrack();
+        REQUIRE (group != nullptr);
+        CHECK (f.messages[f.messages.size() - 1].startsWith ("Group track Group added"));
+        CHECK (f.model.getTracks().size() == 2);   // not in the arrangement
+        REQUIRE (f.mixer->getNumTrackStrips() == 2);
+        REQUIRE (f.mixer->getNumGroupStrips() == 1);
+        REQUIRE (f.mixer->getNumReturnStrips() == 1);
+
+        auto* groupStrip = f.mixer->getGroupStrip (0);
+        auto* strip = f.mixer->getTrackStrip (0);
+        CHECK (groupStrip->isGroup());
+        CHECK (groupStrip->getTrack() == group);
+        CHECK (groupStrip->getX() > f.mixer->getTrackStrip (1)->getRight());
+        CHECK (f.mixer->getReturnStrip (0)->getX() > groupStrip->getRight());
+        CHECK (groupStrip->getNumSends() == 1);   // a group can send to the reverb too
+        CHECK (groupStrip->getFader().getY() == strip->getFader().getY());
+        CHECK_FALSE (groupStrip->getOutputButton().isVisible());
+        CHECK (strip->getOutputButton().isVisible());
+        CHECK (strip->getOutputButton().getButtonText().endsWith ("Master"));
+
+        // The Output menu: the master ticked, the group offered.
+        auto menu = ui::arrangement::makeOutputMenu (f.model, f.firstTrack());
+        REQUIRE (findItem (menu, "Master") != nullptr);
+        CHECK (findItem (menu, "Master")->isTicked);
+        choose (menu, "Group");
+        dispatch();
+        CHECK (audio::groups::getGroup (f.firstTrack()) == group);
+        CHECK (f.undoManager().getUndoDescription() == "Play through Group");
+        CHECK (f.mixer->getTrackStrip (0)->getOutputButton().getButtonText().endsWith ("Group"));
+        CHECK (findItem (ui::arrangement::makeOutputMenu (f.model, f.firstTrack()), "Group")->isTicked);
+
+        // Rendered to audio, it still plays through the group.
+        REQUIRE (f.model.renderToAudio (f.firstTrack()).isEmpty());
+        auto* rendered = f.model.getCurrentTrack();
+        REQUIRE (rendered != nullptr);
+        CHECK (rendered != &f.firstTrack());
+        CHECK (audio::groups::getGroup (*rendered) == group);
+        f.project->undo();
+        dispatch();
+        CHECK (f.model.getTracks().size() == 2);
+
+        // A new group with the bass in it.
+        choose (ui::arrangement::makeOutputMenu (f.model, *bass), "New group with this track");
+        dispatch();
+        REQUIRE (f.mixer->getNumGroupStrips() == 2);
+        CHECK (audio::groups::getGroup (*bass) == f.mixer->getGroupStrip (1)->getTrack());
+        CHECK (f.mixer->getGroupStrip (1)->getTrack()->getName() == "Group 2");
+
+        f.project->undo();
+        f.project->undo();
+        dispatch();
+        CHECK (audio::groups::getGroup (f.firstTrack()) == nullptr);
+        CHECK (f.mixer->getNumGroupStrips() == 1);
+        CHECK (f.mixer->getTrackStrip (0)->getOutputButton().getButtonText().endsWith ("Master"));
+
+        // Deleted, the group takes no track with it.
+        choose (ui::arrangement::makeOutputMenu (f.model, f.firstTrack()), "Group");
+        audio::groups::removeGroup (*f.project, *group);
+        dispatch();
+        CHECK (f.mixer->getNumGroupStrips() == 0);
+        CHECK (f.mixer->getNumTrackStrips() == 2);
+        CHECK (f.mixer->getTrackStrip (0)->getOutputButton().getButtonText().endsWith ("Master"));
+    }
+
+    TEST_CASE ("an effect's slot menu sets what it listens to; deleting that track stops it")
+    {
+        MixerFixture f;
+        auto* kick = f.model.addTrack();
+        REQUIRE (kick != nullptr);
+        kick->setName ("Kick");
+        dispatch();
+
+        auto* strip = f.mixer->getTrackStrip (0);
+        strip->addEffect (builtIn ("Compressor"));
+        REQUIRE (strip->getNumSlots() == 1);
+        auto* compressor = effects::get (f.firstTrack().pluginList).getFirst();
+        REQUIRE (compressor != nullptr);
+
+        auto menu = strip->makeSlotMenu (*compressor);
+        REQUIRE (findItem (menu, "Listen to (sidechain)/Nothing (its own track)") != nullptr);
+        CHECK (findItem (menu, "Listen to (sidechain)/Nothing (its own track)")->isTicked);
+        CHECK (findItem (menu, "Listen to (sidechain)/" + f.firstTrack().getName()) == nullptr);   // not itself
+        choose (menu, "Listen to (sidechain)/Kick");
+        CHECK (audio::sidechain::getSource (*compressor) == kick);
+        CHECK (f.undoManager().getUndoDescription() == "Sidechain from Kick");
+        CHECK (findItem (strip->makeSlotMenu (*compressor), "Listen to (sidechain)/Kick")->isTicked);
+
+        // An effect without a sidechain input offers none.
+        strip->addEffect (builtIn ("Reverb"));
+        auto* reverb = effects::get (f.firstTrack().pluginList).getLast();
+        CHECK (findItem (strip->makeSlotMenu (*reverb), "Listen to (sidechain)") == nullptr);
+
+        f.model.deleteTrack (*kick);
+        CHECK (audio::sidechain::getSource (*compressor) == nullptr);
+        f.project->undo();
+        CHECK (audio::sidechain::getSource (*compressor) != nullptr);
+    }
+
     TEST_CASE ("tracks added after a return track come before it")
     {
         MixerFixture f;
@@ -408,10 +548,20 @@ TEST_SUITE ("mixer: main window")
         audio::sends::setLevelDb (*tracks[2], *delay, -14.0f);
         audio::sends::setLevelDb (*tracks[3], *delay, -2.0f);
 
+        // Lead and Pad through one group; the bass's compressor listening to the first track.
+        auto* synths = audio::groups::addGroup (*f.project, { tracks[2], tracks[3] }, "Synths");
+        REQUIRE (synths != nullptr);
+        effects::add (synths->pluginList, builtIn ("EQ"), error);
+        synths->getVolumePlugin()->setVolumeDb (-3.0f);
+        auto* bassCompressor = effects::add (tracks[1]->pluginList, builtIn ("Compressor"), error);
+        REQUIRE (bassCompressor != nullptr);
+        REQUIRE (audio::sidechain::setSource (*f.project, *bassCompressor, tracks[0]));
+
         f.main->showLowerPanel (ui::MainComponent::LowerPanel::mixer);
         dispatch();
         CHECK (f.main->getMixer().getNumTrackStrips() == 4);
         CHECK (f.main->getMixer().getTrackStrip (0)->getNumSlots() == 3);
+        CHECK (f.main->getMixer().getNumGroupStrips() == 1);
         CHECK (f.main->getMixer().getNumReturnStrips() == 2);
         CHECK (f.main->getArrangement().getHeaders().getNumHeaders() == 4);   // return tracks stay out of the arrangement
 

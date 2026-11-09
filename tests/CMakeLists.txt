@@ -30,6 +30,7 @@ add_executable(harmonia_tests
     audio/EffectsTests.cpp
     audio/RecordingTests.cpp
     audio/SendsTests.cpp
+    audio/GroupsTests.cpp
     audio/AutomationTests.cpp
     audio/StemsTests.cpp
     audio/MidiRenderTests.cpp

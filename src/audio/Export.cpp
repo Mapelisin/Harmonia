@@ -1,17 +1,19 @@
 #include "audio/Export.h"
+#include "audio/Groups.h"
+#include "audio/Sidechain.h"
 #include "core/Tracks.h"
 
 namespace harmonia::audio
 {
     namespace
     {
-        /** The tracks exportWav plays: song and return tracks as they're heard (muted ones left out;
-            while some are soloed, only those and the solo-safe ones), and the edit's other tracks
-            (tempo, master...). */
+        /** The tracks exportWav plays: song, group and return tracks as they're heard (muted ones
+            left out; while some are soloed, only those and the solo-safe ones), and the edit's other
+            tracks (tempo, master...). */
         struct Audible
         {
             juce::Array<te::Track*> others;
-            juce::Array<te::AudioTrack*> songTracks, returnTracks;
+            juce::Array<te::AudioTrack*> songTracks, groupTracks, returnTracks;
         };
 
         Audible findAudible (te::Edit& edit)
@@ -32,10 +34,116 @@ namespace harmonia::audio
                 if (track->isMuted (true) || (anySolo && ! (track->isSolo (true) || track->isSoloIsolate (true))))
                     continue;
 
-                (core::tracks::isReturn (*audioTrack) ? result.returnTracks : result.songTracks).add (audioTrack);
+                if (core::tracks::isReturn (*audioTrack))
+                    result.returnTracks.add (audioTrack);
+                else if (core::tracks::isGroup (*audioTrack))
+                    result.groupTracks.add (audioTrack);
+                else
+                    result.songTracks.add (audioTrack);
             }
 
+            // A soloed track is heard through its group, though the group itself isn't soloed.
+            for (auto* track : result.songTracks)
+                if (auto* group = groups::getGroup (*track))
+                    result.groupTracks.addIfNotAlreadyThere (group);
+
             return result;
+        }
+
+        /** The edit's tracks that aren't audio tracks (tempo, master...): every render has them. */
+        juce::Array<te::Track*> getOtherTracks (te::Edit& edit)
+        {
+            juce::Array<te::Track*> others;
+
+            for (auto* track : te::getAllTracks (edit))
+                if (dynamic_cast<te::AudioTrack*> (track) == nullptr)
+                    others.add (track);
+
+            return others;
+        }
+
+        /** Property changes made straight in the edit's state for one render and put back after
+            it: not undo steps, nor changes to save. */
+        class TemporaryState
+        {
+        public:
+            explicit TemporaryState (te::Edit& e) : edit (e), wasChanged (e.hasChangedSinceSaved()) {}
+
+            ~TemporaryState()
+            {
+                for (auto it = saved.rbegin(); it != saved.rend(); ++it)
+                {
+                    auto& [tree, id, value] = *it;
+
+                    if (value.has_value())
+                        tree.setProperty (id, *value, nullptr);
+                    else
+                        tree.removeProperty (id, nullptr);
+                }
+
+                // Tracktion counts any mute or solo change as a change to save.
+                if (! wasChanged)
+                    edit.resetChangedStatus();
+            }
+
+            /** Heard whatever its mute and the others' solo say. */
+            void hear (te::AudioTrack& track)
+            {
+                set (track.state, te::IDs::mute, false);
+                set (track.state, te::IDs::soloIsolate, true);
+            }
+
+            /** Played straight out rather than into its group (which this render doesn't have). */
+            void playToMaster (te::AudioTrack& track)
+            {
+                if (groups::getGroup (track) == nullptr)
+                    return;
+
+                // The name, which the output follows, before the group's ID kept next to it: put
+                // back in the reverse order, the ID is there when the name looks for it.
+                auto output = track.state.getChildWithName (te::IDs::OUTPUTDEVICES).getChildWithName (te::IDs::DEVICE);
+                set (output, te::IDs::name, te::DeviceManager::getDefaultAudioOutDeviceName (false));
+                set (output, "destTrackID", {});
+            }
+
+            /** Silent, though still feeding the effects that listen to it: Tracktion keeps a
+                muted track playing for them, without its sends to the return tracks. */
+            void keepAsSource (te::AudioTrack& track)
+            {
+                set (track.state, te::IDs::mute, true);
+            }
+
+        private:
+            te::Edit& edit;
+            bool wasChanged;
+            std::vector<std::tuple<juce::ValueTree, juce::Identifier, std::optional<juce::var>>> saved;
+
+            /** A void value removes the property. */
+            void set (juce::ValueTree tree, const juce::Identifier& id, const juce::var& value)
+            {
+                saved.emplace_back (tree, id, tree.getPropertyPointer (id) != nullptr ? std::optional<juce::var> (tree[id]) : std::nullopt);
+
+                if (value.isVoid())
+                    tree.removeProperty (id, nullptr);
+                else
+                    tree.setProperty (id, value, nullptr);
+            }
+        };
+
+        /** The tracks the effects of `heard` listen to (sidechain), added to `tracks` silent:
+            a part of the song rendered alone sounds as it does in the whole song. */
+        juce::Array<te::AudioTrack*> keepSources (TemporaryState& temporary, const juce::Array<te::AudioTrack*>& heard,
+                                                  juce::Array<te::Track*>& tracks)
+        {
+            auto sources = sidechain::getSourcesFor (heard);
+
+            for (auto* source : sources)
+            {
+                temporary.keepAsSource (*source);
+                tracks.add (source);
+            }
+
+            return sources;
         }
 
         te::TimeRange getRange (te::Edit& edit)
@@ -59,7 +167,7 @@ namespace harmonia::audio
             the time being, which Tracktion counts as a change to save (the project showed unsaved
             changes after an export). The tracks given here are all heard anyway. */
         juce::String render (te::Edit& edit, const juce::File& file, const juce::Array<te::Track*>& tracks,
-                             te::TimeRange range, bool withMaster)
+                             te::TimeRange range, bool withMaster, const juce::Array<te::AudioTrack*>& silentSources = {})
         {
             if (const auto error = prepare (file); error.isNotEmpty())
                 return error;
@@ -77,6 +185,9 @@ namespace harmonia::audio
             parameters.usePlugins = true;
             parameters.useMasterPlugins = withMaster;
             parameters.tracksToDo = te::toBitSet (tracks);
+
+            for (auto* source : silentSources)
+                parameters.tracksToProcessWhileMuted.add (source->itemID);
 
             juce::String taskError;
 
@@ -100,50 +211,15 @@ namespace harmonia::audio
 
     juce::String renderTrack (te::AudioTrack& track, const juce::File& file, te::TimeRange range)
     {
-        // Heard for the render whatever its mute and the others' solo say. Put straight into the
-        // state and back, not as undo steps.
-        struct Heard
-        {
-            explicit Heard (te::AudioTrack& t) : edit (t.edit), state (t.state), wasChanged (t.edit.hasChangedSinceSaved())
-            {
-                for (const auto& [id, value] : { std::pair { te::IDs::mute, false }, std::pair { te::IDs::soloIsolate, true } })
-                {
-                    saved.push_back ({ id, state.getPropertyPointer (id) != nullptr ? std::optional<juce::var> (state[id]) : std::nullopt });
-                    state.setProperty (id, value, nullptr);
-                }
-            }
+        TemporaryState temporary (track.edit);
+        temporary.hear (track);
+        temporary.playToMaster (track);
 
-            ~Heard()
-            {
-                for (const auto& [id, value] : saved)
-                {
-                    if (value.has_value())
-                        state.setProperty (id, *value, nullptr);
-                    else
-                        state.removeProperty (id, nullptr);
-                }
-
-                // Tracktion counts any mute or solo change as a change to save.
-                if (! wasChanged)
-                    edit.resetChangedStatus();
-            }
-
-            te::Edit& edit;
-            juce::ValueTree state;
-            bool wasChanged;
-            std::vector<std::pair<juce::Identifier, std::optional<juce::var>>> saved;
-        };
-
-        juce::Array<te::Track*> tracks;
-
-        for (auto* other : te::getAllTracks (track.edit))
-            if (dynamic_cast<te::AudioTrack*> (other) == nullptr)
-                tracks.add (other);
-
+        auto tracks = getOtherTracks (track.edit);
         tracks.add (&track);
 
-        const Heard heard (track);
-        return render (track.edit, file, tracks, range, false);
+        const auto sources = keepSources (temporary, { &track }, tracks);
+        return render (track.edit, file, tracks, range, false, sources);
     }
 
     juce::String exportWav (te::Edit& edit, const juce::File& file, std::optional<te::TimeRange> part)
@@ -161,14 +237,18 @@ namespace harmonia::audio
             return "Nothing to export: every track is muted";
 
         auto tracks = audible.others;
+        juce::Array<te::AudioTrack*> heard;
 
-        for (auto* track : audible.songTracks)
+        for (const auto* list : { &audible.songTracks, &audible.groupTracks, &audible.returnTracks })
+            heard.addArray (*list);
+
+        for (auto* track : heard)
             tracks.add (track);
 
-        for (auto* track : audible.returnTracks)
-            tracks.add (track);
-
-        return render (edit, file, tracks, part.value_or (getRange (edit)), true);
+        // A muted kick still ducks the bass, as it does while playing.
+        TemporaryState temporary (edit);
+        const auto sources = keepSources (temporary, heard, tracks);
+        return render (edit, file, tracks, part.value_or (getRange (edit)), true, sources);
     }
 
     juce::String getStemFileName (const juce::String& prefix, int number, const juce::String& trackName)
@@ -207,7 +287,7 @@ namespace harmonia::audio
             juce::Array<te::AudioTrack*> all;
 
             for (auto* track : te::getAudioTracks (edit))
-                if (! core::tracks::isReturn (*track))
+                if (! core::tracks::isBus (*track))
                     all.add (track);
 
             return all;
@@ -220,16 +300,24 @@ namespace harmonia::audio
 
             auto* track = withClips[i];
 
-            // The track and the return tracks: only this track sends to them here.
+            // The track, its group and the return tracks: only this track plays into them here.
+            juce::Array<te::AudioTrack*> heard { track };
+
+            if (auto* group = groups::getGroup (*track))
+                heard.add (group);
+
+            heard.addArray (audible.returnTracks);
+
             auto tracks = audible.others;
-            tracks.add (track);
 
-            for (auto* returnTrack : audible.returnTracks)
-                tracks.add (returnTrack);
+            for (auto* t : heard)
+                tracks.add (t);
 
+            TemporaryState temporary (edit);
+            const auto sources = keepSources (temporary, heard, tracks);
             const auto file = folder.getChildFile (getStemFileName (prefix, allSongTracks.indexOf (track) + 1, track->getName()));
 
-            if (const auto error = render (edit, file, tracks, range, false); error.isNotEmpty())
+            if (const auto error = render (edit, file, tracks, range, false, sources); error.isNotEmpty())
             {
                 result.error = error;
                 return result;

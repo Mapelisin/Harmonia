@@ -1,4 +1,5 @@
 #include "ui/mixer/Mixer.h"
+#include "audio/Groups.h"
 #include "ui/Theme.h"
 #include "ui/arrangement/TrackHeaders.h"
 
@@ -6,7 +7,7 @@ namespace harmonia::ui::mixer
 {
     namespace
     {
-        constexpr int addTrackWidth = 70, masterGap = 6, returnGap = 6;
+        constexpr int addTrackWidth = 70, masterGap = 6, busGap = 6;
     }
 
     Mixer::Mixer (core::Session& s, arrangement::ArrangementModel& m)
@@ -19,7 +20,8 @@ namespace harmonia::ui::mixer
         viewport.setScrollBarThickness (10);
         viewport.setWantsKeyboardFocus (false);
 
-        addTrackButton.setTooltip ("Add a track, or a return track (one reverb or delay shared by several tracks)");
+        addTrackButton.setTooltip ("Add a track, a group track (several tracks through one fader) or a return track "
+                                   "(one reverb or delay shared by several tracks)");
         addTrackButton.setWantsKeyboardFocus (false);
         addTrackButton.onClick = [this] { showAddMenu(); };
         stripRow.addAndMakeVisible (addTrackButton);
@@ -64,6 +66,12 @@ namespace harmonia::ui::mixer
 
         auto menu = arrangement::makeAddTrackMenu (model);
         menu.addSeparator();
+        menu.addItem ("Group track: several tracks through one fader", [safe]
+        {
+            if (safe != nullptr)
+                safe->addGroupTrack();
+        });
+        menu.addSeparator();
         menu.addSectionHeader ("Return track: one effect for several tracks");
         menu.addItem ("Reverb return", addReturn (Preset::reverb));
         menu.addItem ("Delay return", addReturn (Preset::delay));
@@ -87,6 +95,18 @@ namespace harmonia::ui::mixer
 
         refresh();
         return track;
+    }
+
+    te::AudioTrack* Mixer::addGroupTrack()
+    {
+        auto* group = audio::groups::addGroup (model.getProject(), {});
+
+        if (onMessage != nullptr && group != nullptr)
+            onMessage ("Group track " + group->getName() + " added: choose it under the Output button of a track's strip "
+                           "to play that track through it", false);
+
+        refresh();
+        return group;
     }
 
     //==============================================================================
@@ -122,9 +142,10 @@ namespace harmonia::ui::mixer
         needsRefresh = false;
 
         const auto tracksChanged = syncStrips (strips, model.getTracks());
+        const auto groupsChanged = syncStrips (groupStrips, model.getProject().getGroupTracks());
         const auto returnsChanged = syncStrips (returnStrips, model.getProject().getReturnTracks());
 
-        if (tracksChanged || returnsChanged)
+        if (tracksChanged || groupsChanged || returnsChanged)
             layOutStrips();
 
         master.refresh();
@@ -150,25 +171,25 @@ namespace harmonia::ui::mixer
 
     void Mixer::layOutStrips()
     {
-        // Song tracks, a gap, the return tracks, "+ Track".
-        const auto returnsWidth = returnStrips.isEmpty() ? 0 : returnGap + returnStrips.size() * ChannelStrip::width;
-        const auto rowWidth = strips.size() * ChannelStrip::width + returnsWidth + addTrackWidth;
+        // Song tracks; a gap, the group tracks; a gap, the return tracks; "+ Track".
+        const auto busesWidth = [] (const juce::OwnedArray<ChannelStrip>& buses)
+        {
+            return buses.isEmpty() ? 0 : busGap + buses.size() * ChannelStrip::width;
+        };
+        const auto rowWidth = strips.size() * ChannelStrip::width + busesWidth (groupStrips) + busesWidth (returnStrips) + addTrackWidth;
         const auto height = viewport.getHeight() - (rowWidth > viewport.getWidth() ? viewport.getScrollBarThickness() : 0);
         auto x = 0;
 
-        for (auto* strip : strips)
+        for (const auto* row : { &strips, &groupStrips, &returnStrips })
         {
-            strip->setBounds (x, 0, ChannelStrip::width, height);
-            x += ChannelStrip::width;
-        }
+            if (row != &strips && ! row->isEmpty())
+                x += busGap;
 
-        if (! returnStrips.isEmpty())
-            x += returnGap;
-
-        for (auto* strip : returnStrips)
-        {
-            strip->setBounds (x, 0, ChannelStrip::width, height);
-            x += ChannelStrip::width;
+            for (auto* strip : *row)
+            {
+                strip->setBounds (x, 0, ChannelStrip::width, height);
+                x += ChannelStrip::width;
+            }
         }
 
         addTrackButton.setBounds (juce::Rectangle<int> (x, 0, addTrackWidth, height)

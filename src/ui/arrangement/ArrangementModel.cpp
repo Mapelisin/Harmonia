@@ -1,7 +1,9 @@
 #include "ui/arrangement/ArrangementModel.h"
 #include "audio/Export.h"
+#include "audio/Groups.h"
 #include "audio/Instruments.h"
 #include "audio/Sends.h"
+#include "audio/Sidechain.h"
 #include "core/AudioTempo.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
@@ -569,6 +571,7 @@ namespace harmonia::ui::arrangement
 
         // Linked copies on other tracks stay linked only if more than one of them is left.
         clips::remove (clips::getClips (track));
+        audio::sidechain::forgetSource (track);
         getEdit().deleteTrack (&track);
 
         const auto remaining = getTracks();
@@ -721,6 +724,9 @@ namespace harmonia::ui::arrangement
         for (auto* returnTrack : project.getReturnTracks())
             if (audio::sends::getSend (track, *returnTrack) != nullptr)
                 audio::sends::setLevel (*audioTrack, *returnTrack, audio::sends::getLevel (track, *returnTrack));
+
+        // Through its group as before: the render has only the track's own sound.
+        audio::groups::setGroup (*audioTrack, audio::groups::getGroup (track));
 
         // Tracktion's mute isn't undoable: set it so that undo unmutes the track again.
         track.state.setProperty (te::IDs::mute, true, &edit.getUndoManager());

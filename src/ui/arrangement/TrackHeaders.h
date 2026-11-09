@@ -11,6 +11,9 @@ namespace harmonia::ui::arrangement
     /** makeAddTrackMenu, shown under `target`. */
     void showAddTrackMenu (ArrangementModel&, juce::Component& target);
 
+    /** Where a song track plays: the master, one of the group tracks, or a new group. */
+    juce::PopupMenu makeOutputMenu (ArrangementModel&, te::AudioTrack&);
+
     /** The column left of the clips: one header per track with its name (double-click to
         rename), mute, solo and volume; audio tracks also have record arm, their input and its
         level while armed. Click a header to make the track current; right-click for its menu. */

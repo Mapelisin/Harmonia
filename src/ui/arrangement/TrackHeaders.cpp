@@ -1,6 +1,7 @@
 #include "ui/arrangement/TrackHeaders.h"
 #include "ui/TrackColours.h"
 #include "audio/AudioInputs.h"
+#include "audio/Groups.h"
 #include "audio/Instruments.h"
 #include "core/Clips.h"
 #include "core/Tracks.h"
@@ -28,6 +29,41 @@ namespace harmonia::ui::arrangement
     void showAddTrackMenu (ArrangementModel& model, juce::Component& target)
     {
         makeAddTrackMenu (model).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target));
+    }
+
+    juce::PopupMenu makeOutputMenu (ArrangementModel& model, te::AudioTrack& track)
+    {
+        auto& project = model.getProject();
+        const auto* current = audio::groups::getGroup (track);
+        const te::Track::Ptr keepAlive (&track);
+        const auto setGroup = [&project, keepAlive] (te::AudioTrack* group)
+        {
+            return [&project, keepAlive, g = te::Track::Ptr (group)]
+            {
+                auto* t = dynamic_cast<te::AudioTrack*> (keepAlive.get());
+                auto* target = dynamic_cast<te::AudioTrack*> (g.get());
+
+                if (t == nullptr || ! t->state.getParent().isValid() || (target != nullptr && ! target->state.getParent().isValid()))
+                    return;
+
+                project.beginGesture (target != nullptr ? "Play through " + target->getName() : juce::String ("Play to the master"));
+                audio::groups::setGroup (*t, target);
+            };
+        };
+
+        juce::PopupMenu menu;
+        menu.addItem ("Master", true, current == nullptr, setGroup (nullptr));
+
+        for (auto* group : project.getGroupTracks())
+            menu.addItem (group->getName(), true, group == current, setGroup (group));
+
+        menu.addSeparator();
+        menu.addItem ("New group with this track", [&project, keepAlive]
+        {
+            if (auto* t = dynamic_cast<te::AudioTrack*> (keepAlive.get()); t != nullptr && t->state.getParent().isValid())
+                audio::groups::addGroup (project, { t });
+        });
+        return menu;
     }
 
     //==============================================================================
@@ -384,6 +420,7 @@ namespace harmonia::ui::arrangement
             if (safe != nullptr)
                 safe->renderToAudio (*t);
         });
+        menu.addSubMenu ("Output (master or a group)", makeOutputMenu (model, *track));
         menu.addSeparator();
         menu.addSubMenu ("Add track", makeAddTrackMenu (model));
         menu.addSeparator();

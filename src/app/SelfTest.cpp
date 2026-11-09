@@ -9,9 +9,11 @@
 #include "audio/Instruments.h"
 #include "audio/Export.h"
 #include "audio/FilePreview.h"
+#include "audio/Groups.h"
 #include "audio/NotePreview.h"
 #include "audio/PlaybackClock.h"
 #include "audio/PluginScanner.h"
+#include "audio/Sidechain.h"
 #include "audio/Transport.h"
 #include "core/AudioTempo.h"
 #include "core/Clips.h"
@@ -261,6 +263,7 @@ namespace harmonia::app
                     checkPlayAfterDeviceRestart (transport, level);
                     checkEffects (*project, track, transport, level);
                     checkSends (*project, track, transport, level);
+                    checkGroup (*project, track, transport, level);
                     checkAutomation (*project, track, transport, level);
                 }
 
@@ -755,6 +758,59 @@ namespace harmonia::app
                 report.check (project.getReturnTracks().isEmpty() && audio::sends::getBus (track) < 0
                                   && transport.isPlaying() && level.takePeakDb() > -60.0f,
                               "Deleted the return track while playing, still audible");
+
+                transport.stop();
+                pump (300, level, transport, report);
+            }
+
+            /** Track 1 put into a group while playing is heard through it; a compressor on the group
+                listening to track 1 (sidechain) and the group deleted again keep the song playing. */
+            void checkGroup (core::Project& project, te::AudioTrack& track, audio::Transport& transport, TrackLevel& level)
+            {
+                transport.setPositionSeconds (0.0);
+                transport.play();
+                pump (300, level, transport, report);
+
+                auto* group = audio::groups::addGroup (project, { &track });
+
+                if (group == nullptr)
+                {
+                    report.check (false, "Added a group track");
+                    transport.stop();
+                    return;
+                }
+
+                auto* device = audio::getDeviceManager (session).getCurrentAudioDevice();
+                const auto xrunsBefore = device != nullptr ? device->getXRunCount() : -1;
+
+                {
+                    TrackLevel groupLevel (*group);
+                    pump (1200, groupLevel, transport, report);
+                    const auto peak = groupLevel.takePeakDb();
+                    report.check (transport.isPlaying() && audio::groups::getGroup (track) == group && peak > -60.0f,
+                                  "Track 1 put into a group while playing: heard through it (group peak "
+                                      + juce::String (peak, 1) + " dBFS)");
+
+                    juce::String error;
+                    auto compressorType = audio::effects::getBuiltIn();
+                    compressorType.removeIf ([] (const auto& type) { return type.builtInType != te::CompressorPlugin::xmlTypeName; });
+                    auto* compressor = compressorType.isEmpty() ? nullptr
+                                                                : audio::effects::add (group->pluginList, compressorType.getFirst(), error);
+                    const auto listening = compressor != nullptr && audio::sidechain::setSource (project, *compressor, &track);
+                    pump (1200, groupLevel, transport, report);
+                    const auto after = groupLevel.takePeakDb();
+                    const auto xruns = device != nullptr ? device->getXRunCount() - xrunsBefore : 0;
+                    report.check (listening && transport.isPlaying() && after > -60.0f && (xrunsBefore < 0 || xruns == 0),
+                                  "A compressor on the group listening to track 1 (sidechain), set while playing: still heard (group peak "
+                                      + juce::String (after, 1) + " dBFS), dropouts: " + juce::String (xruns));
+                }
+
+                audio::groups::removeGroup (project, *group);
+                level.takePeakDb();
+                pump (800, level, transport, report);
+                report.check (project.getGroupTracks().isEmpty() && audio::groups::getGroup (track) == nullptr
+                                  && transport.isPlaying() && level.takePeakDb() > -60.0f,
+                              "Deleted the group while playing: track 1 back on the master, still audible");
 
                 transport.stop();
                 pump (300, level, transport, report);

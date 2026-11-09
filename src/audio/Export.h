@@ -23,8 +23,9 @@ namespace harmonia::audio
 
     /** Stems: each song track that would be heard in exportWav and has clips, rendered to its own
         24-bit WAV in `folder`, named "<prefix> - 01 <track name>.wav" (numbered top to bottom).
-        Each is the track with its effects and what it sends to the return tracks (its own reverb,
-        delay...), before the master's effects and volume; all are as long as the whole song, so
+        Each is the track with its effects, its group's (audio::groups) and what it sends to the
+        return tracks (its own reverb, delay...), before the master's effects and volume; all are as
+        long as the whole song, so
         put side by side in another program they line up and add up to the mix. Files of the same
         name are replaced. `progress` hears (done, total) before each stem. Blocks until done. */
     StemsResult exportStems (te::Edit&, const juce::File& folder, const juce::String& prefix,
@@ -34,7 +35,8 @@ namespace harmonia::audio
     juce::String getStemFileName (const juce::String& prefix, int number, const juce::String& trackName);
 
     /** Renders `range` of one track as it sounds through its own instrument, effects, volume and
-        pan (not its sends, nor the master) to a 24-bit WAV: even while it's muted or another track
-        is soloed. Blocks until done. Changes nothing in the project. */
+        pan (not its sends, its group, nor the master) to a 24-bit WAV: even while it's muted or
+        another track is soloed. Effects listening to other tracks (sidechain) still hear them.
+        Blocks until done. Changes nothing in the project. */
     juce::String renderTrack (te::AudioTrack&, const juce::File&, te::TimeRange);
 }

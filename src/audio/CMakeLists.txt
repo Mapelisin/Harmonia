@@ -37,6 +37,10 @@ add_library(harmonia_audio STATIC
     PluginControls.cpp
     PluginScanner.h
     PluginScanner.cpp
+    Groups.h
+    Groups.cpp
+    Sidechain.h
+    Sidechain.cpp
     Sends.h
     Sends.cpp
     Transport.h

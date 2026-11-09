@@ -43,25 +43,6 @@ namespace harmonia::audio::sends
             return -1;
         }
 
-        juce::String getUniqueName (core::Project& project, const juce::String& base)
-        {
-            const auto taken = [&project] (const juce::String& name)
-            {
-                for (auto* track : project.getReturnTracks())
-                    if (track->getName() == name)
-                        return true;
-
-                return false;
-            };
-
-            auto name = base;
-
-            for (int i = 2; taken (name); ++i)
-                name = base + " " + juce::String (i);
-
-            return name;
-        }
-
         juce::String getPresetName (Preset preset)
         {
             switch (preset)
@@ -137,7 +118,7 @@ namespace harmonia::audio::sends
             return nullptr;
         }
 
-        const auto name = getUniqueName (project, getPresetName (preset));
+        const auto name = core::tracks::getUniqueBusName (edit, getPresetName (preset));
         project.beginGesture ("Add " + name + " return");
         auto* track = project.addReturnTrack (name);
 

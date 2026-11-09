@@ -64,7 +64,7 @@ namespace harmonia::core::song_forms
 
         for (auto* track : te::getAudioTracks (edit))
         {
-            if (tracks::isReturn (*track) || clipsWithin (*track, startBeat, endBeat).isEmpty())
+            if (tracks::isBus (*track) || clipsWithin (*track, startBeat, endBeat).isEmpty())
                 continue;
 
             if (drums::showsNames (*track))

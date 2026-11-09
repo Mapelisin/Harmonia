@@ -295,7 +295,7 @@ namespace harmonia::core::clips
     {
         const auto& state = copy.getState();
 
-        if (tracks::isReturn (track))
+        if (tracks::isBus (track))
             return false;
 
         if (state.hasType (te::IDs::AUDIOCLIP))

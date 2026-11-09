@@ -289,7 +289,7 @@ namespace harmonia::core
     juce::Array<te::AudioTrack*> Project::getTracks() const
     {
         auto result = te::getAudioTracks (*edit);
-        result.removeIf ([] (te::AudioTrack* track) { return tracks::isReturn (*track); });
+        result.removeIf ([] (te::AudioTrack* track) { return tracks::isBus (*track); });
         return result;
     }
 
@@ -297,6 +297,13 @@ namespace harmonia::core
     {
         auto result = te::getAudioTracks (*edit);
         result.removeIf ([] (te::AudioTrack* track) { return ! tracks::isReturn (*track); });
+        return result;
+    }
+
+    juce::Array<te::AudioTrack*> Project::getGroupTracks() const
+    {
+        auto result = te::getAudioTracks (*edit);
+        result.removeIf ([] (te::AudioTrack* track) { return ! tracks::isGroup (*track); });
         return result;
     }
 
@@ -318,13 +325,23 @@ namespace harmonia::core
 
     te::AudioTrack* Project::addReturnTrack (const juce::String& name)
     {
+        return addBusTrack (name, tracks::Kind::fxReturn);
+    }
+
+    te::AudioTrack* Project::addGroupTrack (const juce::String& name)
+    {
+        return addBusTrack (name, tracks::Kind::group);
+    }
+
+    te::AudioTrack* Project::addBusTrack (const juce::String& name, tracks::Kind kind)
+    {
         auto track = edit->insertNewAudioTrack (te::TrackInsertPoint (nullptr, te::getAudioTracks (*edit).getLast()), nullptr);
 
         if (track == nullptr)
             return nullptr;
 
         track->setName (name);
-        tracks::setKind (*track, tracks::Kind::fxReturn);
+        tracks::setKind (*track, kind);
         return track.get();
     }
 

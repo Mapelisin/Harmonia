@@ -71,7 +71,10 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Автоматизация — только через `audio::automation` (доли и 0..1; правки в текущую транзакцию undo — жест
   начинает вызывающий). Мышь панели — `ui/automation/AutomationGestures` (тесты без окна).
 - Посылы и возвратные дорожки — только через `audio::sends`. `Project::getTracks` — дорожки песни (без
-  возвратных), `getReturnTracks` — возвратные.
+  возвратных и групп, `core::tracks::isBus`), `getReturnTracks` — возвратные, `getGroupTracks` — группы.
+- Группы — только через `audio::groups` (выход дорожки в группу — `setGroup`; хранится по ID, патч 0002),
+  сайдчейн — через `audio::sidechain` (удаляешь дорожку — `forgetSource`). Рендер части песни берёт источники
+  сайдчейна беззвучно (`sidechain::getSourcesFor`).
 - Эффекты — через `audio::effects` (порядок в списке плагинов: инструмент, эффекты, громкость, индикатор).
   Ручки плагинов — через `audio::PluginControl` (у Chorus/Phaser/времени Delay/типа фильтра нет параметров).
 - Исправления Tracktion — патчи в `external/patches/tracktion_engine` (решение 21), их накладывает настройка CMake.

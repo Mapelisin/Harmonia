@@ -7,6 +7,7 @@ namespace harmonia::core::tracks
         const juce::Identifier kindId ("hTrackKind");
         constexpr const char* audioKind = "audio";
         constexpr const char* returnKind = "return";
+        constexpr const char* groupKind = "group";
     }
 
     Kind getKind (const te::AudioTrack& track)
@@ -19,7 +20,29 @@ namespace harmonia::core::tracks
         if (kind == returnKind)
             return Kind::fxReturn;
 
+        if (kind == groupKind)
+            return Kind::group;
+
         return Kind::instrument;
+    }
+
+    juce::String getUniqueBusName (const te::Edit& edit, const juce::String& base)
+    {
+        const auto taken = [&edit] (const juce::String& name)
+        {
+            for (auto* track : te::getAudioTracks (edit))
+                if (isBus (*track) && track->getName() == name)
+                    return true;
+
+            return false;
+        };
+
+        auto name = base;
+
+        for (int i = 2; taken (name); ++i)
+            name = base + " " + juce::String (i);
+
+        return name;
     }
 
     std::optional<juce::Colour> getColour (const te::Track& track)
@@ -48,6 +71,8 @@ namespace harmonia::core::tracks
             track.state.setProperty (kindId, audioKind, undoManager);
         else if (kind == Kind::fxReturn)
             track.state.setProperty (kindId, returnKind, undoManager);
+        else if (kind == Kind::group)
+            track.state.setProperty (kindId, groupKind, undoManager);
         else
             track.state.removeProperty (kindId, undoManager);
     }

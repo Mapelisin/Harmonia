@@ -1,0 +1,110 @@
+diff --git a/modules/tracktion_engine/model/tracks/tracktion_TrackOutput.cpp b/modules/tracktion_engine/model/tracks/tracktion_TrackOutput.cpp
+index 7dd0869f3dd..d877190e168 100644
+--- a/modules/tracktion_engine/model/tracks/tracktion_TrackOutput.cpp
++++ b/modules/tracktion_engine/model/tracks/tracktion_TrackOutput.cpp
+@@ -10,6 +10,13 @@
+ 
+ namespace tracktion::inline engine {
+ 
++namespace
++{
++    // The destination track's ID, next to its number in the output's name: the number changes when
++    // tracks are added, removed or moved before it, the ID doesn't
++    const juce::Identifier destTrackIDProperty ("destTrackID");
++}
++
+ TrackOutput::TrackOutput (Track& t)
+     : owner (t)
+ {
+@@ -55,19 +62,28 @@ void TrackOutput::updateOutput()
+ 
+     if (outputDevice.get().startsWith ("track "))
+     {
+-        auto trackNum = outputDevice.get().upToFirstOccurrenceOf ("(", false, false).trim().getTrailingIntValue();
++        AudioTrack* dest = nullptr;
++
++        if (auto id = EditItemID::fromVar (state.getChildWithName (IDs::DEVICE)[destTrackIDProperty]); id.isValid())
++            dest = findAudioTrackForID (owner.edit, id);
+ 
+-        for (auto at : getAudioTracks (owner.edit))
++        if (dest == nullptr)
+         {
+-            if (at->getAudioTrackNumber() == trackNum)
+-            {
+-                if (! at->getOutput().feedsInto (&owner))  // check for recursion
+-                    destTrackID = at->itemID;
++            auto trackNum = outputDevice.get().upToFirstOccurrenceOf ("(", false, false).trim().getTrailingIntValue();
+ 
+-                break;
++            for (auto at : getAudioTracks (owner.edit))
++            {
++                if (at->getAudioTrackNumber() == trackNum)
++                {
++                    dest = at;
++                    break;
++                }
+             }
+         }
+ 
++        if (dest != nullptr && ! dest->getOutput().feedsInto (&owner))  // check for recursion
++            destTrackID = dest->itemID;
++
+         if (oldTrackID == destTrackID)
+             return;
+     }
+@@ -219,8 +235,20 @@ juce::String TrackOutput::getDescriptiveOutputName() const
+     return outputDevice;
+ }
+ 
++void TrackOutput::setDestTrackIDProperty (AudioTrack* track)
++{
++    auto devicesTree = state.getChildWithName (IDs::DEVICE);
++    auto um = &owner.edit.getUndoManager();
++
++    if (track != nullptr)
++        devicesTree.setProperty (destTrackIDProperty, track->itemID.toVar(), um);
++    else
++        devicesTree.removeProperty (destTrackIDProperty, um);
++}
++
+ void TrackOutput::setOutputToDeviceID (const juce::String& deviceID)
+ {
++    setDestTrackIDProperty (nullptr);
+     outputDevice = deviceID;
+ }
+ 
+@@ -250,18 +278,22 @@ bool TrackOutput::canPlayMidi() const
+ 
+ void TrackOutput::setOutputToTrack (AudioTrack* track)
+ {
++    // The ID first: undone, the name goes back first and the ID is no longer looked at
++    setDestTrackIDProperty (track);
+     outputDevice = track != nullptr ? juce::String ("track") + " " + juce::String (track->getAudioTrackNumber())
+                                     : juce::String();
+ }
+ 
+ void TrackOutput::setOutputToDefaultDevice (bool isMidi)
+ {
++    setDestTrackIDProperty (nullptr);
+     outputDevice = isMidi ? DeviceManager::getDefaultMidiOutDeviceName (false)
+                           : DeviceManager::getDefaultAudioOutDeviceName (false);
+ }
+ 
+ void TrackOutput::setOutputToNone()
+ {
++    setDestTrackIDProperty (nullptr);
+     outputDevice = "(none)";
+ }
+ 
+diff --git a/modules/tracktion_engine/model/tracks/tracktion_TrackOutput.h b/modules/tracktion_engine/model/tracks/tracktion_TrackOutput.h
+index ed5119cb66b..2c4b0f23001 100644
+--- a/modules/tracktion_engine/model/tracks/tracktion_TrackOutput.h
++++ b/modules/tracktion_engine/model/tracks/tracktion_TrackOutput.h
+@@ -94,6 +94,7 @@ private:
+     juce::CachedValue<juce::String> outputDevice;
+     EditItemID destTrackID;
+ 
++    void setDestTrackIDProperty (AudioTrack*);
+     void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
+     void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override {}
+     void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override {}

@@ -6,12 +6,14 @@
 
 namespace harmonia::ui::mixer
 {
-    /** One mixer channel: a track's, a return track's or the master's. Top to bottom: name; effect
-        slots (click opens the effect, the light turns it off and on, right-click for its menu) and
-        "+" to add one; on a song track a send bar per return track ("how much goes to the Reverb");
-        pan; volume fader with the level meter; mute and solo.
-        A click anywhere on a song track's strip makes that track current; a right-click on a return
-        track's strip opens its menu (rename, delete). */
+    /** One mixer channel: a track's, a group track's, a return track's or the master's. Top to
+        bottom: name; effect slots (click opens the effect, the light turns it off and on,
+        right-click for its menu: also what it listens to, the sidechain) and "+" to add one; on
+        song and group tracks a send bar per return track ("how much goes to the Reverb"); pan;
+        volume fader with the level meter; mute and solo; on a song track, where it plays (the
+        master or a group).
+        A click anywhere on a song track's strip makes that track current; a right-click on a group
+        or return track's strip opens its menu (rename, delete). */
     class ChannelStrip final : public juce::Component
     {
     public:
@@ -26,6 +28,7 @@ namespace harmonia::ui::mixer
         te::AudioTrack* getTrack() const noexcept       { return track.get(); }
         bool isMaster() const noexcept                  { return track == nullptr; }
         bool isReturn() const;
+        bool isGroup() const;
         te::PluginList& getChain() const;
         te::VolumeAndPanPlugin* getVolumePlugin() const;
 
@@ -44,6 +47,13 @@ namespace harmonia::ui::mixer
         LevelMeter& getMeter() noexcept                 { return meter; }
         juce::Slider& getFader() noexcept               { return volume; }
         juce::Slider& getPanKnob() noexcept             { return pan; }
+
+        /** Where a song track plays ("-> Master", "-> Drums"); hidden on the other strips. */
+        juce::TextButton& getOutputButton() noexcept    { return output; }
+
+        /** What a right-click on an effect's slot offers: open, bypass, move, what it listens to
+            (sidechain), remove. */
+        juce::PopupMenu makeSlotMenu (te::Plugin&);
 
         /** Something to tell the user (e.g. a plugin failed to load). */
         std::function<void (const juce::String& text, bool isProblem)> onMessage;
@@ -82,6 +92,7 @@ namespace harmonia::ui::mixer
         juce::Label panText, volumeText;
         LevelMeter meter;
         juce::TextButton mute { "M" }, solo { "S" };
+        juce::TextButton output;
 
         void setUp();
         void refreshSlots();
@@ -89,10 +100,11 @@ namespace harmonia::ui::mixer
         void refreshValues();
         void layOutSlots();
         void layOutSends();
-        void showReturnMenu();
-        void askToRenameReturn();
+        bool isBus() const;
+        void showBusMenu();
+        void askToRenameBus();
+        void refreshOutput();
         void showAddMenu();
-        void showSlotMenu (te::Plugin&);
         void tell (const juce::String&, bool isProblem);
         juce::Colour getColour() const;
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Session.h"
+#include "core/Tracks.h"
 
 namespace harmonia::core
 {
@@ -50,19 +51,25 @@ namespace harmonia::core
         //==============================================================================
         // Tracks and clips. All changes are undoable.
 
-        /** The song's tracks (instrument and audio tracks), top to bottom. Return tracks are not
-            among them. */
+        /** The song's tracks (instrument and audio tracks), top to bottom. Return and group tracks
+            are not among them. */
         juce::Array<te::AudioTrack*> getTracks() const;
         int getNumTracks() const;
 
         /** The return tracks (shared effects, see audio::sends), in mixer order. */
         juce::Array<te::AudioTrack*> getReturnTracks() const;
 
+        /** The group tracks (one fader for several tracks, see audio::groups), in mixer order. */
+        juce::Array<te::AudioTrack*> getGroupTracks() const;
+
         /** Adds a track after `after`, or below the other song tracks. */
         te::AudioTrack* addTrack (const juce::String& name, te::Track* after = nullptr);
 
         /** Adds an empty return track after all the others (audio::sends::addReturnTrack sets it up). */
         te::AudioTrack* addReturnTrack (const juce::String& name);
+
+        /** Adds an empty group track after all the others (audio::groups::addGroup sets it up). */
+        te::AudioTrack* addGroupTrack (const juce::String& name);
 
         /** Inserts an empty MIDI clip; positions are in beats from the start of the song. */
         te::MidiClip* addMidiClip (te::AudioTrack&, double startBeat, double lengthBeats,
@@ -109,6 +116,8 @@ namespace harmonia::core
 
     private:
         explicit Project (std::unique_ptr<te::Edit>);
+
+        te::AudioTrack* addBusTrack (const juce::String& name, tracks::Kind);
 
         std::unique_ptr<te::Edit> edit;
 

@@ -81,6 +81,8 @@ namespace harmonia::ui::theme
         inline const juce::Colour fader           { 0xff4f9fe0 };
         inline const juce::Colour send            { 0xffb48ae6 };
         inline const juce::Colour returnTrack     { 0xffb48ae6 };
+        inline const juce::Colour group           { 0xffe0a24f };
+        inline const juce::Colour sidechain       { 0xffe0a24f };
     }
 
     namespace size
