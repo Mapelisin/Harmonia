@@ -7,7 +7,7 @@ namespace harmonia::ui
         : readLoad (std::move (read))
     {
         setTooltip ("Audio load: how much of the time between two audio buffers working out the sound takes.\n"
-                    "Near 100% it starts to crackle: a larger buffer in the audio settings, or fewer heavy plugins.");
+                    "Near 100% it starts to crackle: a larger buffer in File > Settings > Audio, or fewer heavy plugins.");
         refresh();
         startTimerHz (4);
     }

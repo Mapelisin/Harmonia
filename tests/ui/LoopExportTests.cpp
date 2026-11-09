@@ -16,7 +16,7 @@ namespace
         void openProject() override         {}
         void saveProject() override         {}
         void saveProjectAs() override       {}
-        void exportWav() override           {}
+        void exportSong() override          {}
         void exportStems() override         {}
         void exportLoopWav() override       { ++loopExports; }
         juce::String getProjectName() const override    { return "Song"; }

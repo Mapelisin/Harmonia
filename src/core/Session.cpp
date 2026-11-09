@@ -5,6 +5,8 @@ namespace harmonia::core
 {
     namespace
     {
+        constexpr const char* sandboxKey = "pluginSandbox";
+
         class HarmoniaEngineBehaviour final : public te::EngineBehaviour
         {
         public:
@@ -58,9 +60,10 @@ namespace harmonia::core
             pluginSandbox = std::make_unique<sandbox::Sandbox> (sandbox::Sandbox::Options { options.pluginHost,
                                                                                            options.pluginHangLimitMs });
             auto& plugins = engine->getPluginManager();
+            sandboxOn = engine->getPropertyStorage().getPropertiesFile().getBoolValue (sandboxKey, true);
 
-            plugins.createPluginInstance = [this, &plugins] (const juce::PluginDescription& description, double sampleRate,
-                                                             int blockSize, juce::String& error)
+            plugins.createPluginInstance = [this, &plugins, inProcess = plugins.createPluginInstance]
+                (const juce::PluginDescription& description, double sampleRate, int blockSize, juce::String& error)
                 -> std::unique_ptr<juce::AudioPluginInstance>
             {
                 // A plugin whose file is gone needs no process to find that out.
@@ -73,9 +76,20 @@ namespace harmonia::core
                     }
                 }
 
+                if (! sandboxOn)
+                    return inProcess (description, sampleRate, blockSize, error);
+
                 return pluginSandbox->createInstance (description, sampleRate, blockSize, error);
             };
         }
+    }
+
+    void Session::setPluginSandboxOn (bool on)
+    {
+        sandboxOn = on;
+        auto& settings = engine->getPropertyStorage().getPropertiesFile();
+        settings.setValue (sandboxKey, on);
+        settings.saveIfNeeded();
     }
 
     juce::File Session::getFileForNewRecording (const te::Track& track, const juce::String& extension,

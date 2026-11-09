@@ -8,6 +8,7 @@
 #include "ui/ComputerKeyboard.h"
 #include "ui/Icons.h"
 #include "ui/Theme.h"
+#include "ui/settings/SettingsPanel.h"
 
 namespace harmonia::ui
 {
@@ -467,10 +468,17 @@ namespace harmonia::ui
                         else       fileCommands->saveProject();
                     }
                     return true;
-                case 'R': if (fileCommands != nullptr && ! shift) fileCommands->exportWav(); return ! shift;
+                case 'R': if (fileCommands != nullptr && ! shift) fileCommands->exportSong(); return ! shift;
                 case 'T': if (! shift) keyboard.setEnabled (! keyboard.isEnabled()); return ! shift;
                 case 'M': if (! shift) toggleMetronome(); return ! shift;
                 default:  break;
+            }
+
+            // Ctrl+, as in most programs; the same key types "б" in the Russian layout.
+            if (! shift && (code == ',' || code == 0x0431 || code == 0x0411))
+            {
+                showSettings();
+                return true;
             }
         }
 
@@ -601,7 +609,7 @@ namespace harmonia::ui
         menu.addItem ("Save as...  (Ctrl+Shift+S)", hasCommands, false, run (&FileCommands::saveProjectAs));
         menu.addSeparator();
         menu.addItem ("Import audio or MIDI...", [safe] { if (safe != nullptr) safe->chooseFilesToImport(); });
-        menu.addItem ("Export WAV...  (Ctrl+R)", hasCommands, false, run (&FileCommands::exportWav));
+        menu.addItem ("Export song (WAV, FLAC, MP3)...  (Ctrl+R)", hasCommands, false, run (&FileCommands::exportSong));
         menu.addItem ("Export stems (WAV per track)...", hasCommands, false, run (&FileCommands::exportStems));
 
         const auto loop = arrangementModel.getLoopRegion();
@@ -613,7 +621,8 @@ namespace harmonia::ui
         menu.addItem ("Check loudness for streaming...", [safe] { if (safe != nullptr) safe->checkLoudness(); });
         menu.addItem ("Check the mix (Mix Doctor)...", [safe] { if (safe != nullptr) safe->checkMix(); });
         menu.addSeparator();
-        menu.addItem ("Audio settings...", session.devicesEnabled(), false, [safe] { if (safe != nullptr) safe->showAudioSettings(); });
+        menu.addItem (MainMenu::makeItem ("Settings (audio, MIDI, plugins)...", "Ctrl+,", true,
+                                          [safe] { if (safe != nullptr) safe->showSettings(); }));
         menu.addSeparator();
         menu.addItem (MainMenu::makeItem ("Exit", "Alt+F4", true, []
         {
@@ -847,20 +856,11 @@ namespace harmonia::ui
         });
     }
 
-    void MainComponent::showAudioSettings()
+    void MainComponent::showSettings()
     {
-        juce::DialogWindow::LaunchOptions options;
-        options.dialogTitle = "Audio settings";
-        options.dialogBackgroundColour = theme::colour::background;
-        options.useNativeTitleBar = true;
-        options.resizable = false;
+        SettingsPanel::show (session);
 
-        auto selector = std::make_unique<juce::AudioDeviceSelectorComponent> (audio::getDeviceManager (session),
-                                                                              0, 2, 1, 2, false, false, true, false);
-        selector->setSize (500, 440);
-        options.content.setOwned (selector.release());
-        options.launchAsync();
-
+        // A warning about the sound card is being dealt with.
         statusBar.setWarning ({});
     }
 

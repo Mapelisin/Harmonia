@@ -33,6 +33,20 @@ namespace harmonia::audio
         /** Called when keyboards are plugged in or out. */
         std::function<void()> onDevicesChanged;
 
+        /** A MIDI keyboard plugged into the computer. */
+        struct Keyboard
+        {
+            juce::String id, name;
+            bool on = true;
+        };
+
+        /** Every keyboard plugged in, those switched off included. */
+        static std::vector<Keyboard> getKeyboards (te::Engine&);
+
+        /** Switches a keyboard on or off (Tracktion keeps it in the settings): one that's off
+            plays nothing and isn't recorded, as if it were unplugged. */
+        static void setKeyboardOn (te::Engine&, const juce::String& id, bool on);
+
     private:
         struct Received
         {

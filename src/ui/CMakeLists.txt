@@ -33,6 +33,16 @@ add_library(harmonia_ui STATIC
     FileDrag.h
     RecentProjects.h
     RecentProjects.cpp
+    ExportOptions.h
+    ExportOptions.cpp
+    settings/AudioSettingsTab.h
+    settings/AudioSettingsTab.cpp
+    settings/MidiSettingsTab.h
+    settings/MidiSettingsTab.cpp
+    settings/PluginSettingsTab.h
+    settings/PluginSettingsTab.cpp
+    settings/SettingsPanel.h
+    settings/SettingsPanel.cpp
     TransportBar.h
     TransportBar.cpp
     InstrumentPanel.h

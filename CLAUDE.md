@@ -81,6 +81,12 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   плагина показывает его процесс (`ui::RemotePluginWindow`), у такого плагина не звать `createEditor`. Тесты
   плагинов — тестовые плагины формата HarmoniaTest (`tests/sandbox/TestPlugins.h`, умеют падать и зависать;
   песня с ними — `TestPluginSong.h`). Свои папки скана — `PluginScanner::addFolder` (настройки).
+- Экспорт песни — `audio::exportSong` с `audio::ExportFormat` (WAV 16/24/32, FLAC, MP3; `exportWav` — WAV 24).
+  MP3 — `audio::mp3` (Windows: Media Foundation, `Mp3EncoderWindows.cpp`; решение 24). Окно формата —
+  `ui::ExportOptions`, последний формат — `getLastExportFormat`.
+- Настройки — `ui::SettingsPanel` (вкладки в `src/ui/settings`). MIDI-клавиатуры вкл/выкл — `MidiInputs::setKeyboardOn`
+  (хранит Tracktion); плагины в своих процессах вкл/выкл — `Session::setPluginSandboxOn` (в тестах включено на
+  старте). Скан плагинов — один на программу (`PluginScanner::startScan` вернёт false).
 - Эффекты — через `audio::effects` (порядок в списке плагинов: инструмент, эффекты, громкость, индикатор).
   Ручки плагинов — через `audio::PluginControl` (у Chorus/Phaser/времени Delay/типа фильтра нет параметров).
 - Исправления Tracktion — патчи в `external/patches/tracktion_engine` (решение 21), их накладывает настройка CMake.

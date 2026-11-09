@@ -18,7 +18,7 @@ namespace
         void openProject() override         {}
         void saveProject() override         {}
         void saveProjectAs() override       {}
-        void exportWav() override           {}
+        void exportSong() override          {}
         void exportStems() override         {}
         juce::String getProjectName() const override                    { return "Song"; }
         juce::Array<juce::File> getRecentProjects() const override      { return recent; }

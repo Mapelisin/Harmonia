@@ -32,6 +32,7 @@ add_executable(harmonia_tests
     audio/DeviceStatusTests.cpp
     audio/AudioTests.cpp
     audio/EffectsTests.cpp
+    audio/ExportFormatTests.cpp
     audio/RecordingTests.cpp
     audio/SendsTests.cpp
     audio/GroupsTests.cpp
@@ -75,6 +76,8 @@ add_executable(harmonia_tests
     ui/AudioTempoUiTests.cpp
     ui/ChordNameTests.cpp
     ui/LoopExportTests.cpp
+    ui/ExportOptionsTests.cpp
+    ui/SettingsTests.cpp
     ui/MainMenuTests.cpp
     ui/MixDoctorMenuTests.cpp
     ui/ChordLaneTests.cpp

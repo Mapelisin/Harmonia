@@ -993,8 +993,14 @@ namespace harmonia::app
                     return;
 
                 if (auto* plugin = audio::instruments::get (track))
-                    report.check (audio::plugin_safety::getStatus (*plugin) == audio::plugin_safety::Status::running,
-                                  "'" + instrument->name + "' runs in a process of its own (its crash won't stop Harmonia)");
+                {
+                    if (session.isPluginSandboxOn())
+                        report.check (audio::plugin_safety::getStatus (*plugin) == audio::plugin_safety::Status::running,
+                                      "'" + instrument->name + "' runs in a process of its own (its crash won't stop Harmonia)");
+                    else
+                        report.check (audio::plugin_safety::getStatus (*plugin) == audio::plugin_safety::Status::notSandboxed,
+                                      "'" + instrument->name + "' loads into Harmonia, as the settings say (Settings > Plugins)");
+                }
 
                 if (options.useDevice)
                 {

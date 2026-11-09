@@ -393,7 +393,7 @@ namespace harmonia::ui::arrangement
                 });
 
             if (inputs.empty())
-                inputMenu.addItem ("No inputs (see Audio settings)", false, false, [] {});
+                inputMenu.addItem ("No inputs (see File > Settings > Audio)", false, false, [] {});
 
             menu.addSeparator();
             menu.addItem ("Record arm", true, audio::AudioInputs::isArmed (*track), [t = track]

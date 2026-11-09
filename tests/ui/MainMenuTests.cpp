@@ -85,10 +85,11 @@ TEST_SUITE ("ui: the menu bar and the transport")
         CHECK (MainFixture::find (menu.createViewMenu(), "Mixer")->shortcutKeyDescription == "F9");
         CHECK (MainFixture::find (menu.createTransportMenu(), "Back to the start")->shortcutKeyDescription == "Home");
 
-        // File keeps its commands and gains the audio settings and Exit.
+        // File keeps its commands and gains the settings and Exit.
         const auto file = f.main->createFileMenu();
         CHECK (MainFixture::find (file, "Save").has_value());
-        CHECK (MainFixture::find (file, "Audio settings").has_value());
+        CHECK (MainFixture::find (file, "Settings")->shortcutKeyDescription == "Ctrl+,");
+        CHECK (MainFixture::find (file, "Export song")->text.contains ("MP3"));
         CHECK (MainFixture::find (file, "Exit")->shortcutKeyDescription == "Alt+F4");
     }
 

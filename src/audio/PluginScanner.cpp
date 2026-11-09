@@ -6,6 +6,15 @@ namespace harmonia::audio
     {
         const juce::String foldersKey ("pluginFolders");
 
+        // Two scans at once would write the same plugin list from two threads.
+        std::atomic<PluginScanner*> scanning { nullptr };
+
+        void finished (PluginScanner* scanner)
+        {
+            auto expected = scanner;
+            scanning.compare_exchange_strong (expected, nullptr);
+        }
+
         void saveFolders (core::Session& session, const juce::StringArray& folders)
         {
             auto& settings = session.getEngine().getPropertyStorage().getPropertiesFile();
@@ -79,13 +88,25 @@ namespace harmonia::audio
         return formats;
     }
 
-    void PluginScanner::startScan (Callbacks newCallbacks)
+    bool PluginScanner::startScan (Callbacks newCallbacks)
     {
-        if (isThreadRunning())
-            return;
+        PluginScanner* none = nullptr;
+
+        if (isThreadRunning() || ! scanning.compare_exchange_strong (none, this))
+            return false;
 
         callbacks = std::move (newCallbacks);
-        startThread();
+
+        if (startThread())
+            return true;
+
+        finished (this);
+        return false;
+    }
+
+    bool PluginScanner::isAnyScanRunning()
+    {
+        return scanning.load() != nullptr;
     }
 
     void PluginScanner::cancelScan()
@@ -99,6 +120,7 @@ namespace harmonia::audio
             abort();
 
         stopThread (10000);
+        finished (this);
     }
 
     bool PluginScanner::isScanning() const
@@ -143,6 +165,7 @@ namespace harmonia::audio
         }
 
         const auto numKnown = list.getNumTypes();
+        finished (this);
 
         post ([numKnown] (PluginScanner& s)
         {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/ExportFormat.h"
 #include "core/Session.h"
 
 namespace harmonia::audio
@@ -10,6 +11,11 @@ namespace harmonia::audio
         exactly (a loop to use as a sample: nothing added to ring out). Blocks until done. Changes
         nothing in the project. Returns an error message, empty on success. */
     juce::String exportWav (te::Edit&, const juce::File&, std::optional<te::TimeRange> part = std::nullopt);
+
+    /** exportWav in another format: WAV of another bit depth, FLAC or MP3. 16-bit files get a
+        little noise (dither), so quiet endings fade out smoothly; an MP3 is rendered at 44.1 or
+        48 kHz (the audio interface's rate if it is one of them). */
+    juce::String exportSong (te::Edit&, const juce::File&, const ExportFormat&, std::optional<te::TimeRange> part = std::nullopt);
 
     /** How long the export lets notes ring out after the last clip ends. */
     inline constexpr double exportTailSeconds = 2.0;

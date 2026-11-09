@@ -6,9 +6,10 @@
 namespace harmonia::ui
 {
     /** Chooses the instrument of one track: built-in synth or a scanned plugin,
-        opens its editor and scans for new plugins. */
+        opens its editor and scans for new plugins (the folders: Settings > Plugins). */
     class InstrumentPanel final : public juce::Component,
                                   private juce::ValueTree::Listener,
+                                  private juce::ChangeListener,
                                   private juce::AsyncUpdater
     {
     public:
@@ -31,7 +32,6 @@ namespace harmonia::ui
         juce::TextButton scanButton { "Scan plugins" };
         juce::TextButton foldersButton { "Folders..." };
         juce::Label messageLabel;
-        std::unique_ptr<juce::FileChooser> folderChooser;
 
         // The instrument's process crashed or came back: the editor button becomes "Reload" and back.
         audio::plugin_safety::Watcher crashWatcher;
@@ -41,13 +41,14 @@ namespace harmonia::ui
         void editorClicked();
         void instrumentChosen();
         void startScan();
-        void showFolders();
-        void chooseFolder();
         void showMessage (const juce::String&, bool isProblem);
 
         void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
         void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
         void handleAsyncUpdate() override;
+
+        // The plugin list changed (a scan here or in the settings).
+        void changeListenerCallback (juce::ChangeBroadcaster*) override;
 
         JUCE_DECLARE_NON_COPYABLE (InstrumentPanel)
     };

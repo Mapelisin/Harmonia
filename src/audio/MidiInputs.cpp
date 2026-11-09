@@ -35,6 +35,25 @@ namespace harmonia::audio
         return names;
     }
 
+    std::vector<MidiInputs::Keyboard> MidiInputs::getKeyboards (te::Engine& engine)
+    {
+        std::vector<Keyboard> keyboards;
+
+        for (auto& device : engine.getDeviceManager().getMidiInDevices())
+            if (std::dynamic_pointer_cast<te::PhysicalMidiInputDevice> (device) != nullptr)
+                keyboards.push_back ({ device->getDeviceID(), device->getName(), device->isEnabled() });
+
+        return keyboards;
+    }
+
+    void MidiInputs::setKeyboardOn (te::Engine& engine, const juce::String& id, bool on)
+    {
+        // The engine then lists its inputs again, and every MidiInputs follows (changeListenerCallback).
+        for (auto& device : engine.getDeviceManager().getMidiInDevices())
+            if (device->getDeviceID() == id && std::dynamic_pointer_cast<te::PhysicalMidiInputDevice> (device) != nullptr)
+                device->setEnabled (on);
+    }
+
     void MidiInputs::refreshDevices()
     {
         for (auto& device : listening)

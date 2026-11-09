@@ -126,7 +126,9 @@ namespace harmonia::ui
         void jumpToMarker (bool next);
 
         void toggleMetronome();
-        void showAudioSettings();
+
+        /** File > Settings (Ctrl+,): the sound card, MIDI keyboards, plugins. */
+        void showSettings();
 
         /** Help → About: the version, and what Harmonia is made with. */
         void showAbout();

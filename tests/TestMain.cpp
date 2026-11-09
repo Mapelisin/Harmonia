@@ -101,6 +101,11 @@ int main (int argc, char** argv)
         options.pluginHangLimitMs = 1000;
 
         harmonia::core::Session session (std::move (options));
+
+        // Plugins in processes of their own, whatever an interrupted run left in the settings; the
+        // test plugins can load here too (for the tests that turn that off).
+        session.setPluginSandboxOn (true);
+        session.getEngine().getPluginManager().pluginFormatManager.addFormat (harmonia::test::plugins::createFormat());
         harmonia::audio::limiter::registerType (session.getEngine());
         harmonia::audio::pump::registerType (session.getEngine());
         harmonia::audio::drum_kit::registerType (session.getEngine());

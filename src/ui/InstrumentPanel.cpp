@@ -3,6 +3,7 @@
 #include "audio/Instruments.h"
 #include "core/Tracks.h"
 #include "ui/Theme.h"
+#include "ui/settings/SettingsPanel.h"
 
 namespace harmonia::ui
 {
@@ -42,12 +43,12 @@ namespace harmonia::ui
         editorButton.setWantsKeyboardFocus (false);
         scanButton.setWantsKeyboardFocus (false);
         foldersButton.setWantsKeyboardFocus (false);
-        foldersButton.setTooltip ("Folders the scan looks in for plugins: add your own, such as E:\\VST");
+        foldersButton.setTooltip ("Settings > Plugins: the folders the scan looks in (add your own, such as E:\\VST)");
 
         instrumentBox.onChange = [this] { instrumentChosen(); };
         editorButton.onClick = [this] { editorClicked(); };
         scanButton.onClick = [this] { startScan(); };
-        foldersButton.onClick = [this] { showFolders(); };
+        foldersButton.onClick = [this] { SettingsPanel::show (session, SettingsPanel::Tab::plugins); };
 
         for (auto* c : std::initializer_list<juce::Component*> { &titleLabel, &instrumentBox, &editorButton,
                                                                  &scanButton, &foldersButton, &messageLabel })
@@ -65,12 +66,19 @@ namespace harmonia::ui
             return;
         }
 
+        session.getEngine().getPluginManager().knownPluginList.addChangeListener (this);
         refreshList();
     }
 
     InstrumentPanel::~InstrumentPanel()
     {
+        session.getEngine().getPluginManager().knownPluginList.removeChangeListener (this);
         track.state.removeListener (this);
+    }
+
+    void InstrumentPanel::changeListenerCallback (juce::ChangeBroadcaster*)
+    {
+        refreshList();
     }
 
     void InstrumentPanel::paint (juce::Graphics& g)
@@ -240,9 +248,6 @@ namespace harmonia::ui
             return;
         }
 
-        scanButton.setButtonText ("Stop scan");
-        showMessage ("Scanning plugins...", false);
-
         audio::PluginScanner::Callbacks callbacks;
 
         callbacks.onProgress = [this] (const juce::String& file)
@@ -264,76 +269,14 @@ namespace harmonia::ui
             showMessage (text, false);
         };
 
-        scanner.startScan (std::move (callbacks));
-    }
-
-    void InstrumentPanel::showFolders()
-    {
-        enum { addId = 1, firstRemoveId = 100, firstStandardId = 10000 };
-
-        juce::PopupMenu menu;
-        menu.addSectionHeader ("The scan looks in");
-
-        // The standard folders are always searched: shown, not removable.
-        if (auto* format = scanner.getFormatsToScan().getFirst())
+        if (! scanner.startScan (std::move (callbacks)))
         {
-            const auto standard = format->getDefaultLocationsToSearch();
-
-            for (int i = 0; i < standard.getNumPaths(); ++i)
-                menu.addItem (firstStandardId + i, standard[i].getFullPathName() + "  (standard)", false);
+            showMessage ("A scan is running already (in the settings): wait for it to finish.", true);
+            return;
         }
 
-        const auto own = audio::PluginScanner::getOwnFolders (session);
-
-        for (int i = 0; i < own.size(); ++i)
-        {
-            const auto exists = juce::File (own[i]).isDirectory();
-            menu.addItem (firstRemoveId + i, "Remove " + own[i] + (exists ? juce::String() : "  (not found)"));
-        }
-
-        menu.addSeparator();
-        menu.addItem (addId, "Add a folder...");
-
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (foldersButton),
-                            [safe = juce::Component::SafePointer (this), own] (int result)
-        {
-            if (safe == nullptr || result == 0)
-                return;
-
-            if (result == addId)
-            {
-                safe->chooseFolder();
-            }
-            else if (result >= firstRemoveId && result - firstRemoveId < own.size())
-            {
-                audio::PluginScanner::removeFolder (safe->session, own[result - firstRemoveId]);
-                safe->showMessage ("The scan won't look in " + own[result - firstRemoveId] + " any more", false);
-            }
-        });
-    }
-
-    void InstrumentPanel::chooseFolder()
-    {
-        folderChooser = std::make_unique<juce::FileChooser> ("A folder with plugins (folders inside it are searched too)",
-                                                             juce::File(), juce::String(), true);
-
-        folderChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
-                                    [safe = juce::Component::SafePointer (this)] (const juce::FileChooser& chooser)
-        {
-            if (safe == nullptr)
-                return;
-
-            const auto folder = chooser.getResult();
-
-            if (! folder.isDirectory())
-                return;
-
-            audio::PluginScanner::addFolder (safe->session, folder);
-
-            // Finding what's there is the point of adding it.
-            if (! safe->scanner.isScanning())
-                safe->startScan();
-        });
+        scanButton.setButtonText ("Stop scan");
+        showMessage ("Scanning plugins...", false);
     }
 
     void InstrumentPanel::showMessage (const juce::String& text, bool isProblem)

@@ -48,6 +48,12 @@ namespace harmonia::core
         /** Where plugins run in processes of their own; nullptr if they load into this one. */
         sandbox::Sandbox* getPluginSandbox() noexcept    { return pluginSandbox.get(); }
 
+        /** Whether plugins loaded from now on get processes of their own (there is a plugin host,
+            and the user hasn't turned it off). Plugins already loaded stay where they are.
+            Kept in the settings; on at first. */
+        bool isPluginSandboxOn() const noexcept    { return pluginSandbox != nullptr && sandboxOn.load(); }
+        void setPluginSandboxOn (bool);
+
         /** The file a new recording on this track goes to: "<project> Audio" next to a saved
             project, else the recordings folder; named after the track and the time. */
         static juce::File getFileForNewRecording (const te::Track&, const juce::String& extension,
@@ -55,6 +61,7 @@ namespace harmonia::core
 
     private:
         bool openDevices;
+        std::atomic<bool> sandboxOn { true };
 
         // Outlives the engine: the engine's plugins are its processes.
         std::unique_ptr<sandbox::Sandbox> pluginSandbox;

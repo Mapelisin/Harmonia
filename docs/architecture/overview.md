@@ -104,6 +104,10 @@ Tracktion останавливает воспроизведение, когда 
   `ui/MainComponent` связывает: открытый клип → piano roll, текущая дорожка → инструмент, клавиатуры; что играет
   Play — `ArrangementModel::getPlayRange`. Файлы (новый/открыть/сохранить, экспорт `audio/Export`) — `app/MainWindow`,
   он владеет проектом и пересоздаёт экран при смене проекта; `MainComponent` зовёт их через `ui/FileCommands`.
+  Формат экспорта — `audio/ExportFormat` (окно выбора `ui/ExportOptions`); MP3 кодирует система за `audio/Mp3Encoder`
+  (Windows — Media Foundation, решение 24). Окно настроек — `ui/settings/SettingsPanel` (вкладки звука, MIDI,
+  плагинов); всё, что там меняется, хранит `te::PropertyStorage` (свои ключи — у владельцев: `PluginScanner`,
+  `Session`, `ExportFormat`).
 - **Микшер и эффекты:** `audio/Effects` — цепочки эффектов (список плагинов дорожки: инструмент, эффекты,
   громкость/панорама, индикатор; у мастера только эффекты, громкость мастера — отдельный плагин после них);
   каждое изменение — один шаг undo. `audio/PluginControls` — ручки любого плагина (параметры Tracktion или

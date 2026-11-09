@@ -23,11 +23,14 @@ namespace harmonia::audio
             std::function<void (int numPluginsKnown)> onFinished;
         };
 
-        /** Scans the standard plugin folders and the user's own (see addFolder). Does nothing if
-            a scan is already running. */
-        void startScan (Callbacks);
+        /** Scans the standard plugin folders and the user's own (see addFolder). One scan at a
+            time in the whole program: false (and nothing happens) if one is running already. */
+        bool startScan (Callbacks);
         void cancelScan();
         bool isScanning() const;
+
+        /** Whether any scanner is scanning (the instrument panel's, or the settings window's). */
+        static bool isAnyScanRunning();
 
         /** Scans one plugin file on the calling thread and returns what it contains. */
         juce::Array<juce::PluginDescription> scanFile (const juce::String& path);

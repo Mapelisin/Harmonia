@@ -2,6 +2,7 @@
 #include "audio/Export.h"
 #include "audio/Instruments.h"
 #include "core/Clips.h"
+#include "ui/ExportOptions.h"
 #include "ui/MainComponent.h"
 #include "ui/RenderingPolicy.h"
 #include "ui/Theme.h"
@@ -341,9 +342,13 @@ namespace harmonia::app
         return true;
     }
 
-    void MainWindow::exportWav()
+    void MainWindow::exportSong()
     {
-        chooseWavExport (getProjectName(), std::nullopt);
+        ui::ExportOptions::show (session, [safe = juce::Component::SafePointer<MainWindow> (this)] (const audio::ExportFormat& format)
+        {
+            if (safe != nullptr)
+                safe->chooseExport (safe->getProjectName(), std::nullopt, format);
+        });
     }
 
     void MainWindow::exportLoopWav()
@@ -360,33 +365,41 @@ namespace harmonia::app
         auto& tempo = project->getEdit().tempoSequence;
         const te::TimeRange part (tempo.toTime (te::BeatPosition::fromBeats (region->start)),
                                   tempo.toTime (te::BeatPosition::fromBeats (region->end)));
-        chooseWavExport (getProjectName() + " - " + ui::MainComponent::describeBars (*region, content->getArrangementModel().getBeatsPerBar()),
-                         part);
+        // A loop is a sample for other songs: a WAV at full quality.
+        chooseExport (getProjectName() + " - " + ui::MainComponent::describeBars (*region, content->getArrangementModel().getBeatsPerBar()),
+                      part, {});
     }
 
-    void MainWindow::chooseWavExport (const juce::String& defaultName, std::optional<te::TimeRange> part)
+    void MainWindow::chooseExport (const juce::String& defaultName, std::optional<te::TimeRange> part, const audio::ExportFormat& format)
     {
         const auto folder = file != juce::File() ? file.getParentDirectory() : getDefaultFolder();
         folder.createDirectory();
 
-        chooser = std::make_unique<juce::FileChooser> ("Export WAV", folder.getChildFile (juce::File::createLegalFileName (defaultName + ".wav")),
-                                                       "*.wav");
+        const auto extension = format.getExtension();
+        chooser = std::make_unique<juce::FileChooser> ("Export " + format.describe(),
+                                                       folder.getChildFile (juce::File::createLegalFileName (defaultName + extension)),
+                                                       "*" + extension);
         chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
                                   | juce::FileBrowserComponent::warnAboutOverwriting,
-                              [this, part] (const juce::FileChooser& fc)
+                              [this, part, format] (const juce::FileChooser& fc)
         {
             auto result = fc.getResult();
 
             if (result == juce::File())
                 return;
 
-            result = result.withFileExtension (".wav");
+            result = result.withFileExtension (format.getExtension());
 
             // Rendering takes over the engine: stop first, or playback would resume over it.
             if (auto* content = getMainComponent())
                 content->getTransport().stop();
 
-            if (const auto error = audio::exportWav (project->getEdit(), result, part); error.isNotEmpty())
+            // Rendering holds the window up for a while (an MP3 is encoded after it).
+            juce::MouseCursor::showWaitCursor();
+            const auto error = audio::exportSong (project->getEdit(), result, format, part);
+            juce::MouseCursor::hideWaitCursor();
+
+            if (error.isNotEmpty())
                 showError ("Export failed", error);
             else if (auto* content = getMainComponent())
                 content->showMessage ("Exported " + result.getFullPathName());

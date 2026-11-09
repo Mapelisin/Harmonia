@@ -11,6 +11,9 @@ add_library(harmonia_audio STATIC
     Effects.cpp
     Export.h
     Export.cpp
+    ExportFormat.h
+    ExportFormat.cpp
+    Mp3Encoder.h
     FilePreview.h
     FilePreview.cpp
     MidiRender.h
@@ -47,6 +50,12 @@ add_library(harmonia_audio STATIC
     Sends.cpp
     Transport.h
     Transport.cpp)
+
+if (WIN32)
+    target_sources(harmonia_audio PRIVATE Mp3EncoderWindows.cpp)
+else()
+    message(FATAL_ERROR "MP3 export (src/audio/Mp3Encoder.h) has no implementation for this system yet")
+endif()
 
 harmonia_configure_target(harmonia_audio)
 target_link_libraries(harmonia_audio PUBLIC harmonia_core)

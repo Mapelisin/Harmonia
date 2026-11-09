@@ -1,5 +1,6 @@
 #include "audio/Export.h"
 #include "audio/Groups.h"
+#include "audio/Mp3Encoder.h"
 #include "audio/Sidechain.h"
 #include "core/Tracks.h"
 
@@ -167,19 +168,46 @@ namespace harmonia::audio
             the time being, which Tracktion counts as a change to save (the project showed unsaved
             changes after an export). The tracks given here are all heard anyway. */
         juce::String render (te::Edit& edit, const juce::File& file, const juce::Array<te::Track*>& tracks,
-                             te::TimeRange range, bool withMaster, const juce::Array<te::AudioTrack*>& silentSources = {})
+                             te::TimeRange range, bool withMaster, const juce::Array<te::AudioTrack*>& silentSources = {},
+                             const ExportFormat& format = {}, double sampleRate = 0)
         {
             if (const auto error = prepare (file); error.isNotEmpty())
                 return error;
+
+            if (sampleRate <= 0)
+                sampleRate = edit.engine.getDeviceManager().getSampleRate();
+
+            // An MP3 is made from a float WAV rendered next to it.
+            if (format.type == ExportFormat::Type::mp3)
+            {
+                if (! mp3::isAvailable (format.kbps))
+                    return "This computer has no MP3 encoder for " + juce::String (format.kbps) + " kbps: export WAV or FLAC";
+
+                const juce::TemporaryFile wav (file.withFileExtension (".wav"));
+                const auto error = render (edit, wav.getFile(), tracks, range, withMaster, silentSources,
+                                           { ExportFormat::Type::wav, 32 },
+                                           mp3::canUseSampleRate (sampleRate) ? sampleRate : 44100.0);
+
+                if (error.isNotEmpty())
+                    return error;
+
+                const auto encoded = mp3::encode (wav.getFile(), file, format.kbps);
+
+                // The engine may still hold the WAV it wrote; it goes with the temporary file.
+                edit.engine.getAudioFileManager().releaseFile (te::AudioFile (edit.engine, wav.getFile()));
+                return encoded;
+            }
 
             const te::Edit::ScopedRenderStatus renderStatus (edit, true);
             te::TransportControl::stopAllTransports (edit.engine, false, true);
 
             te::Renderer::Parameters parameters (edit);
             parameters.destFile = file;
-            parameters.audioFormat = edit.engine.getAudioFileFormatManager().getWavFormat();
-            parameters.bitDepth = 24;
-            parameters.sampleRateForAudio = edit.engine.getDeviceManager().getSampleRate();
+            auto& formats = edit.engine.getAudioFileFormatManager();
+            parameters.audioFormat = format.type == ExportFormat::Type::flac ? formats.getFlacFormat() : formats.getWavFormat();
+            parameters.bitDepth = format.bitDepth;
+            parameters.ditheringEnabled = format.bitDepth == 16;
+            parameters.sampleRateForAudio = sampleRate;
             parameters.blockSizeForAudio = edit.engine.getDeviceManager().getBlockSize();
             parameters.time = range;
             parameters.usePlugins = true;
@@ -222,7 +250,7 @@ namespace harmonia::audio
         return render (track.edit, file, tracks, range, false, sources);
     }
 
-    juce::String exportWav (te::Edit& edit, const juce::File& file, std::optional<te::TimeRange> part)
+    juce::String exportSong (te::Edit& edit, const juce::File& file, const ExportFormat& format, std::optional<te::TimeRange> part)
     {
         if (edit.getLength() <= te::TimeDuration())
             return "Nothing to export: the song has no clips";
@@ -248,7 +276,12 @@ namespace harmonia::audio
         // A muted kick still ducks the bass, as it does while playing.
         TemporaryState temporary (edit);
         const auto sources = keepSources (temporary, heard, tracks);
-        return render (edit, file, tracks, part.value_or (getRange (edit)), true, sources);
+        return render (edit, file, tracks, part.value_or (getRange (edit)), true, sources, format);
+    }
+
+    juce::String exportWav (te::Edit& edit, const juce::File& file, std::optional<te::TimeRange> part)
+    {
+        return exportSong (edit, file, {}, part);
     }
 
     juce::String getStemFileName (const juce::String& prefix, int number, const juce::String& trackName)
