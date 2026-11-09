@@ -407,7 +407,7 @@ namespace harmonia::ui::arrangement
         ClipArea::DropMarker marker;
         marker.trackIndex = track;
         marker.beat = std::max (0.0, snap::snapFloor (view.xToBeat (std::max (0.0f, local.x)), model.getSnap(), model.getSnapContext()));
-        marker.newTrack = track < 0 || model.isFoldedRow (model.getTrack (track))
+        marker.newTrack = track < 0 || model.isLockedRow (model.getTrack (track))
                        || core::tracks::isAudio (*model.getTrack (track)) != ! midi;
         marker.midi = midi;
         return marker;

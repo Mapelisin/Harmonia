@@ -4,6 +4,7 @@
 #include "audio/Instruments.h"
 #include "audio/Sends.h"
 #include "audio/Sidechain.h"
+#include "audio/Freeze.h"
 #include "core/AudioTempo.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
@@ -114,6 +115,41 @@ namespace harmonia::ui::arrangement
 
         const auto folder = core::folders::getFolderOf (*track);
         return folder.has_value() && folder->collapsed;
+    }
+
+    bool ArrangementModel::isFrozen (const te::Track* track) const
+    {
+        auto* audioTrack = dynamic_cast<const te::AudioTrack*> (track);
+        return audioTrack != nullptr && audio::freeze::isFrozen (*audioTrack);
+    }
+
+    bool ArrangementModel::isLockedRow (const te::Track* track) const
+    {
+        return isFoldedRow (track) || isFrozen (track);
+    }
+
+    juce::String ArrangementModel::freezeTrack (te::AudioTrack& track)
+    {
+        if (const auto error = audio::freeze::freeze (project, track); error.isNotEmpty())
+            return error;
+
+        // Its notes aren't heard while it's frozen: nothing of it stays open or selected.
+        if (auto* open = getOpenClip(); open != nullptr && open->getClipTrack() == &track)
+            openClip (nullptr);
+
+        auto stillSelected = getSelectedClips();
+        stillSelected.removeIf ([&] (te::Clip* clip) { return clip->getClipTrack() == &track; });
+        setSelection (stillSelected);
+        clipsDirty = true;
+        changed();
+        return {};
+    }
+
+    void ArrangementModel::unfreezeTrack (te::AudioTrack& track)
+    {
+        audio::freeze::unfreeze (project, track);
+        clipsDirty = true;
+        changed();
     }
 
     std::optional<core::folders::Folder> ArrangementModel::newFolder (te::AudioTrack& track)
@@ -307,8 +343,9 @@ namespace harmonia::ui::arrangement
             for (auto* track : project.getTracks())
             {
                 const auto folder = core::folders::getFolderOf (*track);
-                const auto folded = folder.has_value() && folder->collapsed;
-                const auto row = folded ? tracks.indexOf (core::folders::getMembers (getEdit(), folder->id).getFirst())
+                const auto collapsed = folder.has_value() && folder->collapsed;
+                const auto folded = collapsed || audio::freeze::isFrozen (*track);
+                const auto row = collapsed ? tracks.indexOf (core::folders::getMembers (getEdit(), folder->id).getFirst())
                                         : tracks.indexOf (track);
 
                 if (row < 0)
@@ -523,7 +560,7 @@ namespace harmonia::ui::arrangement
         const auto start = std::max (0.0, snap::snapFloor (beat, snapMode, getSnapContext()));
         auto* target = getTrack (trackIndex);
         te::Track* previous = getTrackToAddAfter (target);
-        auto useTarget = target != nullptr && ! isFoldedRow (target) && core::tracks::isAudio (*target);
+        auto useTarget = target != nullptr && ! isLockedRow (target) && core::tracks::isAudio (*target);
 
         project.beginGesture (files.size() == 1 ? "Import audio" : "Import audio files");
         juce::StringArray problems;
@@ -603,7 +640,7 @@ namespace harmonia::ui::arrangement
         const auto start = std::max (0.0, snap::snapFloor (beat, snapMode, getSnapContext()));
         auto* target = getTrack (trackIndex);
         te::Track* previous = getTrackToAddAfter (target);
-        auto useTarget = target != nullptr && ! isFoldedRow (target) && ! core::tracks::isAudio (*target);
+        auto useTarget = target != nullptr && ! isLockedRow (target) && ! core::tracks::isAudio (*target);
         auto adoptTempo = isSongEmpty();
 
         project.beginGesture (files.size() == 1 ? "Import MIDI" : "Import MIDI files");

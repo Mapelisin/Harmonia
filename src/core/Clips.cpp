@@ -167,12 +167,23 @@ namespace harmonia::core::clips
         juce::Array<te::Clip*> result;
 
         for (auto* clip : track.getClips())
-            if (dynamic_cast<te::MidiClip*> (clip) != nullptr || dynamic_cast<te::WaveAudioClip*> (clip) != nullptr)
+            if ((dynamic_cast<te::MidiClip*> (clip) != nullptr || dynamic_cast<te::WaveAudioClip*> (clip) != nullptr)
+                 && ! isFreezeClip (*clip))
                 result.add (clip);
 
         std::stable_sort (result.begin(), result.end(), [] (te::Clip* a, te::Clip* b)
                           { return getStartBeat (*a) < getStartBeat (*b); });
         return result;
+    }
+
+    bool isFreezeClip (const te::Clip& clip)
+    {
+        return (bool) clip.state["hFreezeClip"];
+    }
+
+    void setFreezeClip (te::Clip& clip)
+    {
+        clip.state.setProperty ("hFreezeClip", true, &clip.edit.getUndoManager());
     }
 
     bool isAudio (const te::Clip& clip)
@@ -189,9 +200,11 @@ namespace harmonia::core::clips
     {
         auto end = 0.0;
 
+        // Not the file of a frozen track: it goes on for a moment after the track's last clip.
         for (auto* track : te::getClipTracks (edit))
             for (auto* clip : track->getClips())
-                end = std::max (end, getEndBeat (*clip));
+                if (! isFreezeClip (*clip))
+                    end = std::max (end, getEndBeat (*clip));
 
         return end;
     }

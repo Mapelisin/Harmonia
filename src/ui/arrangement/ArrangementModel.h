@@ -24,7 +24,7 @@ namespace harmonia::ui::arrangement
         int trackIndex = 0;             // the row it is drawn in
         double startBeat = 0.0, endBeat = 0.0;
         bool selected = false, open = false, linked = false, audio = false;
-        bool folded = false;            // in a collapsed folder's row: shown, not edited there
+        bool folded = false;            // in a collapsed folder's row or on a frozen track: shown, not edited
     };
 
     /** Everything the arrangement edits and remembers, without drawing: tracks, the current
@@ -77,6 +77,21 @@ namespace harmonia::ui::arrangement
 
         /** The track's row stands for its whole collapsed folder. */
         bool isFoldedRow (const te::Track*) const;
+
+        /** Nothing is edited in this track's row: it stands for a collapsed folder, or the track
+            is frozen. */
+        bool isLockedRow (const te::Track*) const;
+
+        //==============================================================================
+        // Freezing (audio::freeze): the track plays a file of its sound, its instrument and
+        // effects off. One undo step each.
+
+        bool isFrozen (const te::Track*) const;
+
+        /** Renders and freezes the track (blocks until done). Returns an error message, empty on
+            success. A clip of it open in the piano roll is closed. */
+        juce::String freezeTrack (te::AudioTrack&);
+        void unfreezeTrack (te::AudioTrack&);
 
         /** A new folder of the track (and the tracks of the selected clips), named by the next
             free name. */

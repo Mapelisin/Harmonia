@@ -70,8 +70,13 @@ namespace harmonia::core::clips
     /** The track's MIDI clips in time order. */
     juce::Array<te::MidiClip*> getMidiClips (te::AudioTrack&);
 
-    /** The track's MIDI and audio clips in time order. */
+    /** The track's MIDI and audio clips in time order (not the file a frozen track plays). */
     juce::Array<te::Clip*> getClips (te::AudioTrack&);
+
+    /** The clip a frozen track plays in place of its own (audio::freeze): kept out of getClips,
+        so nothing shows or edits it. */
+    bool isFreezeClip (const te::Clip&);
+    void setFreezeClip (te::Clip&);
 
     /** An audio clip (plays a file), not a MIDI clip. */
     bool isAudio (const te::Clip&);

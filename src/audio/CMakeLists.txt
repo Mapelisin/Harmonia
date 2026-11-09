@@ -11,6 +11,8 @@ add_library(harmonia_audio STATIC
     DeviceSetup.cpp
     EffectChains.h
     EffectChains.cpp
+    Freeze.h
+    Freeze.cpp
     Effects.h
     Effects.cpp
     Export.h

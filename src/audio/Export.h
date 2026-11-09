@@ -43,6 +43,7 @@ namespace harmonia::audio
     /** Renders `range` of one track as it sounds through its own instrument, effects, volume and
         pan (not its sends, its group, nor the master) to a 24-bit WAV: even while it's muted or
         another track is soloed. Effects listening to other tracks (sidechain) still hear them.
+        With `beforeFader`, without its volume and pan (and whatever line moves them).
         Blocks until done. Changes nothing in the project. */
-    juce::String renderTrack (te::AudioTrack&, const juce::File&, te::TimeRange);
+    juce::String renderTrack (te::AudioTrack&, const juce::File&, te::TimeRange, bool beforeFader = false);
 }

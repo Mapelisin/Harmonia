@@ -2,6 +2,7 @@
 #include "audio/Groups.h"
 #include "audio/Mp3Encoder.h"
 #include "audio/Sidechain.h"
+#include "core/Clips.h"
 #include "core/Tracks.h"
 
 namespace harmonia::audio
@@ -107,6 +108,13 @@ namespace harmonia::audio
                 set (output, "destTrackID", {});
             }
 
+            /** Its volume and pan left out: the sound as it comes to the fader. */
+            void bypassFader (te::AudioTrack& track)
+            {
+                if (auto* fader = track.getVolumePlugin())
+                    set (fader->state, te::IDs::enabled, false);
+            }
+
             /** Silent, though still feeding the effects that listen to it: Tracktion keeps a
                 muted track playing for them, without its sends to the return tracks. */
             void keepAsSource (te::AudioTrack& track)
@@ -149,7 +157,9 @@ namespace harmonia::audio
 
         te::TimeRange getRange (te::Edit& edit)
         {
-            return { te::TimePosition(), te::TimePosition() + edit.getLength() + te::TimeDuration::fromSeconds (exportTailSeconds) };
+            // To the end of the last clip (core::clips knows which clips count), and a moment more.
+            const auto end = edit.tempoSequence.toTime (te::BeatPosition::fromBeats (core::clips::getSongEndBeat (edit)));
+            return { te::TimePosition(), end + te::TimeDuration::fromSeconds (exportTailSeconds) };
         }
 
         juce::String prepare (const juce::File& file)
@@ -237,11 +247,14 @@ namespace harmonia::audio
         }
     }
 
-    juce::String renderTrack (te::AudioTrack& track, const juce::File& file, te::TimeRange range)
+    juce::String renderTrack (te::AudioTrack& track, const juce::File& file, te::TimeRange range, bool beforeFader)
     {
         TemporaryState temporary (track.edit);
         temporary.hear (track);
         temporary.playToMaster (track);
+
+        if (beforeFader)
+            temporary.bypassFader (track);
 
         auto tracks = getOtherTracks (track.edit);
         tracks.add (&track);

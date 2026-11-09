@@ -171,8 +171,8 @@ namespace harmonia::ui::arrangement
 
         if (p.clicks >= 2 && track >= 0)
         {
-            // Not into a collapsed folder: which of its tracks?
-            if (! model.isFoldedRow (model.getTrack (track)))
+            // Not into a collapsed folder (which of its tracks?), nor onto a frozen track.
+            if (! model.isLockedRow (model.getTrack (track)))
                 model.createClip (*model.getTrack (track), view.xToBeat (p.position.x));
 
             return;
@@ -349,7 +349,7 @@ namespace harmonia::ui::arrangement
             {
                 auto* destination = tracks[t.trackIndex + candidate];
 
-                if (destination == nullptr || model.isFoldedRow (destination)
+                if (destination == nullptr || model.isLockedRow (destination)
                      || core::tracks::isAudio (*destination) != clips::isAudio (*t.clip))
                     return false;
             }

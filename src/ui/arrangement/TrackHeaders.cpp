@@ -320,12 +320,16 @@ namespace harmonia::ui::arrangement
             auto* input = isAudio ? audio::AudioInputs::getInput (*track) : nullptr;
             const auto armed = isAudio && audio::AudioInputs::isArmed (*track);
 
-            if (! isAudio)
+            if (model.isFrozen (track.get()))
+                instrument.setText ("Frozen", juce::dontSendNotification);
+            else if (! isAudio)
                 instrument.setText (audio::instruments::getName (*track), juce::dontSendNotification);
             else
                 instrument.setText (input != nullptr ? "In: " + input->getAliasOrName() : juce::String ("Audio"), juce::dontSendNotification);
 
-            instrument.setTooltip (isAudio ? juce::String ("The input this track records from (right-click to change)") : juce::String());
+            instrument.setTooltip (model.isFrozen (track.get()) ? juce::String ("Frozen: it plays a file of its sound, its instrument and effects are off. "
+                                                                                 "Unfreeze it (right-click) to change it.")
+                                   : isAudio ? juce::String ("The input this track records from (right-click to change)") : juce::String());
 
             if (arm.isVisible() != isAudio)
             {
@@ -601,6 +605,13 @@ namespace harmonia::ui::arrangement
             if (safe != nullptr)
                 safe->renderToAudio (*t);
         });
+
+        const auto frozen = model.isFrozen (track.get());
+        menu.addItem (frozen ? "Unfreeze" : "Freeze (plays as audio, its plugins off)", frozen || hasClips, frozen, [safe, t = track]
+        {
+            if (safe != nullptr)
+                safe->toggleFrozen (*t);
+        });
         menu.addSubMenu ("Output (master or a group)", makeOutputMenu (model, *track));
         menu.addSubMenu ("Folder", createFolderMenu (*track));
         menu.addSeparator();
@@ -608,6 +619,26 @@ namespace harmonia::ui::arrangement
         menu.addSeparator();
         menu.addItem ("Delete track", [&m = model, t = track] { m.deleteTrack (*t); });
         return menu;
+    }
+
+    void TrackHeaders::toggleFrozen (te::AudioTrack& track)
+    {
+        const auto trackName = track.getName();
+
+        if (model.isFrozen (&track))
+        {
+            model.unfreezeTrack (track);
+
+            if (onMessage != nullptr)
+                onMessage (trackName + " unfrozen", false);
+
+            return;
+        }
+
+        const auto error = model.freezeTrack (track);
+
+        if (onMessage != nullptr)
+            onMessage (error.isNotEmpty() ? error : trackName + " frozen: it plays as audio, its instrument and effects are off", error.isNotEmpty());
     }
 
     void TrackHeaders::startRenaming (te::AudioTrack& track)

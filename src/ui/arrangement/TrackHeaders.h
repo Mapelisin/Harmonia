@@ -49,6 +49,9 @@ namespace harmonia::ui::arrangement
         /** The track menu's commands (also for tests). */
         void renderToAudio (te::AudioTrack&);
 
+        /** Freezes the track, or unfreezes a frozen one; says what happened. */
+        void toggleFrozen (te::AudioTrack&);
+
         /** The track's menu: right-click on its header, or Track in the menu bar. For the row
             of a collapsed folder, the folder's menu. */
         juce::PopupMenu createTrackMenu (te::AudioTrack&);

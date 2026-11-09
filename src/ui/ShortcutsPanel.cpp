@@ -58,7 +58,7 @@ namespace harmonia::ui
                 { "Ctrl+Insert / Ctrl+Delete", "Empty bars before the loop region / delete its bars, on every track" },
                 { "Right button on the ruler", "Markers; duplicate, insert or delete bars on every track" },
                 { "Markers strip", "+ Marker, double-click: add; drag: move; double-click a marker: rename" },
-                { "Track header: right button", "Rename, colour, duplicate, move, render to audio, delete" },
+                { "Track header: right button", "Rename, colour, duplicate, move, render to audio, freeze, delete" },
                 { "Drag a track header", "Move the track up or down" },
                 { "Track header: right button > Folder", "Put neighbouring tracks into a folder; its button collapses it to one row with mute and solo for all" } } },
 

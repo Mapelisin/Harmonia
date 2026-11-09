@@ -298,3 +298,95 @@ TEST_SUITE ("arrangement: track commands")
         CHECK_FALSE (project->canUndo());
     }
 }
+
+TEST_SUITE ("ui: freezing tracks")
+{
+    TEST_CASE ("a frozen track: the song sounds as before, its reverb too; its row isn't edited; the menu unfreezes")
+    {
+        test::TempFolder temp;
+        auto project = core::Project::createEmpty (test::session());
+        ArrangementModel model { *project };
+        ArrangementView view;
+        TrackHeaders headers (model, view);
+        juce::StringArray messages;
+        headers.onMessage = [&] (const juce::String& text, bool isProblem) { messages.add ((isProblem ? "! " : "") + text); };
+
+        auto& lead = *project->getTracks().getFirst();
+        lead.setName ("Lead");
+        REQUIRE (instruments::useBuiltInSynth (lead).isEmpty());
+        auto* clip = project->addMidiClip (lead, 4.0, 4.0, "Lead");
+        core::NoteEditor (*clip).add ({ makeNote (60, 0.0, 2.0), makeNote (67, 0.0, 2.0) });   // 2-3 s
+
+        juce::String error;
+        auto* reverb = sends::addReturnTrack (*project, sends::Preset::reverb, error);
+        REQUIRE (reverb != nullptr);
+        REQUIRE (sends::setLevelDb (lead, *reverb, -6.0f));
+        auto& empty = *project->addTrack ("Empty");
+        dispatch();
+
+        REQUIRE (project->save (temp.getFile ("Song.harmonia")).isEmpty());
+        const auto before = temp.getFile ("Before.wav");
+        REQUIRE (audio::exportWav (project->getEdit(), before).isEmpty());
+        dispatch();
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (400);
+        model.openClip (clip);
+        model.setSelection ({ clip });
+        project->clearUndoHistory();
+
+        // The track's menu freezes it.
+        auto menu = headers.createTrackMenu (lead);
+        const auto findItem = [] (const juce::PopupMenu& m, const juce::String& text) -> std::optional<juce::PopupMenu::Item>
+        {
+            for (juce::PopupMenu::MenuItemIterator it (m, true); it.next();)
+                if (it.getItem().text.startsWith (text))
+                    return it.getItem();
+
+            return std::nullopt;
+        };
+
+        REQUIRE (findItem (menu, "Freeze").has_value());
+        CHECK_FALSE (findItem (menu, "Freeze")->isTicked);
+        CHECK_FALSE (findItem (headers.createTrackMenu (empty), "Freeze")->isEnabled);      // nothing to freeze
+        findItem (menu, "Freeze")->action();
+        dispatch();
+
+        CHECK (model.isFrozen (&lead));
+        CHECK (model.isLockedRow (&lead));
+        CHECK_FALSE (model.isLockedRow (&empty));
+        REQUIRE (messages.size() == 1);
+        CHECK (messages[0].startsWith ("Lead frozen"));
+        CHECK (project->getUndoDescription() == "Freeze track");
+
+        // Nothing of it is open or selected, and its clip can't be picked in the arrangement.
+        CHECK (model.getOpenClip() == nullptr);
+        CHECK (model.getSelectedClips().isEmpty());
+        REQUIRE (model.getClips().size() == 1);
+        CHECK (model.getClips()[0].folded);
+        CHECK (model.findClipAt (0, 5.0) == nullptr);
+
+        // The song sounds as it did (the synth's random phases make it differ a little).
+        const auto after = temp.getFile ("After.wav");
+        REQUIRE (audio::exportWav (project->getEdit(), after).isEmpty());
+        CHECK (std::abs (getRmsDb (after, 2.0, 3.0) - getRmsDb (before, 2.0, 3.0)) < 1.5f);
+        CHECK (std::abs (getRmsDb (after, 3.2, 3.8) - getRmsDb (before, 3.2, 3.8)) < 3.0f);   // the reverb's tail
+
+        // And is no longer than it was.
+        CHECK (te::AudioFile (project->getEdit().engine, after).getLength()
+                 == doctest::Approx (te::AudioFile (project->getEdit().engine, before).getLength()).epsilon (0.01));
+
+        // Unfrozen from the same menu.
+        menu = headers.createTrackMenu (lead);
+        REQUIRE (findItem (menu, "Unfreeze").has_value());
+        CHECK (findItem (menu, "Unfreeze")->isTicked);
+        findItem (menu, "Unfreeze")->action();
+        dispatch();
+        CHECK_FALSE (model.isFrozen (&lead));
+        CHECK (model.findClipAt (0, 5.0) != nullptr);
+        CHECK (messages[messages.size() - 1] == "Lead unfrozen");
+
+        project->undo();
+        CHECK (model.isFrozen (&lead));
+        project->undo();
+        CHECK_FALSE (model.isFrozen (&lead));
+    }
+}
