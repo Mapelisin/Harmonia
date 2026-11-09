@@ -133,6 +133,8 @@ namespace harmonia::ui
                 { "Click an effect", "Open its window" },
                 { "Green dot on an effect", "Bypass it / turn it back on" },
                 { "Effect: right button", "Open, bypass, move up / down, remove" },
+                { "Drag an effect", "Move it in its chain or to another track, group, return or the master (Ctrl: a copy)" },
+                { "+ on a strip > Chains", "Save all the strip's effects as a chain; add a saved chain or put it in their place" },
                 { "Fader: double-click", "0 dB" },
                 { "Pan knob: double-click", "Centre" },
                 { "Meter's red line: click", "Forget the overload" } } }

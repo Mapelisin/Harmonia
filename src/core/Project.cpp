@@ -1,5 +1,6 @@
 #include "core/Project.h"
 #include "core/AudioClips.h"
+#include "core/PluginState.h"
 #include "core/Tempo.h"
 #include "core/Tracks.h"
 
@@ -34,52 +35,6 @@ namespace harmonia::core
 
             const auto copiedParent = findCopyOf (parent, root, copy);
             return copiedParent.isValid() ? copiedParent.getChild (parent.indexOf (node)) : juce::ValueTree();
-        }
-
-        /** What Tracktion's Plugin::flushPluginStateToValueTree writes, written into a copy of the
-            plugin's node instead: the plugin's own state (VST settings, changed in its window
-            without going through undo), and the values set by hand of parameters the automation
-            is moving. Tracktion writes them into the open edit as undoable steps (the built-in
-            synth even replaces a node each time), which made Ctrl+Z after saving undo nothing
-            visible and dropped the redo steps. */
-        void writePluginSettings (te::Plugin& plugin, juce::ValueTree& node)
-        {
-            juce::MemoryOutputStream stream;
-
-            for (auto* parameter : plugin.getAutomatableParameters())
-            {
-                if (parameter->getCurrentValue() != parameter->getCurrentExplicitValue())
-                {
-                    stream.writeString (parameter->paramID);
-                    stream.writeFloat (parameter->getCurrentExplicitValue());
-                }
-            }
-
-            stream.flush();
-
-            if (stream.getDataSize() > 0)
-                node.setProperty (te::IDs::parameters, stream.getMemoryBlock(), nullptr);
-            else
-                node.removeProperty (te::IDs::parameters, nullptr);
-
-            auto* external = dynamic_cast<te::ExternalPlugin*> (&plugin);
-            auto* instance = external != nullptr ? external->getAudioPluginInstance() : nullptr;
-
-            if (instance == nullptr)
-                return;
-
-            if (instance->getNumPrograms() > 0)
-                node.setProperty (te::IDs::programNum, instance->getCurrentProgram(), nullptr);
-
-            juce::MemoryBlock chunk;
-            instance->suspendProcessing (true);
-            instance->getStateInformation (chunk);
-            instance->suspendProcessing (false);
-
-            if (chunk.getSize() > 0)
-                node.setProperty (te::IDs::state, chunk.toBase64Encoding(), nullptr);
-            else
-                node.removeProperty (te::IDs::state, nullptr);
         }
     }
 
@@ -214,7 +169,7 @@ namespace harmonia::core
 
         for (auto* plugin : te::getAllPlugins (*edit, true))
             if (auto node = findCopyOf (plugin->state, edit->state, state); node.isValid())
-                writePluginSettings (*plugin, node);
+                plugin_state::write (*plugin, node);
 
         const auto folder = relativeTo != juce::File() ? relativeTo.getParentDirectory() : juce::File();
 

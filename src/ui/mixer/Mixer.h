@@ -40,6 +40,9 @@ namespace harmonia::ui::mixer
         te::AudioTrack* addReturnTrack (audio::sends::Preset);
         ChannelStrip& getMasterStrip() noexcept         { return master; }
 
+        /** The strip a point of the screen is on, or nullptr. */
+        ChannelStrip* getStripAt (juce::Point<int> screenPosition);
+
         /** Something to tell the user (e.g. a plugin failed to load). */
         std::function<void (const juce::String& text, bool isProblem)> onMessage;
 
@@ -56,6 +59,14 @@ namespace harmonia::ui::mixer
         bool needsRefresh = false;
 
         void connect (ChannelStrip&);
+
+        /** Every strip, the master's too. */
+        std::vector<ChannelStrip*> getAllStrips();
+
+        /** An effect's slot dragged over the mixer: the strip under the mouse shows where it
+            would go; dropped, it goes there. */
+        void slotDragged (juce::Point<int> screenPosition);
+        void slotDropped (te::Plugin&, juce::Point<int> screenPosition, bool copy);
         void layOutStrips();
         void showAddMenu();
         bool syncStrips (juce::OwnedArray<ChannelStrip>&, const juce::Array<te::AudioTrack*>&);

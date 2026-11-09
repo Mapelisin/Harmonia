@@ -99,7 +99,10 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Настройки — `ui::SettingsPanel` (вкладки в `src/ui/settings`). MIDI-клавиатуры вкл/выкл — `MidiInputs::setKeyboardOn`
   (хранит Tracktion); плагины в своих процессах вкл/выкл — `Session::setPluginSandboxOn` (в тестах включено на
   старте). Скан плагинов — один на программу (`PluginScanner::startScan` вернёт false).
-- Эффекты — через `audio::effects` (порядок в списке плагинов: инструмент, эффекты, громкость, индикатор).
+- Эффекты — через `audio::effects` (порядок в списке плагинов: инструмент, эффекты, громкость, индикатор);
+  перенос и копия на другую дорожку — `moveTo` / `copyTo`, цепочки в файлах — `audio::chains`. Узел плагина
+  с его текущими настройками (для копии, файла, сохранения) — `core::plugin_state::snapshot`, не
+  `flushPluginStateToValueTree` (он пишет в undo).
 - MIDI Learn — только через `audio::midi_learn` (привязки в песне, с undo; окно держит один `Controller`,
   остальные находят его `Controller::find`). Запись автоматизации вкл/выкл — `audio::automation::Writer`.
   Ползунок, который двигает параметр мышью, берёт его `automation::beginTouch` / `endTouch` (или `Touch`),

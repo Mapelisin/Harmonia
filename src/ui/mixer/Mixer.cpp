@@ -49,6 +49,57 @@ namespace harmonia::ui::mixer
             if (onMessage != nullptr)
                 onMessage (text, isProblem);
         };
+        strip.onSlotDrag = [this] (te::Plugin&, juce::Point<int> position) { slotDragged (position); };
+        strip.onSlotDrop = [this] (te::Plugin& plugin, juce::Point<int> position, bool copy) { slotDropped (plugin, position, copy); };
+    }
+
+    std::vector<ChannelStrip*> Mixer::getAllStrips()
+    {
+        std::vector<ChannelStrip*> all;
+
+        for (auto* list : { &strips, &groupStrips, &returnStrips })
+            for (auto* strip : *list)
+                all.push_back (strip);
+
+        all.push_back (&master);
+        return all;
+    }
+
+    ChannelStrip* Mixer::getStripAt (juce::Point<int> screenPosition)
+    {
+        // The master is drawn over the row of the others.
+        if (master.getScreenBounds().contains (screenPosition))
+            return &master;
+
+        if (! viewport.getScreenBounds().contains (screenPosition))
+            return nullptr;
+
+        for (auto* strip : getAllStrips())
+            if (strip != &master && strip->getScreenBounds().contains (screenPosition))
+                return strip;
+
+        return nullptr;
+    }
+
+    void Mixer::slotDragged (juce::Point<int> screenPosition)
+    {
+        auto* target = getStripAt (screenPosition);
+
+        for (auto* strip : getAllStrips())
+            strip->setDropMarker (strip == target ? strip->getDropPosition (screenPosition) : -1);
+    }
+
+    void Mixer::slotDropped (te::Plugin& plugin, juce::Point<int> screenPosition, bool copy)
+    {
+        const te::Plugin::Ptr keepAlive (&plugin);
+        auto* target = getStripAt (screenPosition);
+        const auto position = target != nullptr ? target->getDropPosition (screenPosition) : -1;
+
+        for (auto* strip : getAllStrips())
+            strip->setDropMarker (-1);
+
+        if (target != nullptr && position >= 0 && target->dropEffect (plugin, position, copy))
+            refresh();
     }
 
     void Mixer::showAddMenu()

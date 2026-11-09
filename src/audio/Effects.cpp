@@ -3,6 +3,7 @@
 #include "audio/Limiter.h"
 #include "audio/PluginSafety.h"
 #include "audio/Pump.h"
+#include "core/PluginState.h"
 
 namespace harmonia::audio::effects
 {
@@ -186,6 +187,123 @@ namespace harmonia::audio::effects
         // insertPlugin takes the plugin out first and then puts it where the target was found:
         // that's before the target when moving up and after it when moving down.
         chain->insertPlugin (keepAlive, chain->indexOf (effects[newPosition]), nullptr);
+        return true;
+    }
+
+    juce::ValueTree makeCopyState (te::Plugin& plugin)
+    {
+        auto state = core::plugin_state::snapshot (plugin);
+        state.removeProperty (te::IDs::id, nullptr);
+        state.removeProperty (te::IDs::windowX, nullptr);
+        state.removeProperty (te::IDs::windowY, nullptr);
+
+        // A line of automation belongs to where the effect was.
+        for (int i = state.getNumChildren(); --i >= 0;)
+            if (state.getChild (i).hasType (te::IDs::AUTOMATIONCURVE))
+                state.removeChild (i, nullptr);
+
+        return state;
+    }
+
+    te::Plugin* addFromState (te::PluginList& chain, const juce::ValueTree& state, juce::String& error, int position)
+    {
+        error = {};
+        const auto name = state[te::IDs::name].toString().isNotEmpty() ? state[te::IDs::name].toString()
+                                                                       : state[te::IDs::type].toString();
+
+        if (! canAdd (chain))
+        {
+            error = "No room for more effects here";
+            return nullptr;
+        }
+
+        auto copy = state.createCopy();
+        copy.removeProperty (te::IDs::id, nullptr);
+        const auto plugin = chain.getEdit().getPluginCache().createNewPlugin (copy);
+
+        if (plugin == nullptr)
+        {
+            error = name + " could not be created";
+            return nullptr;
+        }
+
+        if (auto* external = dynamic_cast<te::ExternalPlugin*> (plugin.get()); external != nullptr && external->getAudioPluginInstance() == nullptr)
+        {
+            error = name + " failed to load: " + external->getLoadError();
+            return nullptr;
+        }
+
+        if (plugin->isSynth() || isMixerStage (*plugin))
+        {
+            error = name + " isn't an effect";
+            return nullptr;
+        }
+
+        if (chain.getOwnerTrack() == nullptr && ! plugin->canBeAddedToMaster())
+        {
+            error = name + " can't be used on the master";
+            return nullptr;
+        }
+
+        chain.insertPlugin (plugin, getInsertIndex (chain, position), nullptr);
+
+        if (! chain.contains (plugin.get()))
+        {
+            error = name + " could not be added";
+            return nullptr;
+        }
+
+        return plugin.get();
+    }
+
+    te::Plugin* copyTo (te::Plugin& plugin, te::PluginList& target, int position, juce::String& error)
+    {
+        const auto state = makeCopyState (plugin);
+        getUndoManager (plugin).beginNewTransaction ("Copy " + getDisplayName (plugin));
+        return addFromState (target, state, error, position);
+    }
+
+    bool moveTo (te::Plugin& plugin, te::PluginList& target, int position, juce::String& error)
+    {
+        error = {};
+        auto* chain = getChain (plugin);
+
+        if (chain == nullptr || get (*chain).indexOf (&plugin) < 0)
+        {
+            error = "Not an effect of a track";
+            return false;
+        }
+
+        if (chain == &target)
+        {
+            // Dropped after the others, or at a place: among the effects without it.
+            const auto last = get (*chain).size() - 1;
+            return move (plugin, position < 0 ? last : std::min (position, last));
+        }
+
+        if (! canAdd (target))
+        {
+            error = "No room for more effects there";
+            return false;
+        }
+
+        if (target.getOwnerTrack() == nullptr && ! plugin.canBeAddedToMaster())
+        {
+            error = getDisplayName (plugin) + " can't be used on the master";
+            return false;
+        }
+
+        const te::Plugin::Ptr keepAlive (&plugin);
+        getUndoManager (plugin).beginNewTransaction ("Move " + getDisplayName (plugin));
+        plugin.hideWindowForShutdown();
+        target.insertPlugin (keepAlive, getInsertIndex (target, position), nullptr);
+
+        if (! target.contains (&plugin))
+        {
+            error = getDisplayName (plugin) + " could not be moved";
+            return false;
+        }
+
         return true;
     }
 

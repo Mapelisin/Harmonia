@@ -43,6 +43,22 @@ namespace harmonia::audio::effects
     /** Moves an effect to another position in its chain (clamped). Returns false if nothing moved. */
     bool move (te::Plugin&, int newPosition);
 
+    /** Moves an effect to a position (-1: after the others) in a chain: its own, or another track's
+        or the master's (with its settings, its window closed). One undo step. Returns false, with
+        the reason, if it can't go there (no room, the master and an effect that listens to a track). */
+    bool moveTo (te::Plugin&, te::PluginList& target, int position, juce::String& error);
+
+    /** Puts a copy of an effect, with its settings as they are now, at a position in a chain (-1:
+        after the others). Lines of automation aren't copied. One undo step. */
+    te::Plugin* copyTo (te::Plugin&, te::PluginList& target, int position, juce::String& error);
+
+    /** An effect's node with its settings as they are now, as a copy of it starts from: no ID of
+        its own, no automation. */
+    juce::ValueTree makeCopyState (te::Plugin&);
+
+    /** Adds an effect made from such a node, into the current undo step. */
+    te::Plugin* addFromState (te::PluginList&, const juce::ValueTree& state, juce::String& error, int position = -1);
+
     void remove (te::Plugin&);
 
     /** A bypassed effect stays in the chain but lets the sound through unchanged. */

@@ -5,6 +5,7 @@
 #include "audio/Sends.h"
 #include "audio/Sidechain.h"
 #include "core/Tracks.h"
+#include "ui/ChainMenu.h"
 #include "ui/ParameterMenu.h"
 #include "ui/PresetMenu.h"
 #include "ui/Theme.h"
@@ -77,7 +78,8 @@ namespace harmonia::ui::mixer
                 setTooltip (audio::plugin_safety::describeCrash (*plugin));
             else
                 setTooltip (effects::getDisplayName (*plugin) + (source != nullptr ? " (listens to " + source->getName() + ")" : juce::String())
-                            + ": click to open, the light turns it off and on, right-click for more");
+                            + ": click to open, the light turns it off and on, drag to move it (also to another track; "
+                              "Ctrl: a copy), right-click for more");
 
             repaint();
         }
@@ -122,11 +124,46 @@ namespace harmonia::ui::mixer
 
         void mouseDown (const juce::MouseEvent& e) override
         {
+            dragging = false;
+
             if (e.mods.isPopupMenu())
                 owner.makeSlotMenu (*plugin).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this));
-            else if (hasCrashed())
+        }
+
+        void mouseDrag (const juce::MouseEvent& e) override
+        {
+            if (e.mods.isPopupMenu() || (! dragging && e.getDistanceFromDragStart() < 6))
+                return;
+
+            dragging = true;
+            setMouseCursor (e.mods.isCommandDown() ? juce::MouseCursor::CopyingCursor : juce::MouseCursor::DraggingHandCursor);
+
+            if (owner.onSlotDrag != nullptr)
+                owner.onSlotDrag (*plugin, e.getScreenPosition());
+        }
+
+        void mouseUp (const juce::MouseEvent& e) override
+        {
+            if (e.mods.isPopupMenu())
+                return;
+
+            if (std::exchange (dragging, false))
+            {
+                setMouseCursor (juce::MouseCursor::NormalCursor);
+
+                // The drop may rebuild the slots: nothing of this one is used after it.
+                const te::Plugin::Ptr dropped (plugin);
+
+                if (auto drop = owner.onSlotDrop)
+                    drop (*dropped, e.getScreenPosition(), e.mods.isCommandDown());
+
+                return;
+            }
+
+            // A click (on release, so that a drag isn't one).
+            if (hasCrashed())
                 owner.reload (*plugin);
-            else if (e.x < ledWidth)
+            else if (e.getMouseDownX() < ledWidth)
                 toggleBypass();
             else
                 effects::showEditor (*plugin);
@@ -141,6 +178,7 @@ namespace harmonia::ui::mixer
     private:
         ChannelStrip& owner;
         te::Plugin::Ptr plugin;
+        bool dragging = false;
     };
 
     //==============================================================================
@@ -773,7 +811,87 @@ namespace harmonia::ui::mixer
             menu.addSubMenu ("Plugins", plugins);
         }
 
+        menu.addSeparator();
+        menu.addSubMenu ("Chains", makeChainMenu());
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&addButton));
+    }
+
+    juce::PopupMenu ChannelStrip::makeChainMenu()
+    {
+        return chain_menu::make (getChain(), [safe = juce::Component::SafePointer<ChannelStrip> (this)] (const juce::String& text, bool isProblem)
+        {
+            if (safe != nullptr)
+            {
+                safe->refresh();
+                safe->tell (text, isProblem);
+            }
+        }, chainsFolder);
+    }
+
+    int ChannelStrip::getDropPosition (juce::Point<int> screenPosition) const
+    {
+        if (! getScreenBounds().contains (screenPosition))
+            return -1;
+
+        // Above the slots: first; below them (the fader, the name): after the last.
+        const auto y = slotList.getLocalPoint (nullptr, screenPosition).y;
+        return juce::jlimit (0, slots.size(), (y + slotHeight / 2) / slotHeight);
+    }
+
+    void ChannelStrip::setDropMarker (int position)
+    {
+        if (std::exchange (dropMarker, position) != position)
+            repaint();
+    }
+
+    void ChannelStrip::paintOverChildren (juce::Graphics& g)
+    {
+        if (dropMarker < 0)
+            return;
+
+        // A line between the slots where the effect would go.
+        const auto inList = juce::Point<int> (0, std::min (dropMarker, slots.size()) * slotHeight);
+        const auto y = juce::jlimit (slotView.getY(), slotView.getBottom(), getLocalPoint (&slotList, inList).y);
+        g.setColour (theme::colour::accent);
+        g.fillRect (slotView.getX(), y - 1, slotView.getWidth(), 2);
+    }
+
+    bool ChannelStrip::dropEffect (te::Plugin& plugin, int position, bool copy)
+    {
+        auto& target = getChain();
+        const auto effectName = effects::getDisplayName (plugin);
+        const auto sameChain = effects::getChain (plugin) == &target;
+        const auto from = effects::get (target).indexOf (&plugin);
+        juce::String error;
+        bool done = false;
+
+        if (copy)
+        {
+            done = effects::copyTo (plugin, target, position, error) != nullptr;
+        }
+        else
+        {
+            // Among the effects without it, the places after it are one earlier.
+            const auto place = sameChain && position > from ? position - 1 : position;
+
+            if (sameChain && place == from)
+                return false;       // dropped where it was
+
+            done = effects::moveTo (plugin, target, place, error);
+        }
+
+        refresh();
+
+        if (! done)
+        {
+            if (error.isNotEmpty())
+                tell (error, true);
+
+            return false;
+        }
+
+        tell (effectName + (copy ? " copied to " : " moved to ") + name.getText(), false);
+        return true;
     }
 
     juce::PopupMenu ChannelStrip::makeSlotMenu (te::Plugin& plugin)

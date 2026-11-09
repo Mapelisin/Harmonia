@@ -12,6 +12,8 @@ add_library(harmonia_core STATIC
     ClipLinks.cpp
     Clips.h
     Clips.cpp
+    PluginState.h
+    PluginState.cpp
     Takes.h
     Takes.cpp
     Controllers.h

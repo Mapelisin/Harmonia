@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/AutomationWriter.h"
+#include "audio/EffectChains.h"
 #include "audio/Effects.h"
 #include "ui/ParameterMenu.h"
 #include "ui/arrangement/ArrangementModel.h"
@@ -57,6 +58,33 @@ namespace harmonia::ui::mixer
             listens to (sidechain), remove. */
         juce::PopupMenu makeSlotMenu (te::Plugin&);
 
+        /** What "+" offers after the effects: the chains (save these effects, add or put in a
+            saved chain). */
+        juce::PopupMenu makeChainMenu();
+
+        /** Where the chains are kept (the tests use a folder of their own). */
+        juce::File chainsFolder = audio::chains::getDefaultFolder();
+
+        /** Dragging an effect's slot: where among this strip's effects it would go if dropped at
+            that point of the screen (0: before the first... the number of slots: after the last);
+            -1 if the point isn't on this strip. */
+        int getDropPosition (juce::Point<int> screenPosition) const;
+
+        /** Shows where a dragged effect would go (-1: nowhere here). */
+        void setDropMarker (int position);
+        int getDropMarker() const noexcept              { return dropMarker; }
+
+        /** An effect (of this strip or another) dropped at that place among this strip's effects:
+            moved there, or copied. Says what happened; false if it couldn't. */
+        bool dropEffect (te::Plugin&, int position, bool copy);
+
+        /** A slot of this strip is being dragged (the mixer finds the strip under the mouse),
+            and was dropped. */
+        std::function<void (te::Plugin&, juce::Point<int> screenPosition)> onSlotDrag;
+        std::function<void (te::Plugin&, juce::Point<int> screenPosition, bool copy)> onSlotDrop;
+
+        void paintOverChildren (juce::Graphics&) override;
+
         /** Starts a crashed plugin again, and says how that went. */
         void reload (te::Plugin&);
 
@@ -93,6 +121,7 @@ namespace harmonia::ui::mixer
         juce::Component sendList;
         juce::OwnedArray<Send> sends;
         int numSendRows = 0;   // the same on every strip, so the faders line up
+        int dropMarker = -1;
         MenuSlider pan, volume;
         audio::automation::Touch panTouch, volumeTouch;     // written while automation is written
         juce::Label panText, volumeText;

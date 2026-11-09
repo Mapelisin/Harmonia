@@ -34,6 +34,9 @@ namespace harmonia::core
                 // Tracktion allows only 4 master effects by default; a mastering chain needs more.
                 te::EditLimits limits;
                 limits.maxNumMasterPlugins = 16;
+
+                // A track's 16 count its instrument, fader, meter and sends too: too few for effects.
+                limits.maxPluginsOnTrack = 48;
                 return limits;
             }
 

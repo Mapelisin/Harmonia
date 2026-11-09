@@ -49,6 +49,7 @@ add_executable(harmonia_tests
     audio/PluginSafetyTests.cpp
     audio/PresetTests.cpp
     audio/MidiLearnTests.cpp
+    audio/EffectChainTests.cpp
     ui/PianoRollTests.cpp
     ui/PianoRollViewTests.cpp
     ui/NoteInputTests.cpp

@@ -1,6 +1,8 @@
 #include <doctest.h>
 
 #include "TestSession.h"
+#include "TestAudioFiles.h"
+#include "audio/EffectChains.h"
 #include "audio/Effects.h"
 #include "audio/Groups.h"
 #include "audio/Instruments.h"
@@ -651,5 +653,158 @@ TEST_SUITE ("preset menu")
 
         f.project->undo();
         CHECK (threshold.getValue() == doctest::Approx (inPreset));
+    }
+}
+
+TEST_SUITE ("mixer: moving effects and chains")
+{
+    juce::String slotNames (te::AudioTrack& track)
+    {
+        juce::StringArray names;
+
+        for (auto* plugin : effects::get (track.pluginList))
+            names.add (effects::getDisplayName (*plugin));
+
+        return names.joinIntoString (", ");
+    }
+
+    TEST_CASE ("an effect dropped among its strip's effects moves there; dropped where it was, nothing happens")
+    {
+        MixerFixture f;
+        auto& strip = *f.mixer->getTrackStrip (0);
+        auto& track = f.firstTrack();
+        strip.addEffect (builtIn ("Reverb"));
+        strip.addEffect (builtIn ("Delay"));
+        strip.addEffect (builtIn ("EQ"));
+        f.messages.clear();
+        f.project->clearUndoHistory();
+
+        auto* reverb = effects::get (track.pluginList)[0];
+        CHECK_FALSE (strip.dropEffect (*reverb, 0, false));     // before itself
+        CHECK_FALSE (strip.dropEffect (*reverb, 1, false));     // after itself
+        CHECK_FALSE (f.project->canUndo());
+
+        CHECK (strip.dropEffect (*reverb, 3, false));           // after the last
+        CHECK (slotNames (track) == "Delay, EQ, Reverb");
+        CHECK (strip.getNumSlots() == 3);
+        CHECK (f.messages.size() == 1);
+
+        CHECK (strip.dropEffect (*reverb, 1, false));           // between the other two
+        CHECK (slotNames (track) == "Delay, Reverb, EQ");
+
+        f.project->undo();
+        CHECK (slotNames (track) == "Delay, EQ, Reverb");
+
+        // With Ctrl: a copy, the original stays.
+        CHECK (strip.dropEffect (*reverb, 0, true));
+        CHECK (slotNames (track) == "Reverb, Delay, EQ, Reverb");
+        CHECK (f.messages[f.messages.size() - 1].startsWith ("Reverb copied to"));
+    }
+
+    TEST_CASE ("a slot dragged onto another strip: the marker shows where, the drop moves it there")
+    {
+        MixerFixture f;
+        auto* second = f.project->addTrack ("Second");
+        REQUIRE (second != nullptr);
+        f.mixer->refresh();
+        REQUIRE (f.mixer->getNumTrackStrips() == 2);
+
+        auto& from = *f.mixer->getTrackStrip (0);
+        auto& to = *f.mixer->getTrackStrip (1);
+        from.addEffect (builtIn ("Compressor"));
+        to.addEffect (builtIn ("EQ"));
+        to.addEffect (builtIn ("Reverb"));
+        f.mixer->refresh();
+        f.messages.clear();
+
+        auto* compressor = effects::get (f.firstTrack().pluginList)[0];
+        REQUIRE (from.onSlotDrag != nullptr);
+        REQUIRE (from.onSlotDrop != nullptr);
+
+        // Where the first slot of the other strip is, and a slot and a half below that.
+        const auto top = to.getScreenBounds().getPosition() + juce::Point<int> (to.getWidth() / 2, 0);
+        int firstSlotY = 0;
+
+        for (int y = 0; y < to.getHeight(); ++y)
+            if (to.getDropPosition (top + juce::Point<int> (0, y)) == 1)
+            {
+                firstSlotY = y;     // the middle of the first slot: from here on, after it
+                break;
+            }
+
+        REQUIRE (firstSlotY > 0);
+        CHECK (to.getDropPosition (top + juce::Point<int> (0, firstSlotY - 1)) == 0);
+        CHECK (to.getDropPosition (to.getScreenBounds().getBottomLeft() + juce::Point<int> (4, -4)) == 2);   // on the fader: after the last
+        CHECK (to.getDropPosition (from.getScreenBounds().getCentre()) == -1);
+        CHECK (f.mixer->getStripAt (top + juce::Point<int> (0, firstSlotY)) == &to);
+        CHECK (f.mixer->getStripAt (f.mixer->getMasterStrip().getScreenBounds().getCentre()) == &f.mixer->getMasterStrip());
+
+        const auto point = top + juce::Point<int> (0, firstSlotY + 2);
+        from.onSlotDrag (*compressor, point);
+        CHECK (to.getDropMarker() == 1);
+        CHECK (from.getDropMarker() == -1);
+        CHECK (f.mixer->createComponentSnapshot (f.mixer->getLocalBounds()).isValid());
+
+        from.onSlotDrop (*compressor, point, false);
+        CHECK (to.getDropMarker() == -1);
+        CHECK (slotNames (*second) == "EQ, Compressor, Reverb");
+        CHECK (slotNames (f.firstTrack()).isEmpty());
+        CHECK (from.getNumSlots() == 0);
+        CHECK (to.getNumSlots() == 3);
+        REQUIRE (f.messages.size() == 1);
+        CHECK (f.messages[0] == "Compressor moved to Second");
+
+        // Onto the master, as a copy.
+        auto& master = f.mixer->getMasterStrip();
+        to.onSlotDrop (*effects::get (second->pluginList)[0], master.getScreenBounds().getCentre(), true);
+        CHECK (master.getNumSlots() == 1);
+        CHECK (slotNames (*second) == "EQ, Compressor, Reverb");
+
+        // Dropped outside the mixer: nothing.
+        to.onSlotDrop (*effects::get (second->pluginList)[0], { -500, -500 }, false);
+        CHECK (slotNames (*second) == "EQ, Compressor, Reverb");
+    }
+
+    TEST_CASE ("the chains menu of a strip: saved chains are added to its effects or put in their place")
+    {
+        MixerFixture f;
+        test::TempFolder temp;
+        auto* second = f.project->addTrack ("Second");
+        REQUIRE (second != nullptr);
+        f.mixer->refresh();
+
+        auto& first = *f.mixer->getTrackStrip (0);
+        auto& other = *f.mixer->getTrackStrip (1);
+        first.chainsFolder = other.chainsFolder = temp.getFile ("Chains");
+
+        // Nothing to save, nothing saved.
+        CHECK_FALSE (findItem (first.makeChainMenu(), "Save these effects as a chain...")->isEnabled);
+        CHECK (findItem (first.makeChainMenu(), "No chains saved yet") != nullptr);
+
+        first.addEffect (builtIn ("EQ"));
+        first.addEffect (builtIn ("Compressor"));
+        CHECK (findItem (first.makeChainMenu(), "Save these effects as a chain...")->isEnabled);
+        REQUIRE (audio::chains::save (f.firstTrack().pluginList, "Vocal", first.chainsFolder).isEmpty());
+
+        other.addEffect (builtIn ("Delay"));
+        f.messages.clear();
+
+        auto menu = other.makeChainMenu();
+        REQUIRE (findItem (menu, "Add Vocal") != nullptr);
+        findItem (menu, "Add Vocal")->action();
+        CHECK (slotNames (*second) == "Delay, EQ, Compressor");
+        CHECK (other.getNumSlots() == 3);
+        REQUIRE (f.messages.size() == 1);
+        CHECK (f.messages[0] == "Chain: Vocal");
+
+        menu = other.makeChainMenu();
+        REQUIRE (findItem (menu, "Replace the effects with/Vocal") != nullptr);
+        findItem (menu, "Replace the effects with/Vocal")->action();
+        CHECK (slotNames (*second) == "EQ, Compressor");
+        CHECK (other.getNumSlots() == 2);
+
+        f.project->undo();
+        dispatch();
+        CHECK (slotNames (*second) == "Delay, EQ, Compressor");
     }
 }

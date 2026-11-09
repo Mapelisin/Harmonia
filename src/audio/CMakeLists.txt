@@ -9,6 +9,8 @@ add_library(harmonia_audio STATIC
     DeviceStatus.cpp
     DeviceSetup.h
     DeviceSetup.cpp
+    EffectChains.h
+    EffectChains.cpp
     Effects.h
     Effects.cpp
     Export.h
