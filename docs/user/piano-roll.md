@@ -1,179 +1,197 @@
-# Piano roll — шпаргалка
+# Piano roll: cheat sheet
 
-Piano roll показывает клип, открытый в аранжировке (клик по клипу сверху). Аранжировка — `arrangement.md`.
+**English** | [Русский](piano-roll.ru.md)
 
-**F1** (или кнопка **?** вверху справа) — список всех клавиш и приёмов мышью прямо в программе,
-с поиском: начни печатать «loop», «copy», «Ctrl+B»… **Esc** — закрыть.
+The piano roll shows the clip that is open in the arrangement (click a clip at the top). The arrangement is
+covered in [`arrangement.md`](arrangement.md).
 
-Инструменты (кнопки над нотами или клавиши):
+**F1** (or the **?** button at the top right) opens the list of all shortcuts and mouse moves right in the
+program, with a search: start typing "loop", "copy", "Ctrl+B"… **Esc** closes it.
 
-| Клавиша | Инструмент | Что делает |
+Tools (the buttons above the notes, or keys):
+
+| Key | Tool | What it does |
 |---|---|---|
-| P | Draw | Клик — нота. Тянуть ноту — двигать. За правый край — длина. ПКМ — стереть. |
-| B | Paint | Протяжка рисует ряд нот (по длине последней ноты). |
-| D | Delete | Клик или протяжка стирает ноты. |
-| T | Mute | Клик или протяжка глушит / включает ноты. |
-| C | Slice | Проведи линию через ноты — они разрежутся. Клик режет ноту под курсором. |
-| E | Select | Рамка выделяет, клик выбирает ноту, перетаскивание двигает выделение. |
+| P | Draw | Click: a note. Drag a note: move it. Drag its right edge: length. Right-click: erase. |
+| B | Paint | Dragging draws a row of notes (with the length of the last note). |
+| D | Delete | A click or a drag erases notes. |
+| T | Mute | A click or a drag mutes / unmutes notes. |
+| C | Slice | Draw a line through notes and they are cut. A click cuts the note under the cursor. |
+| E | Select | A box selects, a click picks a note, dragging moves the selection. |
 
-Мышь:
-- **Shift + перетаскивание ноты** — копия. **Shift + протяжка по пустому месту** (Draw) — нота нужной длины.
-- **Ctrl + рамка** — выделить (в любом инструменте), **Ctrl+Shift** — добавить к выделению, **Ctrl + клик по пустому** — снять.
-- **Alt** во время перетаскивания — без привязки к сетке.
-- **Двойной клик по ноте** — свойства (velocity, pan, Mod X/Y, fine pitch, mute, цвет). Если нота выделена — меняются все выделенные.
-- **Колесо** — вверх/вниз, **Shift+колесо** — влево/вправо, **Ctrl+колесо** — масштаб, **средняя кнопка** — двигать вид.
-- **Клавиатура слева**: клик — звук (правее = громче), средняя кнопка вверх/вниз — высота строк.
-- **Линейка**: клик — курсор воспроизведения, **Ctrl + протяжка** (или двойной клик + протяжка) — выделить время.
-  Сверху на линейке — **маркеры песни** («Verse», «Chorus»; ставятся в аранжировке): клик по маркеру — играть с него.
-  У повторяющегося клипа (Loop) конец круга отмечен **скобкой** — тяни её, чтобы сделать круг длиннее или короче.
-  Сами повторы видны правее, чуть темнее, с тонкой чертой в начале каждого круга.
-- **Нижняя панель**: проведи мышью — задать velocity (или другое свойство). Если есть выделение — меняются только выделенные
-  (так правят одну ноту аккорда). **Alt** — сбросить. **Alt+колесо над нотой** — то же колесом (**Ctrl+Alt** — точно).
-  В той же панели — **pitch bend, колесо модуляции и педаль** клипа (см. ниже «Контроллеры»).
+Mouse:
+- **Shift + drag a note**: a copy. **Shift + drag on an empty spot** (Draw): a note of the length you want.
+- **Ctrl + box**: select (in any tool), **Ctrl+Shift**: add to the selection, **Ctrl + click on an empty
+  spot**: deselect.
+- **Alt** while dragging: no snapping to the grid.
+- **Double click a note**: its properties (velocity, pan, Mod X/Y, fine pitch, mute, colour). If the note is
+  selected, all selected notes change.
+- **Wheel**: up/down, **Shift+wheel**: left/right, **Ctrl+wheel**: zoom, **middle button**: move the view.
+- **The keyboard on the left**: a click plays the sound (further right = louder); middle button up/down
+  changes the row height.
+- **The ruler**: a click sets the playback cursor; **Ctrl + drag** (or double click + drag) selects time.
+  At the top of the ruler are the **song markers** ("Verse", "Chorus"; they are set in the arrangement): click
+  a marker to play from it.
+  In a looping clip (Loop) the end of the loop is marked with a **bracket**: drag it to make the loop longer
+  or shorter. The repeats themselves are shown to the right, a little darker, with a thin line at the start
+  of each pass.
+- **The bottom panel**: drag the mouse across it to set velocity (or another property). If there is a
+  selection, only the selected notes change (this is how you edit one note of a chord). **Alt** resets.
+  **Alt+wheel over a note** does the same with the wheel (**Ctrl+Alt** for fine steps).
+  The same panel holds the clip's **pitch bend, mod wheel and sustain pedal** (see "Controllers" below).
 
-Клавиши:
+Keys:
 
-| Клавиши | Действие |
+| Keys | Action |
 |---|---|
-| Пробел | Play / Stop (Clip — клип по кругу, Song — вся песня; переключить — L) |
-| Ctrl+Z / Ctrl+Y (или Ctrl+Shift+Z) | Отменить / вернуть |
-| Del | Удалить выделенное (без выделения — всё) |
-| Ctrl+A / Ctrl+D | Выделить всё / снять выделение |
-| Ctrl+C / Ctrl+X / Ctrl+V | Копировать / вырезать / вставить (в первый видимый такт) |
-| Ctrl+B | Повторить выделенное сразу справа |
-| Ctrl+Q / Shift+Q | Выровнять по сетке / только начала нот |
-| Shift+↑↓ / Ctrl+↑↓ | На полутон / на октаву |
-| Shift+←→ | Сдвинуть на шаг сетки |
-| Alt+←→ | Сдвинуть чуть-чуть, мимо сетки (на пару пикселей; чем крупнее масштаб, тем точнее) |
-| Ctrl+Shift+←→ | Сдвинуть по кругу внутри такта: что ушло за край — выходит с другой стороны |
-| Ctrl+L | Легато: каждая нота дотягивается до следующей |
-| Ctrl+U | Нарезать ноты на куски длиной в шаг сетки (для роллов, хай-хэтов) |
-| Ctrl+G | Склеить ноты одной высоты, которые касаются или наезжают друг на друга |
-| Shift+D | Сделать все ноты длиной в шаг сетки (для ударных) |
-| Alt+M / Alt+Shift+M | Заглушить / включить ноты |
-| Shift+I | Обратить выделение |
-| Ctrl+Insert / Ctrl+Delete | Вставить / вырезать пустое время размером с выделенное на линейке (сдвигает все ноты) |
-| F / Shift+F | Нижняя панель: следующее / предыдущее свойство нот, затем pitch bend, колесо модуляции, педаль |
-| PgUp / PgDn | Приблизить / отдалить |
-| Z | Показать всё: весь клип и его ноты (а если есть выделение — только выделенные ноты) |
-| Alt+V | Показать / скрыть ноты других дорожек |
+| Space | Play / Stop (Clip: the clip in a loop, Song: the whole song; switch with L) |
+| Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z) | Undo / redo |
+| Del | Delete the selection (with no selection, everything) |
+| Ctrl+A / Ctrl+D | Select all / deselect |
+| Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste (into the first visible bar) |
+| Ctrl+B | Repeat the selection right after itself |
+| Ctrl+Q / Shift+Q | Quantize to the grid / note starts only |
+| Shift+↑↓ / Ctrl+↑↓ | By a semitone / by an octave |
+| Shift+←→ | Move by one grid step |
+| Alt+←→ | Nudge a tiny bit, off the grid (a couple of pixels; the closer the zoom, the finer) |
+| Ctrl+Shift+←→ | Rotate inside the bar: what goes past the edge comes out on the other side |
+| Ctrl+L | Legato: every note is stretched to the next one |
+| Ctrl+U | Chop notes into pieces one grid step long (for rolls, hi-hats) |
+| Ctrl+G | Glue notes of the same pitch that touch or overlap |
+| Shift+D | Make all notes one grid step long (for drums) |
+| Alt+M / Alt+Shift+M | Mute / unmute notes |
+| Shift+I | Invert the selection |
+| Ctrl+Insert / Ctrl+Delete | Insert / cut out empty time the size of the time selected on the ruler (moves all notes) |
+| F / Shift+F | Bottom panel: next / previous note property, then pitch bend, mod wheel, sustain pedal |
+| PgUp / PgDn | Zoom in / zoom out |
+| Z | Show everything: the whole clip and its notes (or, if there is a selection, only the selected notes) |
+| Alt+V | Show / hide the notes of other tracks |
 
-Все эти команды есть и в меню **Tools** над нотами — там же видно, какие клавиши. Как и всё остальное,
-они действуют на выделенные ноты, а если ничего не выделено — на все. «По кругу» с выделенным временем
-на линейке крутит только его.
+All these commands are also in the **Tools** menu above the notes, which shows the keys too. Like everything
+else, they act on the selected notes, or on all notes if nothing is selected. "Rotate" with time selected on
+the ruler turns only that time.
 
-## Барабаны: встроенная драм-машина
+## Drums: the built-in drum machine
 
-У Harmonia есть свои барабаны — без плагинов и сэмплов: **+ Track → Drum track** или в выборе инструмента
-над аранжировкой **Drums (built-in)**. Она играет стандартную раскладку General MIDI: бочка C1 (36), малый 38,
-хлопок 39, хэты 42 / 44 / 46, томы, тарелки, ковбелл, шейкер… Закрытый хэт глушит открытый, как у настоящих.
-Ручки (кнопка окна инструмента): **Kit** — набор: *Punchy* (плотный, яркий), *808* (длинная глубокая бочка),
-*Lo-fi* (тёмный, мягкий); **Tune** — выше/ниже на ±12 полутонов; **Decay** — короче/длиннее звучание.
+Harmonia has drums of its own, with no plugins or samples: **+ Track → Drum track**, or **Drums (built-in)**
+in the instrument chooser above the arrangement. It plays the standard General MIDI layout: kick C1 (36),
+snare 38, clap 39, hats 42 / 44 / 46, toms, cymbals, cowbell, shaker… The closed hat cuts off the open one,
+as on real drums.
+The knobs (the instrument window button): **Kit** is the set: *Punchy* (tight, bright), *808* (a long deep
+kick), *Lo-fi* (dark, soft); **Tune** is higher/lower by ±12 semitones; **Decay** is a shorter/longer sound.
 
-Сама подключается, когда:
-- **Alt+D** (Drum pattern) открыт на новой дорожке без нот со встроенным синтезатором — дорожка становится
-  барабанной («Track 2» переименуется в «Drums»); Cancel возвращает как было. Дорожка с нотами или с
-  плагином остаётся со своим звуком;
-- из MIDI-файла приходит барабанная партия (10-й канал) — она ложится на дорожку с драм-машиной.
+It is put in automatically when:
+- **Alt+D** (Drum pattern) is opened on a new track with no notes and the built-in synth: the track becomes
+  a drum track ("Track 2" is renamed to "Drums"); Cancel puts everything back. A track with notes or with a
+  plugin keeps its own sound;
+- a drum part (channel 10) comes from a MIDI file: it goes onto a track with the drum machine.
 
-## Барабаны: имена на клавишах
+## Drums: names on the keys
 
-Если дорожка называется «Drums», «Beat», «Perc»… — на клавишах слева и на нотах пишутся **имена барабанов**
-по General MIDI: Kick (C2), Snare, Clap, Closed hat, Open hat, Crash, Ride, томы… Этой раскладке следуют
-почти все барабанные плагины и наборы.
+If a track is called "Drums", "Beat", "Perc"…, the keys on the left and the notes show **drum names** by
+General MIDI: Kick (C2), Snare, Clap, Closed hat, Open hat, Crash, Ride, toms… Nearly all drum plugins and
+kits follow this layout.
 
-Включить или выключить для любой дорожки: **ПКМ по клавишам слева** → *Drum names (General MIDI)*,
-или меню **Scale** → *Drum names on the keys*. Запоминается для дорожки, отменяется Ctrl+Z.
+To turn it on or off for any track: **right-click the keys on the left** → *Drum names (General MIDI)*, or
+the **Scale** menu → *Drum names on the keys*. It is remembered for the track and can be undone with Ctrl+Z.
 
-## Инструменты с окном
+## Tools with a window
 
-Открываются из меню **Tools** или клавишами. Ноты меняются сразу, пока крутишь ручки, — **Пробел** играет,
-чтобы послушать. **Accept** (или **Enter**, или клик мимо окна) — оставить, это один шаг **Ctrl+Z**.
-**Cancel** (или **Esc**) — вернуть как было. **Reset** — ручки по умолчанию. Пока окно открыто, другие
-клавиши ноты не трогают.
+They open from the **Tools** menu or with keys. The notes change at once while you turn the knobs; **Space**
+plays so you can listen. **Accept** (or **Enter**, or a click outside the window) keeps the result, as one
+**Ctrl+Z** step. **Cancel** (or **Esc**) puts everything back. **Reset** sets the knobs to their defaults.
+While the window is open, other keys do not touch the notes.
 
-| Клавиши | Инструмент | Что делает |
+| Keys | Tool | What it does |
 |---|---|---|
-| Alt+S | **Strum** | «Гитарный» разброс аккорда: ноты вступают одна за другой. Time — насколько поздно последняя (мс), Tension — быстрее в начале или в конце, Direction — снизу вверх, сверху вниз или по очереди, Velocity — последняя тише/громче, Ends — концы на месте или едут вместе с началами. |
-| Alt+A | **Arpeggiate** | Аккорд (2+ ноты с общим началом) превращается в арпеджио на всю его длину. Pattern — вверх, вниз, туда-обратно; Step — 1/4…1/32 и триоли; Gate — длина нот; Octaves — на сколько октав вверх. Одиночные ноты не трогает. |
-| Alt+R | **Humanize** | «Оживить»: чуть-чуть случайно сдвигает ноты (Timing, мс), громкость (Velocity) и длину (Length). Variation — другой вариант случайности (один и тот же номер даёт один и тот же результат). |
-| Alt+X | **Scale levels** | Velocity (или другое свойство из нижней панели) всем сразу: Multiply — разброс (50% — ровнее и тише, 150% — контрастнее), Offset — все выше/ниже. |
-| Alt+P | **Chord progression** | Пишет аккорды сам, даже в пустой клип. Key и Mode — тональность (по умолчанию лад песни), Chords — последовательность (поп I–V–vi–IV, «грустная» vi–IV–I–V, 50-е, рок, джаз ii–V–I, канон, минорные: поп, «эпик» i–VII–VI–VII, «тёмная»…), Notes — трезвучия или септаккорды, Each chord — полтакта / такт / два, Rhythm — держать, четверти, восьмые, на слабую долю (как в хаусе), Octave, Voicing — Smooth (голоса двигаются как можно меньше, звучит связно) или в основном виде, Bass — бас октавой ниже, Repeat — сколько раз повторить. Начинает с начала выделения времени (Shift + протяжка по линейке), иначе с начала клипа; клип сам растягивается. |
-| Alt+D | **Drum pattern** | Пишет барабанный грув сам, даже в пустой клип — на клавиши стандартной раскладки General MIDI (бочка C1 = 36, малый 38, хэт 42…), её понимает большинство барабанных плагинов. Style — рок, поп, хаус (бочка на каждую долю), диско, хип-хоп (boom bap), трэп (с «дробью» хэтов), реггетон (dembow), фанк (с «призрачными» нотами малого), драм-н-бейс, half-time. Bars — сколько тактов (сначала — длина клипа или выделения времени), Fill — сбивка на последних двух долях каждого 4-го такта / только последнего / нет, Crash — тарелка в начале каждых 4 тактов, Swing — каждая вторая шестнадцатая позже (100% — как в триолях), Velocity — громкость сильных ударов (остальные тише). Начинает с начала выделения времени, иначе с начала клипа; клип сам растягивается. Если дорожка называется «Drums», слева видны названия барабанов. |
-| Alt+B | **Bass line** | Пишет бас под аккорды, которые играют **другие дорожки** (барабанные и заглушённые не считаются) — те самые аккорды, что подписаны на линейке. Удобно так: новая дорожка «Bass», клип, Alt+B. Pattern — держать (нота на аккорд), на каждую долю, восьмыми (драйв), тоника–квинта, октавы (диско), «шагающий» (тоника, терция, квинта и полутон к следующему аккорду — джаз, блюз); Octave — где бас (2 — от C2); Slash chords — под «C/E» играть E (как просит аккорд) или C; Gate — длина нот; Velocity — громкость на долях (между долями тише). Берёт аккорды на выделении времени, иначе на длине клипа. Если аккордов нет — внизу окна скажет почему. |
-| Alt+L | **Melody** | Пишет мелодию над аккордами **других дорожек** (как Bass line): на сильных долях — ноты аккорда, между ними — шаги по ладу; фразы по 4 такта поднимаются и возвращаются, последняя нота — тоника последнего аккорда. Лад — из Scale, а если его нет — угадывается по аккордам (C–Am–F–G → до мажор). Rhythm — спокойно (длинные), средне (четверти и восьмые), часто (восьмые и шестнадцатые); **Variation** — другая мелодия на те же аккорды (тот же номер — та же мелодия, крутите, пока не понравится); Octave — где мелодия (5 — вокруг C5); Phrases — третий такт фразы повторяет ритм и рисунок первого (запоминается) или свободно; Velocity. Это набросок: оставить удачное, поправить руками. |
+| Alt+S | **Strum** | A "guitar" spread of a chord: the notes come in one after another. Time is how late the last one is (ms), Tension is faster at the start or at the end, Direction is bottom to top, top to bottom or alternating, Velocity makes the last one quieter/louder, Ends keeps the note ends in place or moves them with the starts. |
+| Alt+A | **Arpeggiate** | A chord (2+ notes with the same start) turns into an arpeggio over its whole length. Pattern: up, down, up and down; Step: 1/4…1/32 and triplets; Gate: note length; Octaves: how many octaves up. It does not touch single notes. |
+| Alt+R | **Humanize** | "Bring to life": shifts the notes a tiny bit at random (Timing, ms), and their loudness (Velocity) and length (Length). Variation is another random variant (the same number gives the same result). |
+| Alt+X | **Scale levels** | Velocity (or another property from the bottom panel) for all notes at once: Multiply is the spread (50% is more even and quieter, 150% is more contrast), Offset moves all of them higher/lower. |
+| Alt+P | **Chord progression** | Writes chords for you, even into an empty clip. Key and Mode set the key (by default, the scale of the song), Chords is the progression (pop I–V–vi–IV, the "sad" vi–IV–I–V, 50s, rock, jazz ii–V–I, canon, minor ones: pop, the "epic" i–VII–VI–VII, a "dark" one…), Notes: triads or seventh chords, Each chord: half a bar / a bar / two bars, Rhythm: hold, quarter notes, eighth notes, on the offbeat (as in house), Octave, Voicing: Smooth (the voices move as little as possible, so it sounds connected) or root position, Bass: a bass note an octave below, Repeat: how many times to repeat. It starts at the start of the time selection (Shift + drag on the ruler), otherwise at the start of the clip; the clip grows by itself. |
+| Alt+D | **Drum pattern** | Writes a drum groove for you, even into an empty clip, on the keys of the standard General MIDI layout (kick C1 = 36, snare 38, hat 42…), which most drum plugins understand. Style: rock, pop, house (a kick on every beat), disco, hip-hop (boom bap), trap (with hat "rolls"), reggaeton (dembow), funk (with snare "ghost" notes), drum and bass, half-time. Bars: how many bars (at first, the length of the clip or of the time selection), Fill: a fill on the last two beats of every 4th bar / of the last bar only / none, Crash: a cymbal at the start of every 4 bars, Swing: every second sixteenth note comes later (100% is like triplets), Velocity: the loudness of the strong hits (the others are quieter). It starts at the start of the time selection, otherwise at the start of the clip; the clip grows by itself. If the track is called "Drums", the drum names are shown on the left. |
+| Alt+B | **Bass line** | Writes a bass line for the chords that **other tracks** play (drum tracks and muted tracks do not count): the same chords that are written on the ruler. A handy way: a new track "Bass", a clip, Alt+B. Pattern: hold (one note per chord), on every beat, eighth notes (drive), root–fifth, octaves (disco), "walking" (root, third, fifth and a semitone into the next chord: jazz, blues); Octave: where the bass is (2 means from C2); Slash chords: under "C/E" play E (as the chord asks) or C; Gate: note length; Velocity: the loudness on the beats (quieter between beats). It takes the chords in the time selection, otherwise over the length of the clip. If there are no chords, the bottom of the window says why. |
+| Alt+L | **Melody** | Writes a melody over the chords of **other tracks** (like Bass line): chord notes on the strong beats, steps along the scale between them; 4-bar phrases rise and come back, and the last note is the root of the last chord. The scale comes from Scale, and if there is none, it is guessed from the chords (C–Am–F–G → C major). Rhythm: calm (long notes), medium (quarter and eighth notes), busy (eighth and sixteenth notes); **Variation**: another melody for the same chords (the same number gives the same melody; turn it until you like one); Octave: where the melody is (5 means around C5); Phrases: the third bar of a phrase repeats the rhythm and shape of the first (easy to remember), or free; Velocity. This is a sketch: keep what works and fix the rest by hand. |
 
-Окно свойств ноты (двойной клик) теперь тоже: все изменения, пока оно открыто, — один шаг **Ctrl+Z**.
+The note properties window (double click) now works the same way: all changes made while it is open are one
+**Ctrl+Z** step.
 
-## Лад и аккорды
+## Scale and chords
 
-- **Scale** (кнопка над нотами) — лад песни: тоника (Root) и лад (Major, Minor, гармонический и
-  мелодический минор, дорийский, фригийский, лидийский, миксолидийский, пентатоники, блюз). Ряды нот
-  лада светлые, остальные тёмные, ряды тоники подсвечены, на клавиатуре слева ноты лада отмечены. Лад
-  сохраняется в проекте, его смена — шаг **Ctrl+Z**.
-- **Snap notes to the scale** (в том же меню; на кнопке появится «(snap)») — новые ноты (клик, Paint)
-  встают на ноты лада; при перетаскивании вверх-вниз ноты идут по ступеням лада (аккорд остаётся
-  аккордом этого лада); **Shift+↑/↓** — на ступень лада. **Ctrl+↑/↓** — по-прежнему октава.
-- **Fit notes to the scale** — подвинуть выделенные (или все) ноты на ближайшие ноты лада (удобно для
-  чужого MIDI). Есть и в **Tools**.
-- **Detect from the notes** — угадать тональность по выделенным (или всем) нотам: мажор или минор, по
-  тому, какие ноты звучат дольше. Обычно угадывает; если нот мало, может спутать параллельные (до мажор
-  и ля минор) — тогда поправь вручную.
-- **Chord** — штамп аккордов: выбери аккорд, и клик в Draw ставит его целиком (нижняя нота — где клик),
-  его сразу можно тащить, слышно аккордом. **Shift + протяжка** — аккорд нужной длины.
-  **Scale chord** / **Scale chord 7** — аккорд, который даёт лад на этой ступени (в до мажоре на ре —
-  ре минор, на соль — G7). Без лада это мажор и септаккорд. **Off** — снова одиночные ноты.
-- **Какой это аккорд?** Выдели несколько нот — справа над нотами появится его название:
-  «Chord Am7 · 4 selected». Понимает мажор и минор, септаккорды (7, m7, maj7, без квинты тоже), dim, aug,
-  sus2/sus4, 6, 9, add9, m7b5, dim7, квинту (C5). Если внизу не основной тон — пишет через дробь: «C/E».
-  Октавы и повторы нот не важны. Удобно, чтобы понять, что сыграно в чужом MIDI или в своей импровизации.
-- **Аккорды на линейке.** В верхней строке линейки над нотами подписано, какие аккорды звучат по ходу клипа:
-  «C — Am — F — G». Мелодия поверх аккордов не мешает (если верхняя нота «ломает» аккорд, она не
-  учитывается), проходящие ноты короче полудоли — тоже. Выключить: меню **Scale** → *Chord names on the ruler*.
+- **Scale** (the button above the notes) is the scale of the song: the root (Root) and the mode (Major,
+  Minor, harmonic and melodic minor, Dorian, Phrygian, Lydian, Mixolydian, pentatonics, blues). The rows of
+  scale notes are light, the others are dark, the rows of the root are highlighted, and the scale notes are
+  marked on the keyboard on the left. The scale is saved in the project; changing it is a **Ctrl+Z** step.
+- **Snap notes to the scale** (in the same menu; the button then shows "(snap)"): new notes (click, Paint)
+  land on scale notes; when you drag notes up and down, they move along the steps of the scale (a chord
+  stays a chord of this scale); **Shift+↑/↓** moves by a scale step. **Ctrl+↑/↓** is still an octave.
+- **Fit notes to the scale** moves the selected (or all) notes to the nearest scale notes (handy for
+  someone else's MIDI). It is also in **Tools**.
+- **Detect from the notes** guesses the key from the selected (or all) notes: major or minor, by which
+  notes sound longer. It is usually right; with few notes it can mix up relative keys (C major and A minor),
+  and then you correct it by hand.
+- **Chord** is a chord stamp: choose a chord, and a click in Draw places the whole chord (the lowest note is
+  where you click); you can drag it right away, and you hear it as a chord. **Shift + drag** gives a chord
+  of the length you want. **Scale chord** / **Scale chord 7** is the chord the scale gives on this step (in
+  C major, D minor on D and G7 on G). With no scale it is a major chord and a seventh chord. **Off** goes
+  back to single notes.
+- **Which chord is this?** Select a few notes and its name appears on the right above the notes:
+  "Chord Am7 · 4 selected". It knows major and minor, seventh chords (7, m7, maj7, also without the fifth),
+  dim, aug, sus2/sus4, 6, 9, add9, m7b5, dim7, the fifth (C5). If the lowest note is not the root, it is
+  written with a slash: "C/E". Octaves and doubled notes do not matter. Handy for understanding what is
+  played in someone else's MIDI or in your own improvisation.
+- **Chords on the ruler.** The top line of the ruler above the notes shows which chords sound along the
+  clip: "C — Am — F — G". A melody over the chords does not get in the way (if the top note "breaks" the
+  chord, it is not counted), and neither do passing notes shorter than half a beat. To turn it off: the
+  **Scale** menu → *Chord names on the ruler*.
 
-## Контроллеры: pitch bend, колесо модуляции, педаль
+## Controllers: pitch bend, mod wheel, sustain pedal
 
-Кроме нот клип хранит, как двигались колёса и педаль MIDI-клавиатуры. Выбери в списке над нижней панелью
-(там, где Velocity) **Pitch bend**, **Mod wheel** или **Sustain pedal** — или жми **F**, пока не дойдёшь.
-Панель покажет линию: каждое значение держится до следующего.
+Besides notes, a clip stores how the wheels and the pedal of a MIDI keyboard moved. In the list above the
+bottom panel (where Velocity is) choose **Pitch bend**, **Mod wheel** or **Sustain pedal**, or press **F**
+until you get there. The panel shows a line: every value holds until the next one.
 
-- **Тянуть левой кнопкой** — нарисовать линию (провёл наискось — плавный подъём). **Alt** — рисовать
-  положение покоя: бенд в середину, колесо и педаль в ноль. **Правая кнопка** — стереть.
-- **Pitch bend** — от середины вверх и вниз (на встроенном синте это ±2 полутона; у плагинов — сколько
-  задано в плагине). **Mod wheel** — 0…127: что оно делает, решает инструмент (обычно вибрато или фильтр;
-  встроенный синт на него пока не отвечает, Surge XT и большинство плагинов — да). **Sustain pedal** —
-  нажата (выше середины) или отпущена.
-- Подсказка справа сверху показывает, какое значение поставит клик (+50%, 64, Down).
-- Пишется только внутри клипа; у повторяющегося клипа — в круг. Копии клипа (связанные) получают то же.
-- Контроллеры сохраняются в проекте, попадают в экспорт MIDI-файла и читаются из чужих MIDI-файлов
-  (педаль из файлов, как и раньше, удлиняет ноты).
+- **Drag with the left button** to draw a line (a diagonal drag gives a smooth rise). **Alt** draws the
+  rest position: bend to the middle, wheel and pedal to zero. **The right button** erases.
+- **Pitch bend** goes up and down from the middle (on the built-in synth this is ±2 semitones; for plugins,
+  whatever is set in the plugin). **Mod wheel** is 0…127: what it does is up to the instrument (usually
+  vibrato or a filter; the built-in synth does not respond to it yet, Surge XT and most plugins do).
+  **Sustain pedal** is pressed (above the middle) or released.
+- The hint at the top right shows which value a click will set (+50%, 64, Down).
+- You can write only inside the clip; in a looping clip, into the loop. Copies of the clip (linked ones)
+  get the same.
+- Controllers are saved in the project, go into the exported MIDI file and are read from other people's
+  MIDI files (the pedal from files, as before, makes the notes longer).
 
-## Запись нот
+## Recording notes
 
-- **●** (или **R**) — взвести запись. Дальше **Пробел**: клип играет по кругу, всё сыгранное
-  пишется в него. Каждый круг добавляет ноты. **Пробел** ещё раз — стоп. Весь дубль отменяется одним **Ctrl+Z**.
-- Пока клавиша нажата, нота видна красной; слева подсвечивается нажатая клавиша.
-- Значок метронома (**Ctrl+M**) — метроном.
-- Список справа от Keys — как ставить записанные ноты: **As played** (как сыграно), **Quantize starts** (начала
-  по сетке), **Quantize starts and ends** (начала и концы). Сетка — та, что выбрана в Snap.
-- **MIDI-клавиатура** подключается сама и играет инструмент выбранной дорожки. Педаль сустейна тоже пишется:
-  ноты держатся, пока она нажата. **Pitch bend и колесо модуляции** пишутся в клип, пока их двигаешь
-  (их видно в нижней панели, см. «Контроллеры»). Какая клавиатура найдена — видно внизу, в строке состояния.
+- **●** (or **R**) arms recording. Then **Space**: the clip plays in a loop, and everything you play is
+  written into it. Every pass adds notes. **Space** again stops. The whole take is undone with one
+  **Ctrl+Z**.
+- While a key is held, the note is shown in red; the pressed key lights up on the left.
+- The metronome icon (**Ctrl+M**) is the metronome.
+- The list to the right of Keys sets how recorded notes are placed: **As played**, **Quantize starts**
+  (starts on the grid), **Quantize starts and ends** (starts and ends). The grid is the one chosen in Snap.
+- A **MIDI keyboard** connects by itself and plays the instrument of the selected track. The sustain pedal
+  is recorded too: the notes hold while it is pressed. **Pitch bend and the mod wheel** are written into the
+  clip while you move them (you can see them in the bottom panel, see "Controllers"). Which keyboard was
+  found is shown at the bottom, in the status bar.
 
-## Клавиатура компьютера как пианино
+## The computer keyboard as a piano
 
-**Keys** (или **Ctrl+T**) — включить / выключить. Работает в любой раскладке, и в русской тоже.
+**Keys** (or **Ctrl+T**) turns it on / off. It works in any keyboard layout, Russian too.
 
 ```
- 2 3   5 6 7   9 0   =        <- чёрные клавиши верхней октавы
-Q W E R T Y U I O P [ ]       <- белые клавиши: C5 D5 E5 F5 G5 A5 B5 C6 ...
- S D   G H J   L ;            <- чёрные клавиши нижней октавы
-Z X C V B N M , . /           <- белые клавиши: C4 D4 E4 F4 G4 A4 B4 C5 ...
+ 2 3   5 6 7   9 0   =        <- black keys of the upper octave
+Q W E R T Y U I O P [ ]       <- white keys: C5 D5 E5 F5 G5 A5 B5 C6 ...
+ S D   G H J   L ;            <- black keys of the lower octave
+Z X C V B N M , . /           <- white keys: C4 D4 E4 F4 G4 A4 B4 C5 ...
 ```
 
-**↑ / ↓** — октава выше / ниже (на кнопке видно, с какой ноты начинается нижний ряд: Keys C4).
-Пока Keys включены, однобуквенные клавиши (P, B, D…) не переключают инструменты — они играют ноты.
-Сочетания с Ctrl (Ctrl+Z, Ctrl+T…) работают как обычно.
+**↑ / ↓** is an octave up / down (the button shows which note the bottom row starts from: Keys C4).
+While Keys is on, single-letter keys (P, B, D…) do not switch tools: they play notes.
+Combinations with Ctrl (Ctrl+Z, Ctrl+T…) work as usual.
 
-Привязка (Snap): **Line** — к линиям сетки (зависит от масштаба), **Cell** — к началу клетки, дальше — такт, доля,
-1/8, 1/16, их триоли и мельче. Без выделения команды действуют на все ноты.
+Snapping (Snap): **Line** snaps to the grid lines (depends on the zoom), **Cell** snaps to the start of a
+cell, and further on: bar, beat, 1/8, 1/16, their triplets and finer. With no selection the commands act on
+all notes.

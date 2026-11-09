@@ -1,57 +1,64 @@
-# Автоматизация — шпаргалка
+# Automation: cheat sheet
 
-Автоматизация — это линия, по которой ручка дорожки сама меняется во время песни: громкость плавно
-нарастает в начале, ревер прибавляется в припеве, фильтр открывается к дропу.
+**English** | [Русский](automation.ru.md)
 
-Панель открывается вместо piano roll: кнопка **Automation** справа над аранжировкой или **F8**
-(**F7** — piano roll, **F9** — микшер).
+Automation is a line that moves a knob of a track by itself while the song plays: the volume rises smoothly
+at the start, more reverb comes in for the chorus, the filter opens towards the drop.
 
-## Как нарисовать линию
+The panel opens in place of the piano roll: the **Automation** button on the right above the arrangement, or
+**F8** (**F7** is the piano roll, **F9** is the mixer).
 
-1. Кликните дорожку в аранжировке — панель показывает её.
-2. Слева кнопка с названием ручки (сначала **Volume**). Нажмите и выберите, что двигать:
-   - **Volume**, **Pan** — громкость и панорама дорожки;
-   - **Send: Reverb**… — сколько дорожка шлёт в возвратную дорожку (если они есть);
-   - подменю эффектов и инструмента — любая их ручка (например, **Low-pass → Frequency**).
-   Точка `•` у пункта — у этой ручки уже есть линия.
-3. Справа — полоса, выровненная с тактами аранжировки над ней (прокрутка и масштаб общие).
-   Кликайте по ней — появляются точки, между ними линия. Вверху полосы — максимум ручки, внизу — минимум.
+## How to draw a line
 
-| Что | Как |
+1. Click a track in the arrangement: the panel shows that track.
+2. On the left there is a button with the name of the knob (**Volume** at first). Click it and choose what to
+   move:
+   - **Volume**, **Pan**: the volume and pan of the track;
+   - **Send: Reverb**…: how much the track sends to a return track (if there are any);
+   - the submenus of the effects and the instrument: any of their knobs (for example,
+     **Low-pass → Frequency**).
+   A dot `•` next to an item means this knob already has a line.
+3. On the right is a lane lined up with the bars of the arrangement above it (they scroll and zoom together).
+   Click in it: points appear, with a line between them. The top of the lane is the knob's maximum, the bottom
+   is its minimum.
+
+| What | How |
 |---|---|
-| Клик по пустому месту | Новая точка (по сетке аранжировки, Snap); не отпуская — тянуть |
-| Alt + клик / тянуть | Без сетки |
-| Тянуть точку | Двигать (не дальше соседних точек) |
-| Shift + тянуть точку | Только вверх-вниз, такт не меняется |
-| ПКМ по точке, двойной клик | Удалить точку |
-| ПКМ и вести по точкам | Удалить все, по которым прошли |
-| **Clear** | Убрать всю линию у этой ручки |
+| Click on an empty spot | A new point (on the arrangement grid, Snap); keep holding to drag it |
+| Alt + click / drag | Off the grid |
+| Drag a point | Move it (no further than the points next to it) |
+| Shift + drag a point | Up and down only, the bar does not change |
+| Right-click a point, double click | Delete the point |
+| Right-click and drag over points | Delete every point you pass over |
+| **Clear** | Remove the whole line of this knob |
 
-Над точкой под мышкой видно значение («-6.0 dB · bar 5.1»).
-Каждое действие мышью — один шаг **Ctrl+Z**.
+The value is shown above the point under the mouse ("-6.0 dB · bar 5.1").
+Every mouse action is one **Ctrl+Z** step.
 
-## Как это работает
+## How it works
 
-- До первой точки ручка стоит на значении первой точки, после последней — на значении последней.
-  Между точками — прямая.
-- Пока у ручки есть линия, во время игры её ведёт линия: двигать фейдер или ручку бесполезно — линия
-  вернёт своё. Убрали линию (**Clear** или удалили последнюю точку) — ручка снова там, где её поставили.
-- Без линии в панели пунктир — текущее значение ручки.
-- Линия привязана к тактам: при смене темпа точки остаются на своих долях.
-- Каждая дорожка помнит, какую ручку вы смотрели в панели.
-- Линии сохраняются в проекте и звучат в экспорте WAV.
+- Before the first point the knob stays at the value of the first point; after the last point, at the value of
+  the last one. Between points the line is straight.
+- While a knob has a line, the line drives it during playback: moving the fader or the knob does nothing, the
+  line puts it back. Remove the line (**Clear**, or delete the last point) and the knob is again where you left
+  it.
+- With no line, the panel shows a dashed line: the current value of the knob.
+- The line is tied to the bars: when the tempo changes, the points stay on their beats.
+- Every track remembers which knob you were looking at in the panel.
+- The lines are saved in the project and are heard in the WAV export.
 
-## Записать движение ручки «вживую»
+## Recording a knob movement "live"
 
-1. Нажмите **Write** рядом с кнопкой записи (или **Ctrl+Shift+A**) — кнопка станет красной.
-2. Запустите песню (Пробел).
-3. Двигайте фейдер, панораму, посыл или ползунок эффекта — мышью или ручкой MIDI-контроллера
-   (как привязать ручку — см. [микшер](mixer.md), раздел «MIDI Learn»).
-4. Отпустили — запись этой ручки закончилась, дальше линия идёт как была. Остановили песню — тоже.
+1. Click **Write** next to the record button (or press **Ctrl+Shift+A**): the button turns red.
+2. Start the song (Space).
+3. Move a fader, a pan knob, a send or an effect slider, with the mouse or with a knob of a MIDI controller
+   (how to link a knob: see the [mixer](mixer.md) cheat sheet, the "MIDI Learn" section).
+4. When you let go, the recording of this knob ends and the line continues as it was. The same happens when
+   you stop the song.
 
-Записанное появляется в линии этой ручки (F8) обычными точками: их можно править мышью.
-Одно движение — один шаг **Ctrl+Z**. Выключите **Write**, когда закончили: иначе любое движение
-ручки во время игры снова запишется.
+What you recorded appears in the line of this knob (F8) as ordinary points: you can edit them with the mouse.
+One movement is one **Ctrl+Z** step. Turn **Write** off when you are done: otherwise any knob movement during
+playback will be recorded again.
 
-Пока нельзя: рисовать и записывать линию на возвратных дорожках и мастере, плавные (изогнутые) переходы
-между точками, видеть линии прямо на клипах в аранжировке.
+Not possible yet: drawing and recording a line on return tracks and the master, smooth (curved) transitions
+between points, seeing the lines right on the clips in the arrangement.

@@ -1,439 +1,473 @@
-# Аранжировка — шпаргалка
+# Arrangement: cheat sheet
 
-## Верх окна
+**English** | [Русский](arrangement.ru.md)
 
-- **Меню**: File, Edit, View, Track, Transport, Help. В нём есть все команды, и справа у каждой написана её
-  клавиша, так что ничего не нужно помнить наизусть. **Edit** работает с тем, с чем вы сейчас работаете: с клипами,
-  если последний клик был в аранжировке (или внизу открыт микшер), иначе с нотами piano roll. **Undo** пишет, что
-  именно отменит («Undo "Change tempo"»).
-- Справа в той же строке — **CPU**: насколько нагружен звук. Около 100 % звук начинает трещать. Тогда помогут
-  буфер побольше (File → Settings → Audio) или меньше тяжёлых плагинов.
-- **Транспорт** (вторая строка): **|◀** — в начало (**Home**), **■** — стоп (если уже стоит — в начало),
-  **▶** — играть (Пробел), **●** — запись (**R**; тусклая — взведена, яркая — идёт запись). Дальше крупный
-  **счётчик**: такт.доля.шестнадцатая (например, `5.2.3`) и рядом время `0:08.250`. Потом темп, размер, Tap,
-  метроном (значок, **Ctrl+M**), предотсчёт, Clip/Song и настройки ввода нот.
+## The top of the window
 
-## Дорожки и клипы
+- **The menu**: File, Edit, View, Track, Transport, Help. It holds every command, with its key written on the
+  right, so you do not need to remember anything by heart. **Edit** works with whatever you are working on
+  now: with clips, if your last click was in the arrangement (or the mixer is open at the bottom), otherwise
+  with the notes of the piano roll. **Undo** says what exactly it will undo ("Undo "Change tempo"").
+- On the right in the same row is **CPU**: how loaded the audio is. Near 100 % the sound starts to crackle.
+  A bigger buffer (File → Settings → Audio) or fewer heavy plugins will help.
+- **The transport** (the second row): **|◀** goes to the start (**Home**), **■** is stop (if already
+  stopped, go to the start), **▶** is play (Space), **●** is record (**R**; dim means armed, bright means
+  recording). Next is a large **counter**: bar.beat.sixteenth (for example, `5.2.3`) with the time
+  `0:08.250` next to it. Then the tempo, the time signature, Tap, the metronome (the icon, **Ctrl+M**), the
+  count-in, Clip/Song and the note input settings.
 
-Сверху — дорожки и клипы (как плейлист FL Studio), снизу — piano roll открытого клипа.
-Полосу между ними можно тянуть мышью. **F1** — список всех клавиш с поиском.
-Сэмплы и лупы удобно брать из браузера звуков (**F6**, `sounds.md`) — слушать и перетаскивать на дорожки.
-**Z** (после клика в аранжировке) — показать всю песню целиком, а если выделены клипы — только их.
-**File → Open recent** — последние 10 проектов (открытые или сохранённые).
+## Tracks and clips
 
-## Клипы
+At the top are the tracks and clips (like the FL Studio playlist), at the bottom is the piano roll of the
+open clip. You can drag the bar between them with the mouse. **F1** opens the list of all shortcuts, with a
+search.
+Samples and loops are easy to take from the sound browser (**F6**, [`sounds.md`](sounds.md)): listen and
+drag them onto tracks.
+**Z** (after a click in the arrangement) shows the whole song, or, if clips are selected, only those.
+**File → Open recent** lists the last 10 projects (opened or saved).
 
-| Мышь | Что делает |
+## Clips
+
+| Mouse | What it does |
 |---|---|
-| Клик по клипу | Открыть его в piano roll (и выбрать) |
-| Тянуть клип | Двигать (и на другую дорожку). Двигается всё выделенное |
-| **Shift** + тянуть | **Связанная копия**: правишь одну — меняются все (как клоны паттерна в FL) |
-| **Ctrl** + тянуть | Обычная (независимая) копия |
-| **Ctrl** + клик | Добавить к выделению / убрать |
-| Тянуть левый / правый край | Спрятать или показать начало / конец клипа (ноты остаются на месте) |
-| ПКМ | Удалить клип (протяжка с ПКМ удаляет все, по которым прошла мышь) |
-| Двойной клик по пустому месту | Новый клип длиной в такт |
-| Протяжка по пустому месту | Выделить рамкой (**Shift** / **Ctrl** — добавить) |
-| Треугольник ▾ в углу клипа | Меню: переименовать, цвет, сделать независимым, копии, разрезать, копировать / вырезать / вставить, удалить |
-| **Alt** при перетаскивании | Без привязки к сетке |
-| Колесо / Shift+колесо / Ctrl+колесо | Вверх-вниз / влево-вправо / масштаб; средняя кнопка — двигать вид |
+| Click a clip | Open it in the piano roll (and select it) |
+| Drag a clip | Move it (also to another track). Everything selected moves |
+| **Shift** + drag | **A linked copy**: edit one and all of them change (like pattern clones in FL) |
+| **Ctrl** + drag | An ordinary (independent) copy |
+| **Ctrl** + click | Add to the selection / remove from it |
+| Drag the left / right edge | Hide or show the start / end of the clip (the notes stay in place) |
+| Right-click | Delete the clip (dragging with the right button deletes every clip the mouse passes over) |
+| Double click on an empty spot | A new clip one bar long |
+| Drag on an empty spot | Select with a box (**Shift** / **Ctrl** to add) |
+| The ▾ triangle in the corner of a clip | A menu: rename, colour, make independent, copies, split, copy / cut / paste, delete |
+| **Alt** while dragging | No snapping to the grid |
+| Wheel / Shift+wheel / Ctrl+wheel | Up-down / left-right / zoom; the middle button moves the view |
 
-Знак **∞** перед именем клипа — у него есть связанные копии.
+The **∞** sign before a clip name means the clip has linked copies.
 
-### Повтор клипа (Loop)
+### Looping a clip (Loop)
 
-Меню клипа (▾) → **Loop (repeats when made longer)**: то, что клип показывает сейчас, становится петлёй.
-Тянешь правый край — петля повторяется сколько угодно раз (тонкие линии показывают, где начинается каждый
-повтор, перед именем — знак **↻**). Левый край тоже можно тянуть раньше — повторы остаются на своих местах.
-- В piano roll правится сама петля, повторы видны серыми ghost-нотами. Нота за концом петли удлиняет петлю
-  (до целого такта); клип при этом не меняется.
-- В режиме **Clip** играет одна петля — удобно сочинять. Запись в такой клип (и в режиме Song по всему клипу)
-  складывает сыгранное в петлю.
-- **Make the repeats real notes** — превратить повторы в настоящие ноты (например, чтобы сделать вариацию в
-  последнем такте). Звучит так же; связанная копия так не превращается — клип сначала становится независимым.
-- Снять **Loop** — клип остаётся той же длины, его содержимое играет один раз.
-- Разрезать (Ctrl+E), копировать, сохранить, экспортировать в MIDI — всё с повторами, как звучит.
-Каждое из этих действий — один шаг **Ctrl+Z**.
+The clip menu (▾) → **Loop (repeats when made longer)**: what the clip shows now becomes the loop.
+Drag the right edge and the loop repeats as many times as you like (thin lines show where each repeat
+starts, and a **↻** sign appears before the name). You can also drag the left edge earlier: the repeats stay
+in their places.
+- In the piano roll you edit the loop itself; the repeats are shown as grey ghost notes. A note past the end
+  of the loop makes the loop longer (up to a whole bar); the clip itself does not change.
+- In **Clip** mode one pass of the loop plays, which is handy for writing. Recording into such a clip (and in
+  Song mode over the whole clip) puts what you play into the loop.
+- **Make the repeats real notes** turns the repeats into real notes (for example, to make a variation in the
+  last bar). It sounds the same; a linked copy is not converted this way: the clip first becomes independent.
+- Turn **Loop** off and the clip keeps its length; its content plays once.
+- Splitting (Ctrl+E), copying, saving, exporting to MIDI all include the repeats, the way it sounds.
+Each of these actions is one **Ctrl+Z** step.
 
-Клавиши (когда последний клик был в аранжировке):
+Keys (when your last click was in the arrangement):
 
-| Клавиши | Действие |
+| Keys | Action |
 |---|---|
-| Del | Удалить выделенные клипы |
-| Ctrl+B | Повторить выделенное справа — связанными копиями |
-| Ctrl+Shift+B | Повторить выделенное справа — независимыми копиями |
-| Ctrl+A / Ctrl+D, Esc | Выделить все / снять выделение |
-| Ctrl+E | **Разрезать** клипы там, где курсор воспроизведения: выделенные, а если под курсором их нет — клипы текущей дорожки. Ноты и звук остаются на месте; потянув край половинки, можно вернуть спрятанное |
-| Ctrl+C / Ctrl+X | Копировать / вырезать выделенные клипы |
-| Ctrl+V | Вставить скопированное туда, где курсор воспроизведения (по сетке), начиная с текущей дорожки. Клипы держат своё расположение друг относительно друга; MIDI-клип ляжет только на дорожку с инструментом, аудио — на аудиодорожку (ближайшую ниже). Вставленное — независимые копии |
-| Ctrl+Z / Ctrl+Y | Отменить / вернуть (работает везде) |
+| Del | Delete the selected clips |
+| Ctrl+B | Repeat the selection to the right, as linked copies |
+| Ctrl+Shift+B | Repeat the selection to the right, as independent copies |
+| Ctrl+A / Ctrl+D, Esc | Select all / deselect |
+| Ctrl+E | **Split** clips at the playback cursor: the selected ones, or, if none of them is under the cursor, the clips of the current track. The notes and the sound stay in place; drag the edge of a half to bring back what is hidden |
+| Ctrl+C / Ctrl+X | Copy / cut the selected clips |
+| Ctrl+V | Paste what was copied at the playback cursor (on the grid), starting from the current track. The clips keep their positions relative to each other; a MIDI clip goes only onto a track with an instrument, audio onto an audio track (the nearest one below). What is pasted are independent copies |
+| Ctrl+Z / Ctrl+Y | Undo / redo (works everywhere) |
 
-**Snap** (рядом с «+ Track») — к чему прилипают клипы: **Line** — по видимой сетке (такты, при приближении доли),
-Bar, Beat, 1/2 и 1/4 доли или без привязки.
+**Snap** (next to "+ Track") sets what clips stick to: **Line** is the visible grid (bars, and beats when
+zoomed in), Bar, Beat, 1/2 and 1/4 of a beat, or no snapping.
 
-## Аудиоклипы (звуковые файлы)
+## Audio clips (sound files)
 
-- **Перетащите** WAV, MP3, FLAC, AIFF или OGG из проводника на аранжировку. Синяя черта показывает, куда встанет
-  начало (по сетке Snap):
-  - на **аудиодорожку** — клип ляжет на неё;
-  - на **дорожку с инструментом** или ниже всех дорожек — появится новая аудиодорожка с именем файла;
-  - несколько файлов сразу — каждый на свою новую дорожку, все с одного места.
-- Или **File → Import audio...** — файлы встанут на текущую аудиодорожку (или на новые) с места курсора песни.
-- В клипе видна **волна**. Двигать, копировать (Shift/Ctrl + тянуть, Ctrl+B), удалять и обрезать края — так же,
-  как MIDI-клипы. Растянуть дальше конца файла нельзя — если только не включить ему повтор (ниже).
-- **По кругу:** меню ▾ → **Loop (repeats when made longer)**. То, что клип играет сейчас, становится петлёй:
-  тяните правый край — звук повторяется столько, сколько длится клип. На клипе появляется «↻», между
-  кругами — тонкая черта. Ещё раз тот же пункт — клип снова играет один раз.
-- **Наложили один аудиоклип на другой** (на одной дорожке) — на длине наложения первый плавно затихает,
-  второй нарастает: склейка без щелчка. Развели — у каждого снова свои фейды. Если нужно, чтобы оба
-  звучали в полную силу: меню ▾ → снять галочку **Crossfade where it overlaps another clip**.
-- Аудиоклипы переносятся только на аудиодорожки, MIDI-клипы — только на дорожки с инструментом.
-- Клик по аудиоклипу делает его дорожку текущей и открывает его внизу в **редакторе аудиоклипа** (см. ниже);
-  в режиме **Clip** Пробел играет этот аудиоклип по кругу.
-- Меню ▾ аудиоклипа: переименовать, показать файл в папке, форма фейдов, убрать фейды, громкость в 0 дБ,
-  копия, удалить.
-- Клип ссылается на файл там, где он лежит (в проект не копируется). Если файл переместить или удалить,
-  клип останется с надписью «File missing».
+- **Drag** a WAV, MP3, FLAC, AIFF or OGG file from File Explorer onto the arrangement. A blue line shows
+  where the start will land (on the Snap grid):
+  - on an **audio track**: the clip goes onto it;
+  - on a **track with an instrument** or below all tracks: a new audio track appears, named after the file;
+  - several files at once: each onto a new track of its own, all from the same place.
+- Or **File → Import audio...**: the files go onto the current audio track (or onto new ones) from the song
+  cursor.
+- The clip shows the **waveform**. Moving, copying (Shift/Ctrl + drag, Ctrl+B), deleting and trimming the
+  edges work the same as for MIDI clips. You cannot stretch a clip past the end of the file, unless you turn
+  on looping for it (below).
+- **Looping:** the ▾ menu → **Loop (repeats when made longer)**. What the clip plays now becomes the loop:
+  drag the right edge and the sound repeats for as long as the clip lasts. A "↻" appears on the clip, with a
+  thin line between passes. The same item again makes the clip play once.
+- **When one audio clip overlaps another** (on the same track), over the overlap the first one fades out and
+  the second fades in: a join with no click. Move them apart and each has its own fades again. If you want
+  both to play at full strength: the ▾ menu → untick **Crossfade where it overlaps another clip**.
+- Audio clips can be moved only onto audio tracks, MIDI clips only onto tracks with an instrument.
+- A click on an audio clip makes its track the current one and opens the clip at the bottom in the **audio
+  clip editor** (see below); in **Clip** mode, Space plays this audio clip in a loop.
+- The ▾ menu of an audio clip: rename, show the file in its folder, fade shape, remove fades, gain to 0 dB,
+  copy, delete.
+- A clip points to the file where it is (the file is not copied into the project). If the file is moved or
+  deleted, the clip stays and shows "File missing".
 
-### Фейды и громкость клипа
+### Clip fades and gain
 
-Вверху волны у аудиоклипа три маленькие ручки (если клип не слишком узкий):
+At the top of the waveform an audio clip has three small handles (if the clip is not too narrow):
 
-| Ручка | Что делает |
+| Handle | What it does |
 |---|---|
-| Левый квадратик | Тянуть вправо — **фейд в начале** (звук плавно нарастает). Затемнённая часть — то, что фейд убирает |
-| Правый квадратик | Тянуть влево — **фейд в конце** (звук плавно затихает) |
-| Кружок посередине | Тянуть вверх-вниз — **громкость клипа** (до +6 дБ, в самом низу — тишина). Линия поперёк клипа показывает уровень, волна становится меньше или больше |
-| Двойной клик по ручке | Сбросить: фейда нет, громкость 0 дБ |
+| The left square | Drag right for a **fade in** at the start (the sound rises smoothly). The darkened part is what the fade removes |
+| The right square | Drag left for a **fade out** at the end (the sound dies away smoothly) |
+| The circle in the middle | Drag up and down for the **clip gain** (up to +6 dB, silence at the very bottom). A line across the clip shows the level, and the waveform gets smaller or bigger |
+| Double click a handle | Reset: no fade, gain 0 dB |
 
-- Пока тянете, рядом видно значение («Fade in 1.50 beats (0.75 s)», «Gain -3.0 dB»).
-- Фейды не по сетке: они про звук, а не про такты. Фейд в начале не заходит на фейд в конце.
-- Форма фейдов — в меню ▾ клипа: **Linear** (ровно), **S-curve** (мягко с обеих сторон), **Fast** (быстро
-  в начале), **Slow** (медленно в начале).
-- Громкость клипа — до эффектов и фейдера дорожки: удобно выровнять громкий и тихий куски одной дорожки.
-- Разрезали клип — фейд в начале остаётся у левой части, фейд в конце — у правой.
-- Каждое движение — один шаг Ctrl+Z; всё сохраняется и звучит в экспорте.
+- While you drag, the value is shown next to it ("Fade in 1.50 beats (0.75 s)", "Gain -3.0 dB").
+- Fades do not snap to the grid: they are about the sound, not about bars. The fade in cannot run into the
+  fade out.
+- The fade shape is in the clip's ▾ menu: **Linear** (even), **S-curve** (soft on both sides), **Fast**
+  (quick at the start), **Slow** (slow at the start).
+- The clip gain comes before the effects and the track fader: handy for evening out a loud piece and a quiet
+  piece on one track.
+- When a clip is split, the fade in stays with the left part and the fade out with the right part.
+- Every movement is one Ctrl+Z step; everything is saved and is heard in the export.
 
-## Редактор аудиоклипа (внизу, F7)
+## The audio clip editor (at the bottom, F7)
 
-На аудиодорожке нижняя панель вместо piano roll — **Audio clip**: тот клип, по которому кликнули (или первый
-клип дорожки). Он же обведён в аранжировке белой рамкой.
+On an audio track the bottom panel is **Audio clip** instead of the piano roll: the clip you clicked (or the
+first clip of the track). The same clip has a white frame around it in the arrangement.
 
-**Волна.** Виден весь звуковой файл: часть, которую клип играет, — яркая, спрятанные начало и конец — тусклые.
-Сверху линейка с тактами песни.
+**The waveform.** You see the whole sound file: the part the clip plays is bright, the hidden start and end
+are dim. Above it is a ruler with the bars of the song.
 
-| Что | Как |
+| What | How |
 |---|---|
-| Белая линия слева / справа | Тянуть — открыть или спрятать начало / конец звука (по сетке **Snap**, с **Alt** — свободно). Дальше файла не тянется |
-| Квадратики и кружок вверху | Фейды и громкость клипа — как на клипе в аранжировке; двойной клик сбрасывает |
-| Клик по волне или линейке | Поставить курсор песни туда |
-| Колесо / Ctrl+колесо | Прокрутка / масштаб |
-| Средняя кнопка мыши | Тащить вид |
-| **Show clip** | Показать всю играемую часть |
+| The white line on the left / right | Drag to show or hide the start / end of the sound (on the **Snap** grid; with **Alt**, freely). It does not go past the file |
+| The squares and the circle at the top | The clip's fades and gain, as on the clip in the arrangement; a double click resets |
+| Click the waveform or the ruler | Put the song cursor there |
+| Wheel / Ctrl+wheel | Scroll / zoom |
+| The middle mouse button | Drag the view |
+| **Show clip** | Show the whole part that plays |
 
-**Панель сверху:**
-- **Gain** — громкость клипа числом: тянуть вверх-вниз (Shift — точнее) или двойной клик и ввести (от −60 до
-  +24 dB; ручкой на волне — до +6). **Normalize** — самое громкое место на 0 dB.
-- **Pitch** — выше или ниже в полутонах (Shift — десятыми долями), скорость не меняется.
-- **Follow tempo** — следовать темпу песни; **Loop** — темп, в котором записан луп (тянуть или ввести),
-  **÷2** / **×2** — вдвое меньше или больше.
-- **Fades** — форма фейдов: Linear, S-curve, Fast, Slow.
-- **Reverse** — играть задом наперёд.
-- Справа — файл: имя, частота, моно или стерео, длина.
+**The panel at the top:**
+- **Gain**: the clip gain as a number: drag up and down (Shift for finer steps) or double click and type
+  (from −60 to +24 dB; with the handle on the waveform, up to +6). **Normalize** puts the loudest point at
+  0 dB.
+- **Pitch**: higher or lower in semitones (Shift for tenths); the speed does not change.
+- **Follow tempo**: follow the tempo of the song; **Loop** is the tempo the loop was recorded at (drag or
+  type), **÷2** / **×2** halves or doubles it.
+- **Fades**: the fade shape: Linear, S-curve, Fast, Slow.
+- **Reverse**: play backwards.
+- On the right is the file: name, sample rate, mono or stereo, length.
 
-Каждое изменение — один шаг **Ctrl+Z**. Ctrl+C / Ctrl+V и другие команды правки, пока открыт редактор
-аудиоклипа, работают с клипами аранжировки.
+Every change is one **Ctrl+Z** step. While the audio clip editor is open, Ctrl+C / Ctrl+V and the other edit
+commands work with the clips of the arrangement.
 
-## Запись звука (микрофон, гитара)
+## Recording audio (a microphone, a guitar)
 
-1. Сделайте аудиодорожку (**+ Track → Audio track**).
-2. Нажмите на ней кнопку **●** (готовность к записи) — она станет красной, под именем появится полоска уровня
-   входа: попробуйте спеть — она должна шевелиться. Вход (`In: ...`) меняется в меню дорожки (ПКМ → Record from).
-3. Включите запись (**●** или **R**) и нажмите **▶** (Пробел). Запись идёт с текущего места песни подряд, без лупа;
-   на дорожке растёт красная полоса «Recording...».
-4. **■** (Пробел) — запись становится аудиоклипом. Ctrl+Z убирает её целиком.
+1. Make an audio track (**+ Track → Audio track**).
+2. Click the **●** button on it (record arm). It turns red, and an input level bar appears under the name:
+   try singing, it should move. The input (`In: ...`) is changed in the track menu (right-click → Record
+   from).
+3. Turn on recording (**●** or **R**) and press **▶** (Space). The recording runs from the current place in
+   the song straight on, with no loop; a red "Recording..." bar grows on the track.
+4. **■** (Space): the recording becomes an audio clip. Ctrl+Z removes it completely.
 
-- **Предотсчёт:** кнопка **Count-in** вверху — 1 или 2 такта щелчков метронома перед записью, чтобы успеть
-  взять инструмент. Песня начинает играть чуть раньше, а запись всё равно начинается с того места, где нажали Play
-  (на счётчике видно «Count 3, 2, 1»). Настройка программы, не проекта. Пока работает только для записи звука:
-  ноты в клип-режиме пишутся по кругу, можно вступить со второго круга.
+- **Count-in:** the **Count-in** button at the top gives 1 or 2 bars of metronome clicks before the
+  recording, so you have time to pick up the instrument. The song starts playing a little earlier, but the
+  recording still starts from the place where you pressed Play (the counter shows "Count 3, 2, 1"). This is
+  a setting of the program, not of the project. For now it works only for audio recording: notes in Clip
+  mode are recorded in a loop, so you can come in on the second pass.
 
-- Можно писать сразу на несколько дорожек с ● (каждая со своего входа).
-- Пока дорожка готова к записи, вход слышно в наушниках. Если мешает эхо или фон из колонок —
-  ПКМ по дорожке → снять галочку **Hear the input while armed**.
-- Файлы записей: у сохранённого проекта — в папке «<имя проекта> Audio» рядом с ним, у несохранённого —
-  в «Документы\Harmonia\Recordings».
-- Если открыт MIDI-клип, сыгранные на клавиатуре ноты записываются в него одновременно со звуком.
+- You can record onto several tracks with ● at once (each from its own input).
+- While a track is armed, you hear the input in your headphones. If an echo or hum from the speakers gets in
+  the way, right-click the track → untick **Hear the input while armed**.
+- Recording files: for a saved project, in the folder "<project name> Audio" next to it; for an unsaved one,
+  in "Documents\Harmonia\Recordings".
+- If a MIDI clip is open, the notes you play on the keyboard are recorded into it at the same time as the
+  audio.
 
-### Дубли: записать несколько раз подряд и выбрать лучший
+### Takes: record several times in a row and pick the best
 
-1. Режим **Song** (кнопка Clip / Song вверху или **L**). Выделите на линейке зону повтора — **Ctrl + тянуть**.
-2. Дорожка с **●**, запись (**R**), **▶**. Песня играет зону по кругу, и каждый круг пишется отдельным дублем;
-   на счётчике вверху видно «take 1», «take 2»...
-3. **■** — получается один клип длиной в зону. В нём все дубли; играет последний, записанный целиком.
+1. **Song** mode (the Clip / Song button at the top, or **L**). Select a loop region on the ruler: **Ctrl +
+   drag**.
+2. A track with **●**, record (**R**), **▶**. The song plays the region in a loop, and every pass is
+   recorded as a separate take; the counter at the top shows "take 1", "take 2"...
+3. **■**: you get one clip as long as the region. It holds all the takes; the last one that was recorded in
+   full plays.
 
-- **Выбрать дубль:** ПКМ по клипу → **Takes**, или кнопка **Take 2 of 4** внизу, в редакторе аудиоклипа (F7).
-- **Собрать из кусков:** разрежьте клип (**Ctrl+E** на курсоре) — в каждом куске выбирается свой дубль.
-- **Keep only this take** — забыть остальные дубли (файлы на диске остаются).
-- Вся запись — один шаг Ctrl+Z, каждый выбор дубля — тоже.
+- **Choose a take:** right-click the clip → **Takes**, or the **Take 2 of 4** button at the bottom, in the
+  audio clip editor (F7).
+- **Put it together from pieces:** split the clip (**Ctrl+E** at the cursor), and choose a take for each
+  piece.
+- **Keep only this take** forgets the other takes (the files stay on the disk).
+- The whole recording is one Ctrl+Z step, and so is every choice of a take.
 
-Без зоны повтора (или в режиме Clip) запись идёт как обычно — подряд, одним куском.
-Пока нельзя: дубли для нот, видеть все дубли сразу под клипом.
+Without a loop region (or in Clip mode) recording works as usual: straight on, in one piece.
+Not possible yet: takes for notes, seeing all the takes at once under the clip.
 
-## Дорожки
+## Tracks
 
-- **+ Track** — меню: **Instrument track** (встроенный синтезатор и пустой клип там же, где открытый),
-  **Drum track** (встроенная драм-машина, имена барабанов на клавишах, пустой клип) или **Audio track**
-  (пустая дорожка для звуковых файлов, без инструмента).
-- Клик по заголовку дорожки — сделать её текущей: её инструмент показан над аранжировкой, на ней играют
-  клавиатура компьютера и MIDI-клавиатура.
-- Двойной клик по имени — переименовать (клипы, названные по дорожке, переименуются вместе с ней).
-- **M** — заглушить, **S** — соло, ползунок — громкость (двойной клик — 0 дБ).
-- ПКМ по заголовку — меню: переименовать, добавить дорожку с инструментом или аудиодорожку, удалить дорожку;
-  у аудиодорожки ещё готовность к записи, вход (Record from) и прослушивание входа. И ещё:
-  - **Duplicate track** — копия прямо под ней: инструмент, эффекты с настройками и автоматизацией, посылы,
-    громкость, клипы (копии свои: правка нот в них не трогает исходные).
-  - **Move up / Move down** — переставить. Или просто тащить заголовок мышью вверх-вниз: синяя линия покажет,
-    куда встанет.
-  - **Freeze** — «заморозить» на месте: звук дорожки записывается в файл, дорожка играет его, а её
-    инструмент и эффекты выключаются и перестают грузить компьютер. В заголовке появляется «Frozen».
-    Громкость, панорама, посылы и группа продолжают работать. Пока дорожка заморожена, её клипы
-    и ноты не правятся; **Unfreeze** в том же меню возвращает всё как было. В отличие от
-    Render to audio track, новой дорожки не появляется.
-  - **Folder** — папки дорожек, см. ниже.
-  - **Render to audio track** — «заморозить» в звук: дорожка (инструмент + эффекты + громкость) пишется в
-    WAV рядом с проектом и ложится на новую аудиодорожку «… (audio)» под ней, с того же места; посылы
-    (ревер) переносятся, а исходная дорожка глушится (M) — песня звучит как прежде. Удобно, когда тяжёлый
-    плагин грузит компьютер, или чтобы резать и переворачивать партию как звук. **Ctrl+Z** — вернуть как было
-    (файл остаётся).
-  - **Output (master or a group)** — куда идёт звук дорожки: прямо на мастер или в группу (общий фейдер
-    для нескольких дорожек, см. шпаргалку микшера), или **New group with this track**.
-  - **Colour** — цвет дорожки (16 цветов). **Automatic** — цвет по месту дорожки в песне, как раньше.
-    Свой цвет остаётся при перестановке, копии дорожки и «заморозке» в звук; виден в аранжировке, микшере и
-    автоматизации.
-  Каждое такое действие — один шаг **Ctrl+Z**.
-- Под именем написан инструмент дорожки или **Audio** у аудиодорожки.
-- Цвет клипа — меню клипа (▾) → **Colour**: если клип выделен, красятся все выделенные. **Same as the track** —
-  снова цвет дорожки. Копии клипа берут его цвет.
+- **+ Track** opens a menu: **Instrument track** (the built-in synth and an empty clip at the same place as
+  the open one), **Drum track** (the built-in drum machine, drum names on the keys, an empty clip) or
+  **Audio track** (an empty track for sound files, with no instrument).
+- Click a track header to make it the current track: its instrument is shown above the arrangement, and the
+  computer keyboard and the MIDI keyboard play it.
+- Double click the name to rename it (clips named after the track are renamed with it).
+- **M** is mute, **S** is solo, the slider is the volume (double click for 0 dB).
+- Right-click the header for a menu: rename, add an instrument track or an audio track, delete the track;
+  an audio track also has record arm, the input (Record from) and input monitoring. And also:
+  - **Duplicate track**: a copy right below it: the instrument, the effects with their settings and
+    automation, the sends, the volume, the clips (the copies are separate: editing notes in them does not
+    touch the originals).
+  - **Move up / Move down**: reorder. Or just drag the header up or down with the mouse: a blue line shows
+    where it will land.
+  - **Freeze**: "freeze" the track in place: its sound is written to a file, the track plays that file, and
+    its instrument and effects are turned off and stop loading the computer. "Frozen" appears in the header.
+    The volume, pan, sends and group keep working. While a track is frozen, its clips and notes cannot be
+    edited; **Unfreeze** in the same menu puts everything back. Unlike Render to audio track, no new track
+    appears.
+  - **Folder**: track folders, see below.
+  - **Render to audio track**: "freeze" into audio: the track (instrument + effects + volume) is written to
+    a WAV next to the project and placed on a new audio track "… (audio)" below it, at the same place; the
+    sends (reverb) are carried over, and the original track is muted (M), so the song sounds as before.
+    Handy when a heavy plugin loads the computer, or when you want to cut and reverse a part as audio.
+    **Ctrl+Z** puts everything back (the file stays).
+  - **Output (master or a group)**: where the track's sound goes: straight to the master or into a group
+    (one fader for several tracks, see the [mixer](mixer.md) cheat sheet), or **New group with this track**.
+  - **Colour**: the track colour (16 colours). **Automatic** is the colour by the track's place in the song,
+    as before. Your own colour stays when the track is moved, copied or "frozen" into audio; it is shown in
+    the arrangement, the mixer and automation.
+  Each of these actions is one **Ctrl+Z** step.
+- Under the name is the track's instrument, or **Audio** for an audio track.
+- The clip colour: the clip menu (▾) → **Colour**: if the clip is selected, all selected clips are coloured.
+  **Same as the track** goes back to the track colour. Copies of a clip take its colour.
 
-### Папки дорожек
+### Track folders
 
-Когда дорожек много, соседние можно сложить в папку и свернуть её в одну строку.
+When there are many tracks, you can put neighbouring ones into a folder and collapse it into one row.
 
-- **Сделать папку:** ПКМ по заголовку дорожки → **Folder** → **New folder with this track**. Если выделены
-  клипы на других дорожках, эти дорожки тоже войдут. Дорожки папки встают рядом.
-- **Добавить дорожку в папку:** её меню → **Folder** → **Move into folder** → имя папки. Или перетащить
-  заголовок между двумя дорожками папки. **Убрать:** **Take out of the folder**, или утащить заголовок
-  в сторону от папки.
-- **Свернуть:** кнопка слева от имени у первой дорожки папки (или **Collapse to one row** в меню).
-  Папка становится одной строкой: имя папки, сколько в ней дорожек, **M** и **S** — сразу на все.
-  В строке видны клипы всех дорожек папки; править их там нельзя — разверните папку той же кнопкой.
-- Свёрнутую папку можно таскать за заголовок — переезжает целиком.
-- **Rename folder...**, **Remove the folder (its tracks stay)** — в том же меню. Дорожки при удалении
-  папки остаются на местах.
+- **Make a folder:** right-click a track header → **Folder** → **New folder with this track**. If clips on
+  other tracks are selected, those tracks go in too. The tracks of a folder are placed next to each other.
+- **Add a track to a folder:** its menu → **Folder** → **Move into folder** → the folder name. Or drag the
+  header between two tracks of the folder. **Take it out:** **Take out of the folder**, or drag the header
+  away from the folder.
+- **Collapse:** the button to the left of the name on the first track of the folder (or **Collapse to one
+  row** in the menu). The folder becomes one row: the folder name, how many tracks it holds, and **M** and
+  **S** for all of them at once. The row shows the clips of all the tracks in the folder; you cannot edit
+  them there: expand the folder with the same button.
+- A collapsed folder can be dragged by its header: it moves as a whole.
+- **Rename folder...** and **Remove the folder (its tracks stay)** are in the same menu. When a folder is
+  removed, its tracks stay where they are.
 
-Папка только наводит порядок на экране и даёт общий mute / solo. Общий фейдер и общие эффекты для
-нескольких дорожек — это **группа** (см. шпаргалку микшера). В микшере папки не сворачиваются.
+A folder only tidies up the screen and gives a shared mute / solo. A shared fader and shared effects for
+several tracks is a **group** (see the [mixer](mixer.md) cheat sheet). Folders do not collapse in the mixer.
 
-## Звук в клипе: реверс и нормализация
+## Sound in a clip: reverse and normalize
 
-В меню аудиоклипа (треугольник ▾ в углу):
-- **Reverse (play backwards)** — играть задом наперёд (реверс-тарелка, вокальные эффекты). Программа сама
-  записывает перевёрнутую копию файла; пока пишет, на клипе надпись «Reversing...» (обычно доли секунды).
-  Ещё раз — снова вперёд. Исходный файл не меняется.
-- **Normalize (loudest point to 0 dB)** — поднять громкость клипа так, чтобы самое громкое место было
-  на 0 dB (считается только та часть, что звучит). Тихую запись можно поднять до +24 dB.
-  Вернуть как было — Ctrl+Z или *Reset gain to 0 dB*.
+In the audio clip menu (the ▾ triangle in the corner):
+- **Reverse (play backwards)**: play backwards (a reverse cymbal, vocal effects). The program writes a
+  reversed copy of the file by itself; while it is writing, the clip shows "Reversing..." (usually a
+  fraction of a second). Once more, and it plays forwards again. The original file is not changed.
+- **Normalize (loudest point to 0 dB)**: raise the clip gain so that the loudest point is at 0 dB (only the
+  part that plays is counted). A quiet recording can be raised by up to +24 dB.
+  To put it back: Ctrl+Z or *Reset gain to 0 dB*.
 
-## Лупы в темпе песни и высота звука
+## Loops in the tempo of the song, and pitch
 
-**Луп сам встаёт в темп.** Перетащите в песню луп — программа узнаёт его темп и растягивает или сжимает
-звук так, чтобы его доли легли на доли песни. Тон при этом не меняется. Темп она берёт:
-- из самого файла (метки ACID или Apple Loops, как в библиотеках сэмплов);
-- из имени: «Drums 95 BPM.wav», «hat_loop_140_Am.wav»;
-- если в имени есть слово «loop», а темпа нет, — по длине: ищет целое число тактов, ближайшее к темпу песни.
+**A loop falls into the tempo by itself.** Drag a loop into the song: the program works out its tempo and
+stretches or squeezes the sound so that its beats land on the beats of the song. The pitch does not change.
+It takes the tempo:
+- from the file itself (ACID or Apple Loops tags, as in sample libraries);
+- from the name: "Drums 95 BPM.wav", "hat_loop_140_Am.wav";
+- if the name has the word "loop" but no tempo, from the length: it looks for a whole number of bars that
+  is closest to the tempo of the song.
 
-Удары, одиночные звуки и записанный голос (в имени нет ни темпа, ни «loop») играют со своей скоростью.
+Hits, single sounds and a recorded voice (no tempo and no "loop" in the name) play at their own speed.
 
-После имени клипа видно, что с ним сделано: «· 95 BPM» — следует темпу песни, а луп записан в 95 BPM;
-«· +3 st» — звучит на 3 полутона выше.
+After the clip name you can see what was done to it: "· 95 BPM" means it follows the tempo of the song and
+the loop was recorded at 95 BPM; "· +3 st" means it sounds 3 semitones higher.
 
-Если сменить темп песни, такой клип ускорится или замедлится вместе с ней и останется на тех же тактах.
+If you change the tempo of the song, such a clip speeds up or slows down with it and stays on the same
+bars.
 
-В меню аудиоклипа (▾):
-- **Follow the song tempo** — включить или выключить. Если выключить, клип снова играет со своей скоростью.
-  Можно включить и для звука, который не луп: тогда программа считает, что он записан в нынешнем темпе
-  песни. Сейчас он звучит как прежде, а при смене темпа будет меняться вместе с песней.
-- **Loop tempo** — если темп угадан неверно: **Set...** — ввести свой (от 50 до 250 BPM), **Half** /
-  **Double** — вдвое меньше или больше. Например, луп угадался как 140, а на самом деле это 70 в два раза
-  длиннее.
-- **Pitch** — выше или ниже на полутон или октаву, без смены скорости (до 24 полутонов в каждую сторону);
-  **Original pitch** — вернуть исходную высоту.
+In the audio clip menu (▾):
+- **Follow the song tempo**: turn on or off. If you turn it off, the clip plays at its own speed again.
+  You can also turn it on for a sound that is not a loop: then the program assumes it was recorded at the
+  current tempo of the song. For now it sounds as before, and when the tempo changes it will change with the
+  song.
+- **Loop tempo**, if the tempo was guessed wrong: **Set...** to type your own (from 50 to 250 BPM),
+  **Half** / **Double** to halve or double it. For example, a loop was guessed as 140, but it is really 70
+  and twice as long.
+- **Pitch**: higher or lower by a semitone or an octave, with no change of speed (up to 24 semitones each
+  way); **Original pitch** goes back to the original pitch.
 
-Каждое изменение — один шаг **Ctrl+Z**. Растягивает звук Signalsmith Stretch (открытый код, лицензия MIT)
-во время игры: ждать подготовки копии файла не нужно.
+Every change is one **Ctrl+Z** step. The sound is stretched by Signalsmith Stretch (open source, MIT
+license) during playback: you do not have to wait for a copy of the file to be prepared.
 
-Звук в FLAC, Ogg или MP3, который следует темпу или звучит выше или ниже, программа сначала переводит в WAV
-(растягивать на ходу можно только его). WAV ложится туда же, куда записи песни: в папку «*имя песни* Audio»
-рядом с файлом песни, а у ещё не сохранённой песни — в «Документы/Harmonia/Recordings». Исходный файл не
-меняется.
+A sound in FLAC, Ogg or MP3 that follows the tempo or sounds higher or lower is first converted to WAV (only
+WAV can be stretched on the fly). The WAV goes to the same place as the recordings of the song: the folder
+"*song name* Audio" next to the song file, or, for a song not saved yet, "Documents/Harmonia/Recordings".
+The original file is not changed.
 
-## Маркеры (куплет, припев…)
+## Markers (verse, chorus…)
 
-Полоса **Markers** над номерами тактов — метки частей песни.
-- **+ Marker** (слева от полосы) — метка там, где курсор воспроизведения; имя подставится само по порядку:
-  Intro, Verse, Pre-chorus, Chorus, Bridge… Двойной клик по пустому месту полосы — метка там.
-- Клик по метке — играть с неё. Тянуть — передвинуть (по сетке Snap, **Alt** — без). Двойной клик — переименовать.
-- ПКМ по линейке — меню: **Add marker here** (готовые имена или своё), а на метке — **Rename**, **Loop this
-  section** (зациклить от этой метки до следующей — удобно доводить припев), **Delete marker**.
-- **Ctrl+→ / Ctrl+←** — к следующей / предыдущей метке (работает везде, не только в аранжировке).
-Метки сохраняются в проекте; каждое изменение — один шаг **Ctrl+Z**.
+The **Markers** lane above the bar numbers holds the labels of the song's sections.
+- **+ Marker** (to the left of the lane) puts a marker at the playback cursor; the name is filled in by
+  itself in order: Intro, Verse, Pre-chorus, Chorus, Bridge… A double click on an empty spot of the lane
+  puts a marker there.
+- Click a marker to play from it. Drag to move it (on the Snap grid; **Alt** for off the grid). Double click
+  to rename.
+- Right-click the ruler for a menu: **Add marker here** (ready-made names or your own), and on a marker:
+  **Rename**, **Loop this section** (loop from this marker to the next one, handy for polishing a chorus),
+  **Delete marker**.
+- **Ctrl+→ / Ctrl+←** go to the next / previous marker (works everywhere, not only in the arrangement).
+Markers are saved in the project; every change is one **Ctrl+Z** step.
 
-## Такты сразу на всех дорожках (повторить припев, вставить паузу)
+## Bars on all tracks at once (repeat a chorus, insert a pause)
 
-ПКМ по линейке — внизу меню три пункта. Они действуют на **луп** (Ctrl + протяжка по линейке), если клик внутри
-него, иначе — на такт под мышью:
+Right-click the ruler: there are three items at the bottom of the menu. They act on the **loop** (Ctrl +
+drag on the ruler) if the click is inside it, otherwise on the bar under the mouse:
 
-- **Duplicate bars 5-8 (all tracks)** — сыграть эти такты дважды: копия встаёт сразу после них на всех дорожках,
-  остальная песня сдвигается дальше. Клипы-копии связаны с оригиналами (как Ctrl+B): правка нот в одном меняет
-  все. Повторяется и автоматизация (подъём фильтра в копии снова идёт с начала), и метки. Луп переезжает на копию —
-  ещё раз тот же пункт добавит третий повтор.
-- **Insert 4 empty bars before bar 5 (all tracks)** — пустые такты: всё, что дальше, сдвигается позже (клипы,
-  автоматизация, темп, метки). Клип, который идёт через это место, разрезается.
-- **Delete bars 5-8 (all tracks)** — вырезать такты из всех дорожек, остальное съезжает назад.
+- **Duplicate bars 5-8 (all tracks)**: play these bars twice: a copy is placed right after them on all
+  tracks, and the rest of the song moves further on. The copied clips are linked to the originals (like
+  Ctrl+B): editing notes in one changes all of them. Automation is repeated too (a filter rise in the copy
+  starts from the beginning again), and so are the markers. The loop moves onto the copy, so the same item
+  once more adds a third repeat.
+- **Insert 4 empty bars before bar 5 (all tracks)**: empty bars: everything after them moves later (clips,
+  automation, tempo, markers). A clip that runs across this place is split.
+- **Delete bars 5-8 (all tracks)**: cut the bars out of all tracks; the rest slides back.
 
-С клавиатуры (в аранжировке, на лупе): **Ctrl+Insert** — пустые такты длиной с луп перед ним, **Ctrl+Delete** —
-удалить такты лупа. Каждое действие — один шаг **Ctrl+Z**.
+From the keyboard (in the arrangement, on a loop): **Ctrl+Insert** inserts empty bars as long as the loop
+before it, **Ctrl+Delete** deletes the bars of the loop. Every action is one **Ctrl+Z** step.
 
-## Песня из лупа
+## A song from a loop
 
-Есть луп на 2–8 тактов, где всё уже звучит (аккорды, барабаны, бас, мелодия)? Отметьте его (Ctrl + протяжка по
-линейке), ПКМ внутри лупа → **Make a song from bars 1-4** → форма:
+Do you have a loop of 2–8 bars where everything already plays (chords, drums, bass, melody)? Mark it (Ctrl
++ drag on the ruler), right-click inside the loop → **Make a song from bars 1-4** → a form:
 
-| Форма | Части |
+| Form | Sections |
 |---|---|
-| **Pop** | Intro (только гармония) → Verse (барабаны, бас, гармония) → Chorus (всё) → Verse → Chorus → Outro (гармония и мелодия) |
-| **Dance** | Intro (барабаны и гармония) → Build (гармония и мелодия) → Drop (всё) → Break (без барабанов и баса) → Drop → Outro |
-| **Short** | Intro → Main (всё) → Break → Main → Outro |
+| **Pop** | Intro (harmony only) → Verse (drums, bass, harmony) → Chorus (everything) → Verse → Chorus → Outro (harmony and melody) |
+| **Dance** | Intro (drums and harmony) → Build (harmony and melody) → Drop (everything) → Break (no drums or bass) → Drop → Outro |
+| **Short** | Intro → Main (everything) → Break → Main → Outro |
 
-Harmonia сама понимает, кто есть кто: барабанная дорожка (названа «Drums», «Beat»… или помечена как барабаны), бас
-(самая низкая, если ниже C3), мелодия (самая высокая, если партий несколько), остальное — гармония. Каждая часть —
-это луп, сыгранный примерно на 8 тактов (луп на 4 такта — дважды). Над частями появляются метки; клипы-копии
-**связаны** с лупом — поправьте ноты в одном, и они изменятся по всей песне (Make unique — отвязать). Что было
-после лупа, сдвигается за песню. Всё — один шаг **Ctrl+Z**.
+Harmonia works out by itself who is who: the drum track (named "Drums", "Beat"… or marked as drums), the
+bass (the lowest one, if it is below C3), the melody (the highest one, if there are several parts), and the
+rest is harmony. Every section is the loop played for about 8 bars (a 4-bar loop, twice). Markers appear
+above the sections; the copied clips are **linked** to the loop: fix the notes in one and they change
+through the whole song (Make unique unlinks a clip). What was after the loop moves to after the song. All of
+it is one **Ctrl+Z** step.
 
-## Воспроизведение: Clip и Song
+## Playback: Clip and Song
 
-Кнопка **Clip / Song** (или **L**) — что играет Пробел, как PAT / SONG в FL:
+The **Clip / Song** button (or **L**) sets what Space plays, like PAT / SONG in FL:
 
-- **Clip** — открытый клип по кругу (удобно писать партию).
-- **Song** — вся аранжировка. Играет по кругу всю песню или **луп**: **Ctrl + протяжка** по линейке над клипами.
-  **Ctrl + клик** по линейке — убрать луп. Обычный клик по линейке — играть с этого места (включает Song).
+- **Clip**: the open clip in a loop (handy for writing a part).
+- **Song**: the whole arrangement. It plays the whole song in a loop, or the **loop**: **Ctrl + drag** on
+  the ruler above the clips. **Ctrl + click** on the ruler removes the loop. An ordinary click on the ruler
+  plays from that place (and turns on Song).
 
-Запись (**R** или кнопка Rec) пишет в открытый клип: в режиме Clip — каждый круг добавляет ноты, в режиме Song —
-только то, что сыграно, пока песня внутри этого клипа.
+Recording (**R** or the Rec button) writes into the open clip: in Clip mode every pass adds notes; in Song
+mode, only what is played while the song is inside this clip.
 
-## Темп и размер
+## Tempo and time signature
 
-Вверху, справа от позиции:
+At the top, to the right of the position:
 
-| Что | Как |
+| What | How |
 |---|---|
-| **120 BPM** | Темп. Тянуть мышью вверх / вниз (с **Shift** — по десятым), колесо мыши, или двойной клик и ввести число (**Enter** — готово, **Esc** — отмена). От 20 до 300 |
-| **Tap** | Нажимать в такт музыке (4 раза и больше) — темп подстроится. Пауза больше 2 секунд — счёт заново |
-| **4/4** | Размер: сколько долей в такте (2/4 … 7/4) |
+| **120 BPM** | The tempo. Drag up / down with the mouse (with **Shift**, by tenths), use the mouse wheel, or double click and type a number (**Enter** to confirm, **Esc** to cancel). From 20 to 300 |
+| **Tap** | Tap in time with the music (4 times or more) and the tempo adjusts. A pause of more than 2 seconds starts the count again |
+| **4/4** | The time signature: how many beats in a bar (2/4 … 7/4) |
 
-- При смене темпа клипы, ноты и автоматизация остаются на своих долях — песня просто играет быстрее или медленнее.
-  Аудиоклипы начинаются на той же доле, но звучат с той же скоростью (не растягиваются) — их длина в тактах меняется.
-- Размер меняет только сетку тактов: клипы стоят на тех же долях.
-- Каждое изменение — один шаг **Ctrl+Z**; темп и размер сохраняются в проекте.
-- Размер пока один на всю песню. Размеры на 8 (6/8, 12/8) — позже.
+- When the tempo changes, clips, notes and automation stay on their beats: the song just plays faster or
+  slower. Audio clips start on the same beat but play at the same speed (they are not stretched), so their
+  length in bars changes.
+- The time signature changes only the bar grid: the clips stay on the same beats.
+- Every change is one **Ctrl+Z** step; the tempo and time signature are saved in the project.
+- For now there is one time signature for the whole song. Signatures over 8 (6/8, 12/8) will come later.
 
-### Смена темпа по ходу песни
+### Tempo changes along the song
 
-- **Добавить:** правой кнопкой по линейке с номерами тактов → **Tempo change here...** → ввести темп.
-  С этого места песня играет в новом темпе. На линейке появляется оранжевый флажок с числом.
-- **Подвинуть:** тянуть флажок мышью (по сетке; **Alt** — без сетки).
-- **Изменить темп:** двойной клик по флажку, или ПКМ → **Set tempo...**. Или поставьте песню на это место
-  и меняйте темп в поле вверху: оно показывает и меняет темп там, где сейчас песня.
-- **Плавно:** ПКМ по флажку → **Glide to it from the tempo before** — темп плавно придёт к этому значению
-  от предыдущей смены (замедление в конце, разгон перед припевом). На флажке появится «~».
-- **Убрать:** ПКМ по флажку → **Remove tempo change**.
+- **Add:** right-click the ruler with the bar numbers → **Tempo change here...** → type the tempo.
+  From this place the song plays at the new tempo. An orange flag with the number appears on the ruler.
+- **Move:** drag the flag with the mouse (on the grid; **Alt** for off the grid).
+- **Change the tempo:** double click the flag, or right-click → **Set tempo...**. Or put the song at this
+  place and change the tempo in the box at the top: it shows and changes the tempo where the song is now.
+- **Smoothly:** right-click the flag → **Glide to it from the tempo before**: the tempo comes to this value
+  smoothly from the previous change (a slowdown at the end, a speed-up before a chorus). A "~" appears on
+  the flag.
+- **Remove:** right-click the flag → **Remove tempo change**.
 
-Клипы, ноты, автоматизация и маркеры остаются на своих долях. Экспорт и метроном идут по этим сменам.
-Каждое действие — один шаг **Ctrl+Z**.
+Clips, notes, automation and markers stay on their beats. The export and the metronome follow these
+changes. Every action is one **Ctrl+Z** step.
 
-## MIDI-файлы
+## MIDI files
 
-- **Добавить:** перетащить `.mid` из проводника на дорожку (или **File → Import audio or MIDI...** — встанет
-  у курсора на выбранную дорожку). Клип начинается с ближайшей сетки слева.
-  - Файл с одной партией ложится на дорожку с инструментом, куда его бросили. Брошенный на аудиодорожку
-    или ниже всех — на новую дорожку.
-  - Файл с несколькими партиями (бас, барабаны, пианино…) — каждая на свою новую дорожку со встроенным
-    синтом, с именем партии. Потом можно поставить свой инструмент.
-  - Если в песне ещё нет ни нот, ни звука — берутся темп и размер из файла.
-  - Всё добавление — один шаг **Ctrl+Z**. Можно бросить вместе звуковые и MIDI-файлы.
-  - **Педаль (сустейн)** из файла переносится в длину нот: нота, отпущенная с нажатой педалью, звучит до
-    отпускания педали (или до нового удара по той же клавише). Пианинные MIDI из интернета звучат как сыграны,
-    а не «обрывками», на любом инструменте.
-- **Сохранить клип:** правый клик по MIDI-клипу → **Export as MIDI file...** — ноты клипа, как он их играет
-  (заглушённые ноты и то, что за краем клипа, не попадают).
-- **Сохранить всю песню:** **File → Export MIDI...** — по дорожке в файле на каждую дорожку с инструментом,
-  где есть ноты, плюс темп и размер. Удобно, чтобы перенести партии в другую программу.
-- Цвет ноты ↔ MIDI-канал (цвет 1 = канал 1 и т.д.).
-- Не поддерживаются файлы со временем в кадрах SMPTE (редкость, от видеопрограмм). Изменения темпа внутри
-  файла не переносятся — берётся первый темп.
+- **Add:** drag a `.mid` from File Explorer onto a track (or **File → Import audio or MIDI...**: it is
+  placed at the cursor on the selected track). The clip starts at the nearest grid line to the left.
+  - A file with one part goes onto the instrument track you dropped it on. Dropped on an audio track or
+    below all tracks, it goes onto a new track.
+  - A file with several parts (bass, drums, piano…): each part onto a new track of its own with the
+    built-in synth, named after the part. You can put your own instrument on it afterwards.
+  - If the song has no notes and no audio yet, the tempo and time signature are taken from the file.
+  - The whole import is one **Ctrl+Z** step. You can drop audio and MIDI files together.
+  - **The sustain pedal** from the file is turned into note length: a note released while the pedal is down
+    sounds until the pedal is released (or until the same key is hit again). Piano MIDI files from the
+    internet sound the way they were played, not "in scraps", on any instrument.
+- **Save a clip:** right-click a MIDI clip → **Export as MIDI file...**: the notes of the clip as it plays
+  them (muted notes and anything past the edge of the clip are left out).
+- **Save the whole song:** **File → Export MIDI...**: one track in the file for every instrument track that
+  has notes, plus the tempo and time signature. Handy for moving parts to another program.
+- Note colour ↔ MIDI channel (colour 1 = channel 1, and so on).
+- Files with time in SMPTE frames are not supported (rare, from video programs). Tempo changes inside a file
+  are not carried over: the first tempo is taken.
 
-## Файлы
+## Files
 
-Меню **File** (там же **Settings...** — звуковая карта, MIDI-клавиатуры, плагины, и **Exit**):
+The **File** menu (it also has **Settings...** for the sound card, MIDI keyboards and plugins, and
+**Exit**):
 
-| Клавиши | Действие |
+| Keys | Action |
 |---|---|
-| Ctrl+N | Новый проект |
-| Ctrl+O | Открыть (`.harmonia`) |
-| Ctrl+S / Ctrl+Shift+S | Сохранить / Сохранить как |
-| Ctrl+R | Экспорт песни (вся песня + 2 секунды на затухание), как в FL: сначала выбрать формат (см. ниже), потом куда сохранить. Звучит как при игре: заглушённые (M) дорожки не попадают, при соло (S) — только солирующие |
-| Ctrl+, | Настройки: звуковая карта и буфер, MIDI-клавиатуры, папки плагинов |
-| — | Import audio or MIDI... — добавить звуковые или MIDI-файлы (см. «Аудиоклипы», «MIDI-файлы») |
-| — | Export stems (WAV per track)... — каждая дорожка в свой WAV (см. ниже) |
-| — | Export the loop region as WAV... — только луп (Ctrl + протяжка по линейке), ровно по его границам: готовый сэмпл-петля |
-| — | Export MIDI... — ноты всей песни в `.mid` |
+| Ctrl+N | New project |
+| Ctrl+O | Open (`.harmonia`) |
+| Ctrl+S / Ctrl+Shift+S | Save / Save as |
+| Ctrl+R | Export the song (the whole song + 2 seconds for the tail), as in FL: first choose the format (see below), then where to save. It sounds as it does in playback: muted (M) tracks are left out; with solo (S), only the soloed ones are included |
+| Ctrl+, | Settings: sound card and buffer, MIDI keyboards, plugin folders |
+| — | Import audio or MIDI...: add audio or MIDI files (see "Audio clips", "MIDI files") |
+| — | Export stems (WAV per track)...: every track into a WAV of its own (see below) |
+| — | Export the loop region as WAV...: only the loop (Ctrl + drag on the ruler), exactly on its borders: a ready-made sample loop |
+| — | Export MIDI...: the notes of the whole song into a `.mid` |
 
-**Формат экспорта** (Ctrl+R; Harmonia запоминает последний):
+**Export format** (Ctrl+R; Harmonia remembers the last one):
 
-| Формат | Для чего |
+| Format | What it is for |
 |---|---|
-| WAV, 24-bit | Полное качество: мастеринг, дистрибьюторы (DistroKid…), другие программы. По умолчанию |
-| WAV, 16-bit (CD) | Для CD и старых плееров. Добавляется очень тихий шум (дизеринг), чтобы тихие концовки затухали гладко |
-| WAV, 32-bit float | Ничего не обрезается даже выше 0 dB: для звукорежиссёра мастеринга или дальнейшей работы |
-| FLAC, 24 / 16-bit | Тот же звук, что WAV, примерно вдвое меньше. Берут Bandcamp, SoundCloud, большинство плееров |
-| MP3, 320 / 256 / 192 / 128 kbps | Маленький, играет везде: отправить, слушать на телефоне. 320 — лучшее. Держите пики ниже −1 dB (лимитер), чтобы не трещало |
+| WAV, 24-bit | Full quality: mastering, distributors (DistroKid…), other programs. The default |
+| WAV, 16-bit (CD) | For CDs and old players. A very quiet noise (dither) is added so that quiet endings fade out smoothly |
+| WAV, 32-bit float | Nothing is clipped even above 0 dB: for a mastering engineer or for further work |
+| FLAC, 24 / 16-bit | The same sound as WAV, about half the size. Accepted by Bandcamp, SoundCloud and most players |
+| MP3, 320 / 256 / 192 / 128 kbps | Small, plays everywhere: for sending, for listening on a phone. 320 is the best. Keep the peaks below −1 dB (a limiter) so it does not crackle |
 
-MP3 делает кодировщик Windows. Если в списке нет MP3 — в этой Windows его нет (бывает в версиях «N»: поможет
-Media Feature Pack из настроек Windows).
+MP3 is made by the Windows encoder. If MP3 is not in the list, this Windows does not have it (this happens
+in "N" editions: the Media Feature Pack from Windows Settings will help).
 
-По умолчанию файлы кладутся в «Документы\Harmonia». Звёздочка в заголовке окна — есть несохранённые изменения;
-при закрытии, новом проекте или открытии другого Harmonia спросит, сохранить ли их.
+By default files go to "Documents\Harmonia". An asterisk in the window title means there are unsaved
+changes; when you close, start a new project or open another one, Harmonia asks whether to save them.
 
-**Стемы** (File → Export stems): выбрать папку — в неё ляжет по WAV на каждую дорожку, которую слышно и
-где есть клипы: «Песня - 01 Bass.wav», «Песня - 02 Drums.wav»… (номер — место дорожки сверху вниз). В каждом —
-дорожка со своими эффектами и своим ревером/дилеем (посылы), но без эффектов и громкости мастера. Все файлы
-длиной во всю песню: в другой программе их ставят с начала — и они сходятся, а вместе звучат как микс.
-Заглушённые (M) дорожки не попадают; при соло (S) — только солирующие. Папка откроется сама.
+**Stems** (File → Export stems): choose a folder, and it gets one WAV for every track that can be heard and
+has clips: "Song - 01 Bass.wav", "Song - 02 Drums.wav"… (the number is the track's place from top to
+bottom). Each one holds the track with its own effects and its own reverb/delay (sends), but without the
+effects and volume of the master. All the files are as long as the whole song: in another program you put
+them at the start and they line up, and together they sound like the mix. Muted (M) tracks are left out;
+with solo (S), only the soloed ones are included. The folder opens by itself.
 
-**Луп в WAV** (File → Export the loop region as WAV): сначала отметь луп — **Ctrl + протяжка** по линейке над
-клипами (или в меню метки *Loop this section*). В файл попадёт ровно этот кусок, без добавки на затухание —
-его можно зациклить в любом сэмплере или вставить обратно как луп. Имя файла предлагается с тактами:
-«Песня - bars 5-8.wav». Пункт меню показывает, какие такты уйдут в файл.
+**A loop as WAV** (File → Export the loop region as WAV): first mark a loop: **Ctrl + drag** on the ruler
+above the clips (or *Loop this section* in a marker's menu). Exactly this piece goes into the file, with
+nothing added for the tail: you can loop it in any sampler or put it back in as a loop. The suggested file
+name includes the bars: "Song - bars 5-8.wav". The menu item shows which bars will go into the file.
 
-**Автосохранение.** Пока есть несохранённые изменения, Harmonia раз в полминуты тихо сохраняет их копию
-(не трогая ваш файл). Если программа упала (например, из-за плагина) или выключили свет — при следующем
-запуске она предложит **Restore** (вернуть работу) или **Don't restore**. Вернувшуюся работу сохраните
-обычным **Ctrl+S** — она запишется в ваш файл. Отказались по ошибке — последняя копия лежит в
-`%APPDATA%\Harmonia\Autosave\Discarded work.harmonia`, её можно открыть через **Ctrl+O**.
+**Autosave.** While there are unsaved changes, Harmonia quietly saves a copy of them every half a minute
+(without touching your file). If the program crashed (for example, because of a plugin) or the power went
+out, on the next start it offers **Restore** (bring the work back) or **Don't restore**. Save the restored
+work with the usual **Ctrl+S**: it is written to your file. If you declined by mistake, the last copy is at
+`%APPDATA%\Harmonia\Autosave\Discarded work.harmonia`; you can open it with **Ctrl+O**.
 
-**Звуковые файлы и папка проекта.** Звуки, которые лежат в папке проекта (или глубже), запоминаются
-относительно неё: папку целиком можно переносить и копировать на другой диск или компьютер. Остальные —
-по полному пути. «Сохранить как» в другую папку звуки не теряет. Настройки VST-плагинов, которые меняли в их
-собственном окне, тоже сохраняются и отмечаются звёздочкой.
+**Sound files and the project folder.** Sounds that are in the project folder (or deeper) are remembered
+relative to it: the whole folder can be moved or copied to another disk or computer. The others are
+remembered by their full path. "Save as" into another folder does not lose the sounds. The settings of VST
+plugins that were changed in their own window are saved too, and are marked with an asterisk.

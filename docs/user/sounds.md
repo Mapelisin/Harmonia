@@ -1,33 +1,37 @@
-# Звуки (браузер сэмплов) — шпаргалка
+# Sounds (sample browser): cheat sheet
 
-Кнопка **Sounds** над нижней панелью (или **F6**) — браузер звуков: слева места, справа папка с сэмплами и лупами.
-**F7** — обратно к piano roll.
+**English** | [Русский](sounds.ru.md)
 
-## Места (слева)
+The **Sounds** button above the bottom panel (or **F6**) opens the sound browser: places on the left, a folder
+with samples and loops on the right. **F7** goes back to the piano roll.
 
-- Рабочий стол, Музыка, Документы, Загрузки и диски — сразу.
-- **+ Folder** — добавить свою папку с сэмплами (например, `D:\Samples`). Она запоминается.
-- ПКМ по добавленной папке → **Remove from places** — убрать из списка (сама папка не удаляется).
-- Программа помнит, в какой папке ты был в прошлый раз.
+## Places (on the left)
 
-## Папка (справа)
+- Desktop, Music, Documents, Downloads and the drives are there from the start.
+- **+ Folder** adds your own folder with samples (for example, `D:\Samples`). It is remembered.
+- Right-click an added folder → **Remove from places** takes it off the list (the folder itself is not
+  deleted).
+- The program remembers which folder you were in last time.
 
-Сначала папки, потом звуки (WAV, AIFF, FLAC, OGG, MP3…) и MIDI-файлы. Остальные файлы не показываются.
+## The folder (on the right)
 
-| Что | Что делает |
+Folders come first, then sounds (WAV, AIFF, FLAC, OGG, MP3…) and MIDI files. Other files are not shown.
+
+| What | What it does |
 |---|---|
-| Клик по звуку или MIDI-файлу | Послушать. Ещё клик — стоп |
-| ↑ / ↓ | Следующий / предыдущий звук — и сразу слушать (удобно перебирать бочки) |
-| **Esc** или **Stop** | Остановить прослушивание |
-| Двойной клик или **Enter** | Поставить в песню: на текущую дорожку, где стоит курсор воспроизведения. Если дорожка с инструментом — звук ляжет на новую аудиодорожку |
-| Перетащить на дорожку | Поставить туда (с привязкой к сетке). **Ctrl/Shift + клик** — выбрать несколько и тащить все |
-| Клик по папке | Открыть |
-| **Backspace** или **Up** | Папка выше |
-| Поле поиска | Найти звуки, в имени которых есть эти буквы, — в этой папке **и во всех вложенных**. Рядом с найденным во вложенной папке серым написано, в какой (`Drums/Acoustic`). Сначала то, что лежит прямо здесь, потом по имени; не больше 500 |
-| ПКМ по звуку | Послушать / поставить в песню / показать в проводнике |
-| ПКМ по папке | Открыть / добавить в места / показать в проводнике |
+| Click a sound or a MIDI file | Listen to it. Click again to stop |
+| ↑ / ↓ | The next / previous sound, played right away (handy for going through kicks) |
+| **Esc** or **Stop** | Stop the preview |
+| Double click or **Enter** | Put it into the song: on the current track, at the playback cursor. If the track has an instrument, the sound goes onto a new audio track |
+| Drag onto a track | Put it there (snapped to the grid). **Ctrl/Shift + click** selects several, and you drag them all |
+| Click a folder | Open it |
+| **Backspace** or **Up** | The folder above |
+| The search box | Finds sounds whose name contains these letters, in this folder **and in all folders inside it**. Next to a sound found in a folder inside, grey text says which one (`Drums/Acoustic`). What is right here comes first, then by name; no more than 500 |
+| Right-click a sound | Listen / put into the song / show in File Explorer |
+| Right-click a folder | Open / add to places / show in File Explorer |
 
-MIDI-файл из браузера ставится так же, как звук: ноты лягут на дорожку с инструментом.
-Слушается MIDI простым встроенным звуком (мягкий тон, на 10-м канале — барабаны), только первая минута:
-это чтобы узнать мелодию или бит. В песне он зазвучит инструментом дорожки.
-Прослушивание идёт поверх песни и немного тише; при переключении на другую панель оно останавливается.
+A MIDI file from the browser is placed the same way as a sound: the notes go onto a track with an instrument.
+A MIDI file is previewed with a simple built-in sound (a soft tone, drums on channel 10), the first minute
+only: this is for recognising the melody or the beat. In the song it will play with the instrument of the
+track.
+The preview plays over the song and a little quieter; it stops when you switch to another panel.

@@ -4,121 +4,124 @@
 
 # Harmonia
 
-**Бесплатная DAW с открытым кодом и локальными ИИ-инструментами**
+**English** | [Русский](README.ru.md)
 
-Программа для сочинения, записи и сведения музыки. Работает без интернета и без подписок.
+**A free, open-source DAW with local AI tools**
+
+A program for writing, recording and mixing music. It works offline and has no subscriptions.
 
 [![CI](https://github.com/Mapelisin/Harmonia/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Mapelisin/Harmonia/actions/workflows/ci.yml)
-![Платформа](https://img.shields.io/badge/Windows-10%20%2F%2011-4f9fe0)
-![Язык](https://img.shields.io/badge/C%2B%2B-20-4f9fe0)
-![Статус](https://img.shields.io/badge/статус-в%20разработке-e0a24f)
+![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011-4f9fe0)
+![Language](https://img.shields.io/badge/C%2B%2B-20-4f9fe0)
+![Status](https://img.shields.io/badge/status-in%20development-e0a24f)
 
-[**Скачать**](https://github.com/Mapelisin/Harmonia/releases/latest) · [Установка](docs/user/install.md) · [Шпаргалки](#шпаргалки) · [Что умеет](#что-уже-умеет) · [Планы](#что-дальше) · [Сборка](#сборка-из-исходников)
+[**Download**](https://github.com/Mapelisin/Harmonia/releases/latest) · [Installation](docs/user/install.md) · [Cheat sheets](#cheat-sheets) · [Features](#what-it-can-do-already) · [Plans](#what-comes-next) · [Building](#building-from-source)
 
-<img src="docs/images/arrangement.png" alt="Аранжировка и piano roll" width="900">
+<img src="docs/images/arrangement.png" alt="Arrangement and piano roll" width="900">
 
 </div>
 
-> **In English.** Harmonia is a free, open-source DAW (digital audio workstation) for Windows with local,
-> offline AI tools; macOS on Apple Silicon is planned. It is built in C++ on JUCE and Tracktion Engine and is
-> under active development. The program's interface is in English; the documentation is in Russian for now.
+## About
 
-## О проекте
+Harmonia is a DAW (digital audio workstation): arrangement, piano roll, recording, mixer, effects,
+automation, VST3 plugins, export. The main ideas:
 
-Harmonia — это DAW (цифровая звуковая рабочая станция): аранжировка, piano roll, запись, микшер, эффекты,
-автоматизация, плагины VST3, экспорт. Главные идеи:
+- **The program itself comes first.** The DAW works fully without any AI models.
+- **AI runs only on your computer.** Nothing goes to the cloud, and no internet is needed.
+- **AI changes nothing on its own.** Every helper first shows and explains what it is going to do. The change
+  happens when you press a button, you can hear it before you accept it, and one Ctrl+Z undoes it.
+- **As few actions as possible.** A common musical task should not take extra steps.
+- **A piano roll as comfortable as the one in FL Studio**, with a look of its own.
 
-- **Сначала сама программа.** Обычная DAW полностью работает без ИИ-моделей.
-- **ИИ только локально.** Ничего не уходит в облако, интернет не нужен.
-- **ИИ ничего не меняет сам.** Любой помощник сначала показывает и объясняет, что сделает; изменение — по кнопке,
-  его слышно до принятия, отмена — одним Ctrl+Z.
-- **Минимум действий.** Обычная музыкальная операция не должна требовать лишних шагов.
-- **Piano roll уровня FL Studio** по удобству — с собственным оформлением.
+The project is under active development: the program already works, but these are early versions (0.x), so
+expect bugs.
 
-Проект в активной разработке: программа уже рабочая, но это ранние версии (0.x) — возможны ошибки.
-
-## Что уже умеет
+## What it can do already
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/mixer.png" alt="Микшер"><br><sub>Микшер: эффекты, посылы, группы, сайдчейн</sub></td>
-<td width="50%"><img src="docs/images/audio-editor.png" alt="Редактор аудиоклипа"><br><sub>Редактор аудиоклипа: фейды, громкость, растяжение под темп</sub></td>
+<td width="50%"><img src="docs/images/mixer.png" alt="Mixer"><br><sub>Mixer: effects, sends, groups, sidechain</sub></td>
+<td width="50%"><img src="docs/images/audio-editor.png" alt="Audio clip editor"><br><sub>Audio clip editor: fades, gain, stretching to the tempo</sub></td>
 </tr>
 </table>
 
 **Piano roll**
-- Инструменты Draw, Paint, Delete, Mute, Slice, Select; привязка к сетке, призрачные ноты других дорожек.
-- Velocity, панорама, тонкая высота и другие свойства каждой ноты; pitch bend, колесо модуляции, педаль.
-- Лад песни с подсветкой и привязкой, штамп аккордов, название аккорда выделенных нот, определение тональности.
-- Команды нот: легато, нарезка, склейка, Strum, Arpeggiate, Humanize — с живым прослушиванием.
-- Запись с MIDI-клавиатуры и с клавиатуры компьютера; горячие клавиши работают и в русской раскладке.
+- The Draw, Paint, Delete, Mute, Slice and Select tools; snapping to the grid; ghost notes of other tracks.
+- Velocity, pan, fine pitch and other properties of every note; pitch bend, mod wheel, sustain pedal.
+- A song scale with highlighting and snapping, a chord stamp, the name of the chord in the selected notes,
+  key detection.
+- Note commands: legato, chop, glue, Strum, Arpeggiate, Humanize, all with live preview.
+- Recording from a MIDI keyboard and from the computer keyboard; shortcuts also work in the Russian keyboard
+  layout.
 
-**Аранжировка**
-- Клипы на дорожках, связанные копии (правка одной меняет все), повтор клипов, маркеры, цвета.
-- Смена темпа по ходу песни, вставка и удаление тактов на всех дорожках.
-- Импорт и экспорт MIDI-файлов, браузер звуков с прослушиванием.
+**Arrangement**
+- Clips on tracks, linked copies (edit one and all of them change), looping clips, markers, colours.
+- Tempo changes along the song; inserting and deleting bars on all tracks at once.
+- MIDI file import and export; a sound browser with preview.
 
-**Звук**
-- Аудиодорожки: файлы WAV, MP3, FLAC, AIFF, OGG перетаскиванием; запись с входа звуковой карты, предотсчёт,
-  запись дублей по кругу.
-- Редактор аудиоклипа: фейды, громкость, реверс, нормализация, растяжение под темп и смена высоты.
+**Audio**
+- Audio tracks: drag in WAV, MP3, FLAC, AIFF or OGG files; record from a sound card input, with a count-in
+  and loop recording of takes.
+- Audio clip editor: fades, gain, reverse, normalize, stretching to the tempo and changing the pitch.
 
-**Микшер и эффекты**
-- Встроенные эффекты: EQ, Compressor, Reverb, Delay, Chorus, Phaser, Filter, Pump, лимитер.
-- Посылы и возвратные дорожки, группы, сайдчейн; эффекты переносятся мышью, цепочки сохраняются в файлы.
-- Автоматизация любой ручки; MIDI Learn и запись движения ручек.
-- Пресеты инструментов и эффектов.
+**Mixer and effects**
+- Built-in effects: EQ, Compressor, Reverb, Delay, Chorus, Phaser, Filter, Pump, a limiter.
+- Sends and return tracks, groups, sidechain; drag effects with the mouse, save effect chains to files.
+- Automation of any knob; MIDI Learn and recording of knob movements.
+- Presets for instruments and effects.
 
-**Плагины**
-- VST3-инструменты и эффекты. Каждый плагин работает в отдельном процессе: если он упал или завис,
-  песня играет дальше, а плагин можно перезапустить.
-- Встроенные синтезатор и драм-машина.
+**Plugins**
+- VST3 instruments and effects. Every plugin runs in a process of its own: if it crashes or hangs, the song
+  keeps playing and the plugin can be restarted.
+- A built-in synth and a built-in drum machine.
 
-**Помощники** (работают по правилам теории музыки и точным измерениям, без нейросетей)
-- Генераторы: последовательности аккордов, барабанный грув, бас и мелодия под аккорды, песня из лупа.
-- Mix Doctor: отчёт по миксу и исправление уровней; громкость для стриминга (LUFS) одной кнопкой.
+**Helpers** (they work by the rules of music theory and by exact measurements, without neural networks)
+- Generators: chord progressions, drum grooves, a bass line and a melody for the chords, a song from a loop.
+- Mix Doctor: a report on the mix and a fix for the levels; loudness for streaming (LUFS) with one button.
 
-**Файлы и надёжность**
-- Экспорт в WAV, FLAC и MP3, стемы по дорожкам.
-- Автосохранение и восстановление после сбоя; отмена и повтор действий (Ctrl+Z / Ctrl+Y).
-- Установщик для Windows.
+**Files and reliability**
+- Export to WAV, FLAC and MP3; stems per track.
+- Autosave and recovery after a crash; undo and redo (Ctrl+Z / Ctrl+Y).
+- An installer for Windows.
 
 <div align="center">
-<img src="docs/images/drums.png" alt="Барабаны в piano roll" width="900"><br>
-<sub>Барабаны в piano roll: у каждой строки — имя звука</sub>
+<img src="docs/images/drums.png" alt="Drums in the piano roll" width="900"><br>
+<sub>Drums in the piano roll: every row shows the name of its sound</sub>
 </div>
 
-## Что дальше
+## What comes next
 
-- Кроссфейды и лупы аудиоклипов, папки дорожек, заморозка дорожек.
-- Локальные ИИ-модели: разделение на стемы, помощник мастеринга, поиск звуков по описанию.
+- Crossfades and loops for audio clips, track folders, freezing tracks.
+- Local AI models: stem separation, a mastering helper, finding sounds by description.
 - macOS (Apple Silicon).
 
-Нейросетевых функций в программе пока нет — они в планах. Подробно — в [проектном документе](docs/PROJECT.md):
-принятые решения, сделанные этапы и следующий шаг.
+There are no neural-network features in the program yet; they are planned. The details are in the
+[project document](docs/PROJECT.md) (in Russian): the decisions made, the stages done and the next step.
 
-## Установка
+## Installation
 
-Нужна 64-битная Windows 10 или 11. Установщик `Harmonia-Setup-<версия>.exe` — на странице
-[**Releases**](https://github.com/Mapelisin/Harmonia/releases/latest); новый выпуск выходит после каждого пятого
-этапа разработки. Как поставить и что ответить на предупреждение Windows — [docs/user/install.md](docs/user/install.md).
+You need 64-bit Windows 10 or 11. The installer, `Harmonia-Setup-<version>.exe`, is on the
+[**Releases**](https://github.com/Mapelisin/Harmonia/releases/latest) page; a new release comes out after every
+fifth development stage. How to install it and what to answer to the Windows warning:
+[docs/user/install.md](docs/user/install.md).
 
-## Шпаргалки
+## Cheat sheets
 
-| Тема | Файл |
+| Topic | File |
 |---|---|
 | Piano roll | [docs/user/piano-roll.md](docs/user/piano-roll.md) |
-| Аранжировка | [docs/user/arrangement.md](docs/user/arrangement.md) |
-| Микшер и эффекты | [docs/user/mixer.md](docs/user/mixer.md) |
-| Автоматизация | [docs/user/automation.md](docs/user/automation.md) |
-| Плагины | [docs/user/plugins.md](docs/user/plugins.md) |
-| Звуки | [docs/user/sounds.md](docs/user/sounds.md) |
+| Arrangement | [docs/user/arrangement.md](docs/user/arrangement.md) |
+| Mixer and effects | [docs/user/mixer.md](docs/user/mixer.md) |
+| Automation | [docs/user/automation.md](docs/user/automation.md) |
+| Plugins | [docs/user/plugins.md](docs/user/plugins.md) |
+| Sounds | [docs/user/sounds.md](docs/user/sounds.md) |
 
-В самой программе список горячих клавиш открывается по F1.
+Every cheat sheet also has a Russian version (the link is at the top of each one). In the program itself, F1
+opens the list of shortcuts.
 
-## Сборка из исходников
+## Building from source
 
-Нужны Windows 10/11 и Visual Studio 2026 с инструментами C++ (CMake и Ninja входят в её состав).
+You need Windows 10/11 and Visual Studio 2026 with the C++ tools (CMake and Ninja come with it).
 
 ```bat
 git clone https://github.com/Mapelisin/Harmonia.git
@@ -127,27 +130,28 @@ git -c url."https://github.com/".insteadOf="git@github.com:" submodule update --
 tools\build.cmd windows-release
 ```
 
-Одна команда настраивает, собирает и запускает тесты. Программа появится в
+This one command configures, builds and runs the tests. The program will be at
 `build\windows-release\src\app\Harmonia_artefacts\Release\Harmonia.exe`.
 
-Установщик (нужен Inno Setup 6): `tools\make-installer.cmd` → `build\installer`.
+The installer (needs Inno Setup 6): `tools\make-installer.cmd` → `build\installer`.
 
-## Как устроен код
+## How the code is organised
 
-| Папка | Что внутри |
+| Folder | What is inside |
 |---|---|
-| `src/core` | Модель проекта: дорожки, клипы, ноты, отмена. Без интерфейса |
-| `src/audio` | Звуковой движок, устройства, эффекты, экспорт |
-| `src/ui` | Интерфейс: piano roll, аранжировка, микшер, настройки |
-| `src/sandbox` | Отдельные процессы для плагинов |
-| `src/app` | Точка входа, главное окно |
-| `tests` | Автотесты (больше 500), в том числе интерфейса без окна |
-| `docs` | Проектный документ, архитектура, исследования, шпаргалки |
+| `src/core` | The project model: tracks, clips, notes, undo. No user interface |
+| `src/audio` | The audio engine, devices, effects, export |
+| `src/ui` | The interface: piano roll, arrangement, mixer, settings |
+| `src/sandbox` | Separate processes for plugins |
+| `src/app` | The entry point, the main window |
+| `tests` | Automated tests (more than 500), including tests of the interface without a window |
+| `docs` | The project document, architecture, research, cheat sheets |
 
-Основа — [JUCE](https://juce.com) и [Tracktion Engine](https://github.com/Tracktion/tracktion_engine).
-Обзор архитектуры — [docs/architecture/overview.md](docs/architecture/overview.md).
+Harmonia is built on [JUCE](https://juce.com) and [Tracktion Engine](https://github.com/Tracktion/tracktion_engine).
+An overview of the architecture (in Russian): [docs/architecture/overview.md](docs/architecture/overview.md).
 
-## Лицензия
+## License
 
-Файла лицензии пока нет. Планируется **AGPLv3** (её требуют JUCE и Tracktion Engine); решение будет подтверждено
-после проверки лицензий. До этого код открыт для чтения, но права на его использование не переданы.
+There is no license file yet. **AGPLv3** is planned (JUCE and Tracktion Engine require it); the decision will be
+confirmed after the licenses are checked. Until then the code is open for reading, but no rights to use it are
+granted.

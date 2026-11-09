@@ -1,39 +1,44 @@
-# Установка Harmonia
+# Installing Harmonia
 
-## Где взять установщик
+**English** | [Русский](install.ru.md)
 
-Файл называется `Harmonia-Setup-<версия>.exe` (например `Harmonia-Setup-0.54.0.exe`).
+## Where to get the installer
 
-- **Проще всего:** страница [Releases](https://github.com/Mapelisin/Harmonia/releases/latest) → внизу **Assets** →
-  `Harmonia-Setup-<версия>.exe`. Входить в GitHub не нужно. Выпуск выходит после каждого пятого этапа разработки.
-- Самая свежая сборка (между выпусками) — её собирает GitHub при каждом изменении программы: страница
-  [Actions](https://github.com/Mapelisin/Harmonia/actions) → последний зелёный запуск **CI** → внизу **Artifacts** →
-  **Harmonia-Setup** (скачается zip-архив, установщик внутри). Нужно войти в GitHub.
-- Или на своём компьютере: `tools\build.cmd windows-release`, затем `tools\make-installer.cmd` — файл появится в
-  `build\installer`.
+The file is called `Harmonia-Setup-<version>.exe` (for example, `Harmonia-Setup-0.54.0.exe`).
 
-## Установка
+- **The easiest way:** the [Releases](https://github.com/Mapelisin/Harmonia/releases/latest) page → **Assets** at
+  the bottom → `Harmonia-Setup-<version>.exe`. You do not need to sign in to GitHub. A release comes out after
+  every fifth development stage.
+- The newest build (between releases). GitHub builds it on every change to the program: the
+  [Actions](https://github.com/Mapelisin/Harmonia/actions) page → the latest green **CI** run → **Artifacts** at
+  the bottom → **Harmonia-Setup** (a zip archive downloads, the installer is inside). You need to sign in to
+  GitHub.
+- Or on your own computer: `tools\build.cmd windows-release`, then `tools\make-installer.cmd`. The file appears
+  in `build\installer`.
 
-1. Запустите установщик. Windows может предупредить «Windows защитила ваш компьютер»: установщик ещё не подписан
-   платной цифровой подписью. Нажмите **Подробнее** → **Выполнить в любом случае**.
-2. Первый вопрос — для кого ставить:
-   - **для всех пользователей** — в `Program Files`, Windows спросит права администратора;
-   - **только для меня** — в вашу папку, без прав администратора.
-3. Галочки:
-   - **Создать значок на рабочем столе**;
-   - **Открывать проекты .harmonia в Harmonia** — проект открывается двойным кликом в проводнике.
-4. В конце можно сразу запустить Harmonia.
+## Installing
 
-Язык установщика — как у Windows (русский или английский). Сама программа пока по-английски.
+1. Run the installer. Windows may warn you with "Windows protected your PC": the installer is not yet signed
+   with a paid digital signature. Click **More info** → **Run anyway**.
+2. The first question is who to install for:
+   - **for all users**: into `Program Files`; Windows will ask for administrator rights;
+   - **for me only**: into your own folder, no administrator rights needed.
+3. The checkboxes:
+   - **Create a desktop shortcut**;
+   - **Open .harmonia projects with Harmonia**: a project opens with a double click in File Explorer.
+4. At the end you can start Harmonia right away.
 
-## Как это работает дальше
+The installer uses the language of your Windows (English or Russian). The program itself is in English for now.
 
-- **Проект двойным кликом.** Если Harmonia уже открыта, проект откроется в том же окне: сначала она спросит,
-  сохранить ли изменения в текущем.
-- **Обновление** — просто запустите установщик новой версии поверх. Если Harmonia открыта, установщик предложит её
-  закрыть.
-- **Удаление** — Параметры Windows → Приложения → Harmonia → Удалить (или «Удаление» в меню «Пуск»). Удаляется
-  программа, значки и связь с файлами `.harmonia`. Ваши проекты (`Документы\Harmonia`) и настройки (папка плагинов,
-  звуковая карта, найденные плагины) остаются — пригодятся при следующей установке.
+## How it works afterwards
 
-Нужна 64-битная Windows 10 или 11.
+- **Opening a project with a double click.** If Harmonia is already open, the project opens in the same window:
+  first it asks whether to save the changes in the current one.
+- **Updating.** Just run the installer of the new version over the old one. If Harmonia is open, the installer
+  offers to close it.
+- **Uninstalling.** Windows Settings → Apps → Harmonia → Uninstall (or "Uninstall" in the Start menu). This
+  removes the program, the shortcuts and the link to `.harmonia` files. Your projects (`Documents\Harmonia`) and
+  settings (the plugin folder, the sound card, the plugins found) stay: they will be useful the next time you
+  install.
+
+You need 64-bit Windows 10 or 11.

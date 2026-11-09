@@ -1,68 +1,74 @@
-# Плагины (VST3) — шпаргалка
+# Plugins (VST3): cheat sheet
 
-Harmonia открывает плагины **VST3**: инструменты (Kontakt, Vital, Serum, Surge XT…) и эффекты.
-Плагины VST2 (файлы `.dll`) не поддерживаются: Steinberg больше не выдаёт на них лицензию. У большинства
-современных плагинов есть и VST3-версия (файл или папка `.vst3`) — ставьте её.
+**English** | [Русский](plugins.ru.md)
 
-## Найти свои плагины
+Harmonia opens **VST3** plugins: instruments (Kontakt, Vital, Serum, Surge XT…) and effects.
+VST2 plugins (`.dll` files) are not supported: Steinberg no longer gives out a license for them. Most modern
+plugins also come in a VST3 version (a `.vst3` file or folder): install that one.
 
-Строка **Instrument** над piano roll:
+## Finding your plugins
 
-| Кнопка | Что делает |
+The **Instrument** row above the piano roll:
+
+| Button | What it does |
 |---|---|
-| **Scan plugins** | Ищет плагины и добавляет их в списки инструментов и эффектов. Каждый файл проверяется в отдельной программе: плагин, который падает при проверке, просто пропускается |
-| **Folders...** | Открывает **File → Settings → Plugins**: где искать. Стандартная папка VST3 (`C:\Program Files\Common Files\VST3`) — всегда. **Add a folder...** — добавить свою, например `E:\VST`: скан смотрит и все папки внутри неё и начинается сам. **Remove** — выбрать свою папку в списке и убрать её из поиска (плагины в списке останутся до следующего скана) |
-| Список инструментов | Встроенные (4OSC, Drums) и найденные плагины-инструменты |
-| **Show editor** | Окно инструмента |
-| **Presets** | Пресеты инструмента: сохранить его звук, загрузить сохранённый (см. «Пресеты» ниже) |
+| **Scan plugins** | Looks for plugins and adds them to the lists of instruments and effects. Every file is checked in a separate program: a plugin that crashes during the check is simply skipped |
+| **Folders...** | Opens **File → Settings → Plugins**: where to look. The standard VST3 folder (`C:\Program Files\Common Files\VST3`) is always searched. **Add a folder...** adds your own, for example `E:\VST`: the scan also looks into all folders inside it and starts by itself. **Remove**: select your folder in the list and take it out of the search (its plugins stay in the list until the next scan) |
+| The instrument list | The built-in instruments (4OSC, Drums) and the instrument plugins found |
+| **Show editor** | The window of the instrument |
+| **Presets** | Presets of the instrument: save its sound, load a saved one (see "Presets" below) |
 
-Если скан ничего не нашёл, а плагины на компьютере есть — они, скорее всего, лежат в своей папке:
-добавьте её через **Folders...**. Найденные эффекты — в микшере: **+** → **Plugins**.
+If the scan found nothing but there are plugins on the computer, they are most likely in a folder of their own:
+add it with **Folders...**. The effects found are in the mixer: **+** → **Plugins**.
 
-## Пресеты: свой звук в любую песню
+## Presets: your sound in any song
 
-Меню **Presets** есть у инструмента (кнопка в строке Instrument), у эффекта (ПКМ по его слоту в микшере →
-**Presets**) и в окне ползунков встроенных инструментов и эффектов (кнопка сверху).
+The **Presets** menu is available for an instrument (the button in the Instrument row), for an effect
+(right-click its slot in the mixer → **Presets**) and in the slider window of the built-in instruments and
+effects (the button at the top).
 
-| Пункт | Что делает |
+| Item | What it does |
 |---|---|
-| **Save preset...** | Сохранить нынешние настройки под именем. Уже есть пресет с таким именем — спросит, заменить ли |
-| Имена пресетов | Загрузить. Галочка — последний загруженный или сохранённый. Не тот — **Ctrl+Z** вернёт как было |
-| **Presets of ...** | Пресеты, которые плагин принёс с собой (если они у него есть) |
-| **Reset to first settings** | У встроенных: все ползунки как у только что добавленного |
-| **Show presets folder** | Открыть папку с пресетами этого плагина |
+| **Save preset...** | Save the current settings under a name. If a preset with this name already exists, it asks whether to replace it |
+| Preset names | Load. The tick marks the last one loaded or saved. Not the right one? **Ctrl+Z** brings back what was there |
+| **Presets of ...** | The presets the plugin came with (if it has any) |
+| **Reset to first settings** | For built-in ones: all sliders as in a freshly added one |
+| **Show presets folder** | Open the folder with the presets of this plugin |
 
-- Пресеты лежат в **Документы → Harmonia → Presets**, по папке на каждый плагин; один пресет — один файл
-  `.harmoniapreset`. Его можно переслать другу или скопировать на другой компьютер — в ту же папку.
-- Пресет помнит, для какого он плагина: в меню другого плагина его нет, и загрузить его туда нельзя.
-- Работает со всеми встроенными (4OSC, Drums, все эффекты) и с плагинами VST3: у VST в пресет попадает всё,
-  что плагин сам сохраняет в песню (как его собственный «Save preset»).
+- Presets are kept in **Documents → Harmonia → Presets**, one folder per plugin; one preset is one
+  `.harmoniapreset` file. You can send it to a friend or copy it to another computer, into the same folder.
+- A preset remembers which plugin it is for: it does not show up in the menu of another plugin and cannot be
+  loaded there.
+- It works with all the built-in ones (4OSC, Drums, all the effects) and with VST3 plugins: for a VST, the
+  preset holds everything the plugin itself saves into the song (like its own "Save preset").
 
-## Если плагин упал или завис
+## If a plugin crashes or hangs
 
-Каждый плагин работает в **своей отдельной программе**. Упадёт плагин — Harmonia не закроется и песня
-не пропадёт:
+Every plugin runs in **a separate program of its own**. If a plugin crashes, Harmonia does not close and the
+song is not lost:
 
-- Упавший инструмент замолкает, упавший эффект пропускает звук без обработки. Остальное играет как было.
-- Внизу окна — предупреждение: какой плагин и на какой дорожке.
-- Плагин, который перестал отвечать (завис), Harmonia останавливает сама через несколько секунд.
-- **Вернуть плагин:** эффект — клик по его слоту в микшере (на нём «!» в рамке) или ПКМ → **Reload plugin**;
-  инструмент — кнопка **Reload plugin** в строке Instrument (на месте Show editor). Плагин запускается заново
-  с теми же настройками.
-- Песню можно сохранять и экспортировать, даже пока плагин упавший: его настройки сохранятся.
+- A crashed instrument goes silent; a crashed effect lets the sound through unprocessed. Everything else plays
+  as before.
+- A warning at the bottom of the window says which plugin and on which track.
+- A plugin that has stopped responding (hung) is stopped by Harmonia itself after a few seconds.
+- **To bring the plugin back:** for an effect, click its slot in the mixer (it shows a "!" in a frame) or
+  right-click → **Reload plugin**; for an instrument, the **Reload plugin** button in the Instrument row (in
+  place of Show editor). The plugin starts again with the same settings.
+- You can save and export the song even while a plugin is crashed: its settings will be saved.
 
-Окно плагина — тоже окно его отдельной программы. Если оно спряталось за Harmonia, нажмите **Show editor**
-или клик по слоту ещё раз: окно выйдет вперёд.
+The plugin window is also a window of its separate program. If it has hidden behind Harmonia, click
+**Show editor** or click the slot again: the window comes to the front.
 
-**Если плагин не работает в отдельной программе** (редко, обычно старые плагины с защитой от копирования):
-**File → Settings → Plugins** → снимите **Run each plugin in a process of its own**. Плагины, загруженные после
-этого, работают внутри Harmonia — как в большинстве программ, но тогда их падение закрывает Harmonia.
-Уже загруженные остаются где были: откройте проект заново. Лучше потом включить обратно.
+**If a plugin does not work in a separate program** (rare, usually old plugins with copy protection):
+**File → Settings → Plugins** → untick **Run each plugin in a process of its own**. Plugins loaded after that
+run inside Harmonia, as in most programs, but then a plugin crash closes Harmonia.
+Plugins that are already loaded stay where they were: open the project again. It is better to turn the option
+back on afterwards.
 
-## Настройки (File → Settings, Ctrl+,)
+## Settings (File → Settings, Ctrl+,)
 
-| Вкладка | Что там |
+| Tab | What is there |
 |---|---|
-| **Audio** | Звуковая карта (ASIO — самая быстрая), частота, размер буфера. Внизу — задержка «от клавиши до колонок»: до ~10 мс игра ощущается мгновенной; трещит — буфер побольше |
-| **MIDI** | Все подключённые MIDI-клавиатуры, у каждой переключатель. Включённая играет дорожку, которую вы правите (и пишется по R). Выключенная молчит, как отключённая: удобно, если пэд-контроллер шлёт лишнее |
-| **Plugins** | Папки для поиска плагинов, Scan plugins, плагины в отдельных программах (см. выше) |
+| **Audio** | The sound card (ASIO is the fastest), sample rate, buffer size. At the bottom is the delay "from key to speakers": up to about 10 ms, playing feels instant; if the sound crackles, use a bigger buffer |
+| **MIDI** | All connected MIDI keyboards, each with a switch. One that is on plays the track you are editing (and is recorded with R). One that is off stays silent, as if unplugged: handy when a pad controller sends things you do not want |
+| **Plugins** | Folders to search for plugins, Scan plugins, plugins in separate programs (see above) |

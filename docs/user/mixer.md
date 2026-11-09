@@ -1,167 +1,179 @@
-# Микшер и эффекты — шпаргалка
+# Mixer and effects: cheat sheet
 
-Микшер открывается вместо piano roll: кнопка **Mixer** справа над аранжировкой или **F9**
-(**F7** или кнопка **Piano roll** — обратно), как в FL Studio.
+**English** | [Русский](mixer.ru.md)
 
-Слева — по полоске на каждую дорожку (цвет как у её клипов), за ними — группы (оранжевые), потом
-возвратные дорожки (сиреневые), справа — **Master**: через него идёт вся песня.
-Клик по полоске делает дорожку текущей (на ней играют клавиатуры). **+ Track** — новая дорожка, группа или
-возвратная.
+The mixer opens in place of the piano roll: the **Mixer** button on the right above the arrangement, or **F9**
+(**F7** or the **Piano roll** button goes back), as in FL Studio.
 
-## Полоска
+On the left there is one strip for every track (in the colour of its clips), then the groups (orange), then
+the return tracks (lilac), and on the right the **Master**: the whole song goes through it.
+A click on a strip makes that track the current one (the keyboards play it). **+ Track** adds a new track,
+group or return track.
 
-Сверху вниз:
+## The strip
 
-| Что | Как |
+From top to bottom:
+
+| What | How |
 |---|---|
-| Эффекты (слоты) | Звук идёт сверху вниз: от инструмента через эффекты к фейдеру |
-| **+** | Добавить эффект: встроенный или плагин (VST3) из «Plugins». Окно эффекта откроется сразу |
-| Клик по эффекту | Открыть его окно (у встроенных — ползунки Harmonia) |
-| Тянуть эффект мышью | Переставить выше / ниже, перенести на другую дорожку, группу, возвратную или мастер — вместе с настройками. Синяя черта показывает, куда он встанет. С **Ctrl** — копия |
-| **+** → **Chains** | Сохранить все эффекты полоски как цепочку (**Save these effects as a chain...**), добавить сохранённую (**Add ...**) или поставить её вместо имеющихся (**Replace the effects with**). Цепочки лежат в `Документы\Harmonia\Chains` и работают в любой песне |
-| Зелёная точка слева | Выключить / включить эффект (bypass): серый — звук идёт мимо него |
-| ПКМ по эффекту | Меню: открыть, выключить, **Presets** (сохранить и загрузить настройки, см. `plugins.md`), выше / ниже по цепочке, кого слушает (**Listen to (sidechain)**, см. ниже), удалить. Оранжевое **SC** на слоте — эффект слушает другую дорожку (наведите мышь — видно какую) |
-| Полоски посылов | По одной на каждую возвратную дорожку («Reverb -6»): сколько звука дорожки отправить в неё. Тянуть мышью, двойной клик — ничего |
-| Ручка | Панорама (L/C/R). Двойной клик — по центру |
-| Фейдер | Громкость. Двойной клик — 0 дБ. Под ним — число в дБ |
-| Индикатор | Уровень после фейдера. Красная полоска сверху — был перегруз выше 0 дБ (клик — сбросить) |
-| **M** / **S** | Заглушить / соло (то же, что в заголовке дорожки) |
-| **→ Master** | Куда идёт звук дорожки: прямо на мастер или в группу (**→ Drums**). Клик — выбрать |
+| Effects (slots) | The sound goes from top to bottom: from the instrument through the effects to the fader |
+| **+** | Add an effect: a built-in one or a plugin (VST3) from "Plugins". The effect window opens right away |
+| Click an effect | Open its window (for built-in ones, Harmonia's sliders) |
+| Drag an effect with the mouse | Move it up / down, or onto another track, group, return track or the master, together with its settings. A blue line shows where it will land. With **Ctrl**, a copy |
+| **+** → **Chains** | Save all the effects of the strip as a chain (**Save these effects as a chain...**), add a saved one (**Add ...**) or put it in place of the current effects (**Replace the effects with**). Chains are kept in `Documents\Harmonia\Chains` and work in any song |
+| The green dot on the left | Turn the effect off / on (bypass): grey means the sound goes past it |
+| Right-click an effect | A menu: open, turn off, **Presets** (save and load settings, see [`plugins.md`](plugins.md)), up / down in the chain, what it listens to (**Listen to (sidechain)**, see below), delete. An orange **SC** on the slot means the effect listens to another track (hover the mouse to see which) |
+| Send bars | One for every return track ("Reverb -6"): how much of the track's sound to send to it. Drag with the mouse; double click for nothing |
+| The knob | Pan (L/C/R). Double click for the centre |
+| The fader | Volume. Double click for 0 dB. The number below it is in dB |
+| The meter | The level after the fader. A red bar at the top means there was an overload above 0 dB (click to reset) |
+| **M** / **S** | Mute / solo (the same as in the track header) |
+| **→ Master** | Where the track's sound goes: straight to the master or into a group (**→ Drums**). Click to choose |
 
-## Посылы и возвратные дорожки (один ревер на всех)
+## Sends and return tracks (one reverb for everyone)
 
-Обычно ревер или дилей не ставят на каждую дорожку, а делают **один общий**: так звучит как одно помещение
-и меньше грузит компьютер.
+Usually a reverb or a delay is not put on every track. Instead you make **one shared** effect: this way it
+sounds like one room and is lighter on the computer.
 
-1. **+ Track → Reverb return** (или Delay return; Empty return — пустая, эффекты добавите сами через **+**).
-   Справа появится сиреневая полоска «Reverb» — это возвратная дорожка. Клипов у неё нет, в аранжировке её
-   не видно, она только в микшере.
-2. На полосках дорожек появилась полоска посыла **Reverb**. Потяните её вправо — эта дорожка начнёт
-   «отправлять» часть звука в ревер. Чем правее, тем больше ревера у этой дорожки.
-3. Общую громкость ревера — фейдером самой возвратной дорожки; настройки ревера — кликом по его слоту.
+1. **+ Track → Reverb return** (or Delay return; Empty return is empty, you add the effects yourself with
+   **+**). A lilac "Reverb" strip appears on the right: this is a return track. It has no clips, it is not
+   shown in the arrangement, it lives only in the mixer.
+2. A **Reverb** send bar has appeared on the track strips. Drag it to the right, and this track starts
+   "sending" part of its sound to the reverb. The further right, the more reverb this track gets.
+3. The overall volume of the reverb is set with the fader of the return track itself; the reverb settings
+   open with a click on its slot.
 
-- Посыл идёт после фейдера: тише дорожка — тише и её ревер; заглушённая (M) дорожка не шлёт ничего.
-- Соло дорожки оставляет её ревер (возвратные дорожки соло не глушит).
-- ПКМ по возвратной полоске — переименовать или удалить (вместе со всеми посылами в неё).
-- Эффект на возвратной дорожке настроен «только эффект» (без исходного звука) — исходный звук идёт с самих дорожек.
+- The send comes after the fader: a quieter track gets a quieter reverb; a muted (M) track sends nothing.
+- Soloing a track keeps its reverb (solo does not mute the return tracks).
+- Right-click a return strip to rename or delete it (together with all the sends to it).
+- The effect on a return track is set to "effect only" (no dry sound): the dry sound comes from the tracks
+  themselves.
 
-## Группы: несколько дорожек одним фейдером
+## Groups: several tracks on one fader
 
-Бочка, малый, хэты, тарелки — четыре дорожки, а громче или тише нужно все барабаны сразу. Для этого их
-направляют в **группу** (в других программах — «шина», «bus», «подгруппа»).
+Kick, snare, hats, cymbals: four tracks, but you want all the drums louder or quieter at once. For this you
+route them into a **group** (other programs call it a "bus" or a "subgroup").
 
-1. **+ Track → Group track** — справа от дорожек появится оранжевая полоска «Group». Или сразу с дорожкой:
-   кнопка **→ Master** внизу её полоски → **New group with this track**.
-2. На полоске каждой барабанной дорожки — кнопка **→ Master** → выберите группу. Кнопка станет **→ Group**.
-   То же в аранжировке: ПКМ по заголовку дорожки → **Output (master or a group)**.
-3. Теперь фейдер группы двигает все барабаны вместе, **M** группы глушит их все, а эффекты на группе
-   (компрессор, EQ) обрабатывают барабаны целиком — как «склеенные».
+1. **+ Track → Group track**: an orange "Group" strip appears to the right of the tracks. Or straight from a
+   track: the **→ Master** button at the bottom of its strip → **New group with this track**.
+2. On the strip of every drum track, click **→ Master** → choose the group. The button becomes **→ Group**.
+   The same in the arrangement: right-click the track header → **Output (master or a group)**.
+3. Now the group fader moves all the drums together, the group's **M** mutes them all, and effects on the
+   group (a compressor, an EQ) process the drums as a whole, as if "glued" together.
 
-- Внутри группы каждая дорожка по-прежнему со своими фейдером, эффектами и посылами на ревер.
-- Соло дорожки в группе: слышна она одна, но через группу (с её эффектами и громкостью).
-- Группа тоже может слать в ревер / дилей (полоски посылов на ней).
-- ПКМ по полоске группы — переименовать (например, «Drums») или удалить; при удалении её дорожки
-  возвращаются прямо на мастер. Всё отменяется **Ctrl+Z**.
-- Дорожки можно добавлять, удалять и переставлять — группа у дорожки не теряется (и после сохранения).
-- Стем дорожки в группе (File → Export stems) — с эффектами и громкостью группы, как она звучит в песне.
-  **Render to audio track** — звук самой дорожки, а новая аудиодорожка встаёт в ту же группу.
+- Inside a group every track still has its own fader, effects and sends to the reverb.
+- Soloing a track in a group: you hear it alone, but through the group (with the group's effects and volume).
+- A group can also send to a reverb / delay (it has send bars too).
+- Right-click a group strip to rename it (for example, "Drums") or delete it; when it is deleted, its tracks
+  go back straight to the master. Everything can be undone with **Ctrl+Z**.
+- You can add, delete and reorder tracks: a track does not lose its group (also after saving).
+- The stem of a track in a group (File → Export stems) comes with the effects and volume of the group, the
+  way it sounds in the song. **Render to audio track** gives the sound of the track itself, and the new audio
+  track goes into the same group.
 
-## Сайдчейн: бас «приседает» от бочки
+## Sidechain: the bass "ducks" under the kick
 
-Компрессор обычно слушает свою дорожку. **Сайдчейн** — когда он слушает **другую**: например, компрессор на
-басе слушает бочку и убавляет бас на каждом ударе. Бочка и бас перестают спорить за низ, а в танцевальной
-музыке это ещё и тот самый «качающий» звук.
+A compressor usually listens to its own track. **Sidechain** is when it listens to **another** one: for
+example, a compressor on the bass listens to the kick and turns the bass down on every hit. The kick and the
+bass stop fighting for the low end, and in dance music this is also that well-known "pumping" sound.
 
-1. На басе: **+** → **Compressor**.
-2. ПКМ по слоту компрессора → **Listen to (sidechain)** → **Kick** (имя дорожки с бочкой). На слоте появится
-   оранжевое **SC**.
-3. Настройте компрессор (клик по слоту): **Threshold** пониже (−20 dB и ниже) — чтобы бочка его «будила»;
-   **Ratio** — насколько сильно убавлять (4 : 1 и больше — заметно); **Attack** поменьше (1–5 ms) — чтобы
-   успевал за ударом; **Release** — как быстро бас возвращается (50–150 ms — в пределах доли).
+1. On the bass: **+** → **Compressor**.
+2. Right-click the compressor slot → **Listen to (sidechain)** → **Kick** (the name of the track with the
+   kick). An orange **SC** appears on the slot.
+3. Set up the compressor (click the slot): **Threshold** lower (−20 dB and below), so the kick "wakes" it;
+   **Ratio** is how strongly to turn down (4 : 1 and more is noticeable); **Attack** short (1–5 ms), so it
+   keeps up with the hit; **Release** is how fast the bass comes back (50–150 ms, within a beat).
 
-- Бочку можно заглушить (**M**) — бас всё равно будет приседать: так делают, когда нужна «качка», а саму бочку
-  слышать не надо.
-- Слушать можно любую дорожку песни, кроме тех, что сами зависят от этой (иначе звук пошёл бы по кругу —
-  таких в списке нет). Обратно — **Nothing (its own track)**.
-- В экспорте, стемах и Render to audio track звучит так же, как при игре.
-- Сайдчейн есть у встроенного **Compressor** и у плагинов с входом для сайдчейна (VST3 с дополнительным
-  входом). Если «качка» нужна без бочки, ровно в темп — эффект **Pump**.
+- You can mute the kick (**M**) and the bass will still duck: this is done when you want the "pumping" but
+  do not want to hear the kick itself.
+- You can listen to any track of the song except those that themselves depend on this one (otherwise the
+  sound would go in a circle; such tracks are not in the list). To go back: **Nothing (its own track)**.
+- In the export, in stems and in Render to audio track it sounds the same as during playback.
+- Sidechain is available in the built-in **Compressor** and in plugins with a sidechain input (VST3 with an
+  extra input). If you want the "pumping" without a kick, exactly in tempo, use the **Pump** effect.
 
-## Встроенные эффекты
+## Built-in effects
 
-| Эффект | Для чего |
+| Effect | What it is for |
 |---|---|
-| EQ | 4 полосы: низ, две середины, верх — частота, усиление, ширина (Q) |
-| Compressor | Сглаживает громкость: порог, степень (ratio), атака, отпускание, выходная громкость |
-| Limiter | Делает громче и не пускает пики выше потолка: **Gain** (на сколько поднять, до +24 dB), **Ceiling** (потолок, обычно −1 dB), **Release** (как быстро громкость возвращается после пика). Смотрит на 2 мс вперёд, поэтому пик убавляется плавно, без хрипа. Ставят последним на мастер |
-| Reverb | Пространство: размер комнаты, глушение, сколько эффекта / исходника, ширина |
-| Delay | Эхо: время в мс, повторы (feedback), сколько эффекта |
-| Chorus | Утолщение: глубина, скорость, ширина, сколько эффекта |
-| Phaser | «Плавающий» звук: глубина, скорость, обратная связь |
-| Filter | Low-pass (срезает верх) или High-pass (срезает низ), частота среза |
-| Pump | «Качка» как от сайдчейна бочки в танцевальной музыке: на каждой доле громкость проседает и плавно возвращается — сама, в темп песни, бочка не нужна. **Depth** — насколько проседает (70% — заметно), **Rate** — как часто: 1/8, 1/4 (каждая доля), 1/2, 1 bar, **Length** — за какую часть шага возвращается (меньше — короче «вдох»). Ставят на пэды, бас, аккорды. Качает, только пока песня играет |
+| EQ | 4 bands: low, two mids, high, each with frequency, gain and width (Q) |
+| Compressor | Evens out the volume: threshold, ratio, attack, release, output gain |
+| Limiter | Makes the sound louder and keeps peaks below the ceiling: **Gain** (how much to raise, up to +24 dB), **Ceiling** (usually −1 dB), **Release** (how fast the volume comes back after a peak). It looks 2 ms ahead, so a peak is turned down smoothly, without distortion. It goes last on the master |
+| Reverb | Space: room size, damping, how much effect / dry sound, width |
+| Delay | Echo: time in ms, repeats (feedback), how much effect |
+| Chorus | Thickening: depth, speed, width, how much effect |
+| Phaser | A "floating" sound: depth, speed, feedback |
+| Filter | Low-pass (cuts the highs) or High-pass (cuts the lows), cutoff frequency |
+| Pump | "Pumping" like a kick sidechain in dance music: on every beat the volume dips and comes back smoothly, by itself, in the tempo of the song, no kick needed. **Depth** is how far it dips (70% is noticeable), **Rate** is how often: 1/8, 1/4 (every beat), 1/2, 1 bar, **Length** is the part of the step it takes to come back (less means a shorter "breath"). Used on pads, bass, chords. It pumps only while the song is playing |
 
-У встроенного синтезатора **4OSC** кнопка **Show editor** теперь тоже открывает окно с его ползунками.
+The **Show editor** button of the built-in **4OSC** synth now also opens a window with its sliders.
 
-Всё в микшере отменяется **Ctrl+Z** и сохраняется в проекте. Эффекты на мастере и возвратных дорожках
-попадают и в экспорт WAV.
-Новые плагины-эффекты находит та же кнопка **Scan plugins**, что и инструменты (свои папки плагинов —
-**Folders...** рядом с ней). Упавший плагин-эффект пропускает звук, на его слоте — «!»: клик по слоту
-запускает его заново. Подробно — `plugins.md`.
+Everything in the mixer can be undone with **Ctrl+Z** and is saved in the project. Effects on the master and
+on return tracks also go into the WAV export.
+New effect plugins are found by the same **Scan plugins** button as instruments (your own plugin folders:
+**Folders...** next to it). A crashed effect plugin lets the sound through, and its slot shows a "!": a click
+on the slot starts it again. Details: [`plugins.md`](plugins.md).
 
-## Громкость для стриминга (первый шаг мастеринга)
+## Loudness for streaming (the first step of mastering)
 
-**File → Check loudness for streaming...** — Harmonia проигрывает песню «про себя» (как экспорт, несколько
-секунд) и меряет её так же, как Spotify, YouTube и Apple Music: **интегральная громкость в LUFS** (стандарт
-EBU R128) и **пик** в dB. Эти сервисы приводят все песни примерно к **−14 LUFS**: тише — твоя песня будет
-звучать тише соседних, громче — её просто убавят.
+**File → Check loudness for streaming...**: Harmonia plays the song "to itself" (like an export, a few
+seconds) and measures it the same way Spotify, YouTube and Apple Music do: **integrated loudness in LUFS**
+(the EBU R128 standard) and the **peak** in dB. These services bring all songs to about **−14 LUFS**: if
+yours is quieter, it will sound quieter than the songs around it; if louder, it will simply be turned down.
 
-Окно скажет, что делать, и предложит кнопку:
-- тихо и есть запас — **Raise the master by … dB** (мастер-фейдер поднимется; до +6 dB);
-- тихо, но пики уже у потолка — поднимет только до пиков −1 dB; а кнопка **Use the limiter** сделает всё
-  сама: поставит **Limiter** последним эффектом на мастер (потолок −1 dB), мастер-фейдер — на 0 dB, и
-  подберёт усиление лимитера так, чтобы песня стала −14 LUFS (несколько раз перемеряет, внизу видно ход);
-- громко — **Lower the master** (сервисы всё равно убавят; так слышно, как будет там);
-- пики выше −1 dB — убавить, чтобы MP3 и стриминг не хрипели (или тоже **Use the limiter**).
+The window tells you what to do and offers a button:
+- quiet, and there is headroom: **Raise the master by … dB** (the master fader goes up; up to +6 dB);
+- quiet, but the peaks are already at the ceiling: it raises only until the peaks reach −1 dB; and the
+  **Use the limiter** button does everything itself: it puts a **Limiter** as the last effect on the master
+  (ceiling −1 dB), sets the master fader to 0 dB, and finds the limiter gain that makes the song −14 LUFS
+  (it measures again several times; the progress is shown at the bottom);
+- loud: **Lower the master** (the services will turn it down anyway; this way you hear how it will sound
+  there);
+- peaks above −1 dB: turn down, so MP3 and streaming do not distort (or **Use the limiter** here too).
 
-Изменение — одно **Ctrl+Z**. Меряется то, что слышно: заглушённые дорожки не считаются, эффекты и громкость
-мастера — считаются.
+The change is one **Ctrl+Z**. What is measured is what you hear: muted tracks do not count; the effects and
+volume of the master do.
 
-## Mix Doctor: что не так в миксе
+## Mix Doctor: what is wrong in the mix
 
-**File → Check the mix (Mix Doctor)...** — Harmonia проигрывает «про себя» песню, потом каждую дорожку
-отдельно (как стемы: с её эффектами и посылами на ревер / дилей; внизу видно «listening to track 2 of 5...»),
-и показывает отчёт:
-- **громкость** песни (LUFS) и пик; **корреляция** левого и правого канала (1 — моно, 0 — совсем разные,
-  меньше 0 — каналы гасят друг друга); **низ** (ниже 120 Гц) и **верх** (выше 6 кГц) в dB относительно середины;
-- **что стоит поправить**, если есть, с советом:
-  - **перегруз** — пики упираются в 0 dB, громкие места срезаются и хрипят;
-  - **каналы в противофазе** или **очень широкое стерео** — на телефоне и в одной колонке части песни пропадут;
-  - **слишком много низа** (гудит, съедает громкость) или **почти нет низа** (тонко);
-  - **слишком ярко / резко** или **глухо** (почти нет верха);
-  - **дорожка тонет** — она на 15+ LU тише самой громкой (может, так и задумано — тогда ничего);
-- **дорожки от громкой к тихой** с громкостью каждой.
+**File → Check the mix (Mix Doctor)...**: Harmonia plays the song "to itself", then every track separately
+(like stems: with its effects and its sends to the reverb / delay; at the bottom you see "listening to track
+2 of 5..."), and shows a report:
+- the **loudness** of the song (LUFS) and the peak; the **correlation** of the left and right channels (1 is
+  mono, 0 is completely different, below 0 the channels cancel each other); the **lows** (below 120 Hz) and
+  the **highs** (above 6 kHz) in dB relative to the mids;
+- **what is worth fixing**, if anything, with advice:
+  - **overload**: the peaks hit 0 dB, loud places are clipped and distort;
+  - **channels out of phase** or **very wide stereo**: on a phone or a single speaker, parts of the song
+    will disappear;
+  - **too much low end** (it booms and eats up loudness) or **almost no low end** (thin);
+  - **too bright / harsh** or **dull** (almost no highs);
+  - **a track is buried**: it is 15+ LU quieter than the loudest one (maybe that is intended, then leave
+    it);
+- **the tracks from loud to quiet**, with the loudness of each.
 
-Границы нарочно широкие: Mix Doctor говорит только о том, что явно не так, а не о вкусе. Сам по себе он ничего
-не меняет. Но если дело в уровнях, в окне есть кнопка **Fix the levels** (в отчёте написано, что именно она
-сделает):
-- **тонущие дорожки** поднимает фейдером до 10 LU ниже самой громкой (насколько фейдер позволяет — до +6 dB);
-- **перегруз** — опускает мастер, пока пики не встанут на −1 dB: слушает песню ещё раз (или несколько — по пику
-  выше 0 dB не понять, насколько он вылез), поэтому занимает несколько секунд.
-Всё вместе — один шаг **Ctrl+Z**. Громкость для Spotify / YouTube — отдельно: *Check loudness for streaming*.
+The limits are wide on purpose: Mix Doctor speaks only about what is clearly wrong, not about taste. By
+itself it changes nothing. But if the problem is in the levels, the window has a **Fix the levels** button
+(the report says exactly what it will do):
+- **buried tracks** are raised with the fader to 10 LU below the loudest one (as far as the fader allows, up
+  to +6 dB);
+- **overload**: it lowers the master until the peaks sit at −1 dB. It listens to the song once more (or
+  several times: from a peak above 0 dB you cannot tell how far it went over), so it takes a few seconds.
+All of it together is one **Ctrl+Z** step. Loudness for Spotify / YouTube is separate:
+*Check loudness for streaming*.
 
-## MIDI Learn: ручки контроллера
+## MIDI Learn: controller knobs
 
-Ручку, фейдер или колесо MIDI-клавиатуры можно привязать к любой настройке песни.
+A knob, fader or wheel of a MIDI keyboard can be linked to any setting of the song.
 
-- **Одна настройка:** правой кнопкой по фейдеру, ручке панорамы, полоске посыла или ползунку в окне
-  эффекта / инструмента → **MIDI Learn** → покрутите ручку на контроллере. Готово: внизу окна написано,
-  что к чему привязано.
-- **Несколько подряд:** **Ctrl+Shift+L** (или Edit → MIDI Learn). Троньте ползунок мышью (можно и в родном
-  окне плагина), потом покрутите ручку; следующий ползунок — следующая ручка. Ещё раз Ctrl+Shift+L — выход.
-- **Забыть:** правой кнопкой по ползунку → **Forget CC…**, или Edit → **MIDI controls of this song** —
-  там весь список.
+- **One setting:** right-click a fader, a pan knob, a send bar or a slider in an effect / instrument window
+  → **MIDI Learn** → turn the knob on the controller. Done: the bottom of the window says what is linked to
+  what.
+- **Several in a row:** **Ctrl+Shift+L** (or Edit → MIDI Learn). Touch a slider with the mouse (the plugin's
+  own window works too), then turn a knob; the next slider, the next knob. Ctrl+Shift+L again to leave.
+- **Forget:** right-click a slider → **Forget CC…**, or Edit → **MIDI controls of this song**, where the
+  whole list is.
 
-Привязки сохраняются вместе с песней. Одна ручка двигает одну настройку. У ползунка в окне плагина
-привязка видна меткой «CC 21», у фейдера — в подсказке. Каждый поворот ручки — один шаг **Ctrl+Z**.
-Чтобы движение ручки записалось в автоматизацию — кнопка **Write**, см. [автоматизацию](automation.md).
+The links are saved with the song. One knob moves one setting. On a slider in a plugin window the link is
+shown as a "CC 21" label; on a fader, in the tooltip. Every turn of a knob is one **Ctrl+Z** step.
+To record a knob movement into automation, use the **Write** button; see [automation](automation.md).
