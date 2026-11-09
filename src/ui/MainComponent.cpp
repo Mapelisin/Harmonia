@@ -231,6 +231,10 @@ namespace harmonia::ui
             playedLoop = range;
             transport.setLoopBeats (range.start, range.end);
         }
+
+        // Recording with a loop region set in song mode goes round it: a take each time.
+        transport.setRecordsTakes (arrangementModel.getPlayMode() == arrangement::PlayMode::song
+                                   && arrangementModel.getLoopRegion().has_value());
     }
 
     void MainComponent::setPlayMode (arrangement::PlayMode mode)

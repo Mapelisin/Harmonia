@@ -17,7 +17,9 @@ namespace harmonia::audio
           this from fighting the engine forever.
         - Play records audio instead when `recordsAudio` says so (the armed audio tracks, see
           audio::AudioInputs): straight on from where the song is, without looping (the loop comes
-          back at Stop). Stop turns the recordings into clips as one undo step. */
+          back at Stop). Stop turns the recordings into clips as one undo step.
+        - With setRecordsTakes on and a loop set, it records round the loop instead, from the
+          loop's start: each time round is a take of the one clip made at Stop (core::takes). */
     class Transport : private juce::Timer
     {
     public:
@@ -30,6 +32,16 @@ namespace harmonia::audio
 
         /** Asked at Play: record the armed audio inputs this time? */
         std::function<bool()> recordsAudio;
+
+        /** Recording with a loop set goes round it, a take each time (else straight on). */
+        void setRecordsTakes (bool);
+        bool recordsTakes() const noexcept          { return takesWanted; }
+
+        /** True while a recording goes round the loop, making takes. */
+        bool isRecordingTakes() const noexcept      { return recordRequested && recordingTakes; }
+
+        /** Which time round the loop a recording of takes is (1, 2...); 0 when it isn't one. */
+        int getTakeNumber() const;
 
         /** True from a Play that records audio until Stop. */
         bool isRecordRequested() const noexcept     { return recordRequested; }
@@ -69,6 +81,7 @@ namespace harmonia::audio
     private:
         te::Edit& edit;
         bool playRequested = false, recordRequested = false, loopWanted = false;
+        bool takesWanted = false, recordingTakes = false;
         mutable bool countInPending = false, countInStarted = false;
         double recordStartSeconds = 0.0;
         int resumeCount = 0;

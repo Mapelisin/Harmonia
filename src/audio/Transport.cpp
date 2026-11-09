@@ -1,4 +1,5 @@
 #include "audio/Transport.h"
+#include "core/Takes.h"
 
 namespace harmonia::audio
 {
@@ -32,7 +33,16 @@ namespace harmonia::audio
         countInPending = recordRequested && edit.getNumCountInBeats() > 0;
         countInStarted = false;
 
-        if (recordRequested)
+        recordingTakes = recordRequested && takesWanted && loopWanted;
+
+        if (recordingTakes)
+        {
+            // Every take is one time round, so the first starts where the loop does.
+            transport().setPosition (transport().getLoopRange().getStart());
+            recordStartSeconds = getPositionSeconds();
+            transport().looping = true;
+        }
+        else if (recordRequested)
         {
             recordStartSeconds = getPositionSeconds();
             transport().looping = false;
@@ -57,7 +67,30 @@ namespace harmonia::audio
         transport().stop (false, false);
 
         if (wasRecording)
+        {
+            if (recordingTakes)
+                core::takes::adoptRecorded (edit);
+
+            recordingTakes = false;
             transport().looping = loopWanted;
+        }
+    }
+
+    void Transport::setRecordsTakes (bool shouldRecordTakes)
+    {
+        takesWanted = shouldRecordTakes;
+    }
+
+    int Transport::getTakeNumber() const
+    {
+        auto* context = transport().getCurrentPlaybackContext();
+        const auto loopLength = transport().getLoopRange().getLength().inSeconds();
+
+        if (! isRecordingTakes() || context == nullptr || loopLength <= 0.0 || isCountingIn())
+            return 0;
+
+        const auto sinceStart = context->getUnloopedPosition().inSeconds() - recordStartSeconds;
+        return 1 + std::max (0, (int) std::floor (sinceStart / loopLength));
     }
 
     bool Transport::isRecording() const
@@ -143,7 +176,7 @@ namespace harmonia::audio
                                         tempo.toTime (te::BeatPosition::fromBeats (endBeat)) });
         }
 
-        transport().looping = loopWanted && ! recordRequested;
+        transport().looping = loopWanted && (! recordRequested || recordingTakes);
     }
 
     bool Transport::canPlayNow() const

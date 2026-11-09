@@ -8,6 +8,7 @@
 #include "core/Tracks.h"
 #include "ui/ComputerKeyboard.h"
 #include "ui/FileDrag.h"
+#include "ui/TakeMenu.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui::arrangement
@@ -544,6 +545,11 @@ namespace harmonia::ui::arrangement
         {
             const auto file = audio->getCurrentSourceFile();
             menu.addItem ("Show file in folder", file.exists(), false, [file] { file.revealToUser(); });
+
+            // Recorded round a loop: which time round it plays.
+            if (const auto takes = take_menu::describe (*audio); takes.isNotEmpty())
+                menu.addSubMenu ("Takes (" + takes + ")", take_menu::make (model.getProject(), *audio));
+
             menu.addSeparator();
 
             // Fades and gain (also with the handles on the clip).

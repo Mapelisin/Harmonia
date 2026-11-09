@@ -6,6 +6,7 @@
 #include "audio/Transport.h"
 #include "core/Clips.h"
 #include "core/Project.h"
+#include "core/Takes.h"
 #include "core/Tracks.h"
 #include "ui/MainComponent.h"
 
@@ -264,5 +265,218 @@ TEST_SUITE ("audio::recording")
         }
 
         main.reset();
+    }
+}
+
+TEST_SUITE ("audio::takes")
+{
+    namespace takes = core::takes;
+
+    /** Records round beats 4..8 (2 s at 120 BPM) for `seconds`; returns the clip made. */
+    te::AudioClipBase* recordTakes (RecordingRig& rig, audio::Transport& transport, AudioInputs& inputs, te::AudioTrack& track, double seconds)
+    {
+        auto& edit = rig.project->getEdit();
+        AudioInputs::setArmed (track, true);
+        inputs.refresh();
+        edit.dispatchPendingUpdatesSynchronously();
+        rig.project->clearUndoHistory();
+
+        transport.recordsAudio = [&inputs] { return inputs.anyArmed(); };
+        transport.setRecordsTakes (true);
+        transport.setLoopBeats (4.0, 8.0);
+        transport.setPositionSeconds (0.5);
+        transport.play();
+        CHECK (transport.isRecordingTakes());
+        CHECK (edit.getTransport().looping.get());
+        CHECK (transport.getRecordStartSeconds() == doctest::Approx (2.0));     // from the loop's start
+
+        rig.process (seconds);
+        transport.stop();
+        CHECK_FALSE (transport.isRecordingTakes());
+        CHECK (transport.getTakeNumber() == 0);
+
+        const auto recorded = clips::getClips (track);
+        REQUIRE (recorded.size() == 1);
+        return dynamic_cast<te::AudioClipBase*> (recorded[0]);
+    }
+
+    TEST_CASE ("recording round a loop makes one clip with a take per time round; it plays the last full one")
+    {
+        RecordingRig rig;
+        auto& track = rig.addAudioTrack ("Vocals");
+        auto& edit = rig.project->getEdit();
+        audio::Transport transport (edit);
+        AudioInputs inputs (edit);
+
+        auto* clip = recordTakes (rig, transport, inputs, track, 5.0);   // two times round and a half
+        REQUIRE (clip != nullptr);
+        CHECK (clips::getStartBeat (*clip) == doctest::Approx (4.0).epsilon (0.02));
+        CHECK (clips::getEndBeat (*clip) == doctest::Approx (8.0).epsilon (0.02));
+
+        REQUIRE (takes::getCount (*clip) == 3);
+        CHECK (takes::getCurrent (*clip) == 1);
+        CHECK_FALSE (clip->state.getChildWithName (te::IDs::TAKES).isValid());   // not Tracktion's takes
+        CHECK (takes::getName (1) == "Take 2");
+
+        for (int i = 0; i < 3; ++i)
+        {
+            const auto file = takes::getFile (*clip, i);
+            CHECK (file.existsAsFile());
+            CHECK (file.isAChildOf (rig.temp.getFile ("Recordings")));
+            CHECK (rmsOf (file) > 0.2f);
+            CHECK (te::AudioFile (rig.engine(), file).getLength() == doctest::Approx (i < 2 ? 2.0 : 1.0).epsilon (0.1));
+        }
+
+        // The whole recording, takes and all, is one undo step.
+        CHECK (edit.getUndoManager().getUndoDescription() == "Record audio");
+        rig.project->undo();
+        CHECK (clips::getClips (track).isEmpty());
+        rig.project->redo();
+        REQUIRE (clips::getClips (track).size() == 1);
+        CHECK (takes::getCount (*clips::getClips (track)[0]) == 3);
+    }
+
+    TEST_CASE ("a take is chosen with undo, plays, and is saved with the song; split pieces choose their own")
+    {
+        RecordingRig rig;
+        auto& track = rig.addAudioTrack ("Vocals");
+        auto& edit = rig.project->getEdit();
+        audio::Transport transport (edit);
+        AudioInputs inputs (edit);
+
+        auto* clip = recordTakes (rig, transport, inputs, track, 6.5);   // three full takes and a bit
+        REQUIRE (clip != nullptr);
+        REQUIRE (takes::getCount (*clip) == 4);
+        CHECK (takes::getCurrent (*clip) == 2);
+        AudioInputs::setArmed (track, false);
+        inputs.refresh();
+        edit.dispatchPendingUpdatesSynchronously();
+
+        edit.getUndoManager().beginNewTransaction ("Choose take");
+        CHECK (takes::choose (*clip, 0));
+        CHECK (takes::getCurrent (*clip) == 0);
+        CHECK (clip->getSourceFileReference().getFile() == takes::getFile (*clip, 0));
+        CHECK_FALSE (takes::choose (*clip, 7));
+
+        // It plays the take.
+        edit.dispatchPendingUpdatesSynchronously();
+        transport.recordsAudio = nullptr;
+        transport.setLoopBeats (0.0, 0.0);
+        transport.setPositionSeconds (2.0);
+        transport.play();
+        rig.process (0.2, 0.0f);
+        CHECK (rig.process (1.0, 0.0f) > 0.1f);
+        transport.stop();
+
+        rig.project->undo();
+        CHECK (takes::getCurrent (*clip) == 2);
+        rig.project->redo();
+        CHECK (takes::getCurrent (*clip) == 0);
+
+        // Split: both pieces have the takes, each its own choice.
+        edit.getUndoManager().beginNewTransaction ("Split");
+        auto* right = dynamic_cast<te::AudioClipBase*> (clips::split (*clip, 6.0));
+        REQUIRE (right != nullptr);
+        CHECK (takes::getCount (*right) == 4);
+        CHECK (takes::getCurrent (*right) == 0);
+        CHECK (takes::choose (*right, 1));
+        CHECK (takes::getCurrent (*clip) == 0);
+        CHECK (takes::getCurrent (*right) == 1);
+
+        // Saved and opened again.
+        const auto file = rig.temp.getFile ("Song.harmonia");
+        REQUIRE (rig.project->save (file).isEmpty());
+        juce::String error;
+        auto loaded = core::Project::load (rig.session, file, error);
+        REQUIRE_MESSAGE (loaded != nullptr, error.toStdString());
+        te::AudioTrack* loadedTrack = nullptr;
+
+        for (auto* t : loaded->getTracks())
+            if (t->getName() == "Vocals")
+                loadedTrack = t;
+
+        REQUIRE (loadedTrack != nullptr);
+        const auto loadedClips = clips::getClips (*loadedTrack);
+        REQUIRE (loadedClips.size() == 2);
+        CHECK (takes::getCount (*loadedClips[0]) == 4);
+        CHECK (takes::getCurrent (*loadedClips[0]) == 0);
+        CHECK (takes::getCurrent (*loadedClips[1]) == 1);
+        loaded.reset();
+
+        // Only the one it plays kept.
+        edit.getUndoManager().beginNewTransaction ("Keep take");
+        takes::keepOnlyCurrent (*right);
+        CHECK (takes::getCount (*right) == 0);
+        CHECK (takes::getCurrent (*right) == -1);
+        CHECK (right->getSourceFileReference().getFile().existsAsFile());
+        rig.project->undo();
+        CHECK (takes::getCount (*right) == 4);
+    }
+
+    TEST_CASE ("takes after a count-in: the clicks play before the loop, the takes start at its start")
+    {
+        RecordingRig rig;
+        auto& track = rig.addAudioTrack ("Vocals");
+        auto& edit = rig.project->getEdit();
+        audio::Transport transport (edit);
+        AudioInputs inputs (edit);
+        AudioInputs::setArmed (track, true);
+        inputs.refresh();
+        edit.dispatchPendingUpdatesSynchronously();
+
+        transport.setCountIn (audio::Transport::CountIn::oneBar);
+        transport.recordsAudio = [&inputs] { return inputs.anyArmed(); };
+        transport.setRecordsTakes (true);
+        transport.setLoopBeats (4.0, 8.0);
+        transport.play();
+        CHECK (transport.isCountingIn());
+        CHECK (transport.getTakeNumber() == 0);
+        rig.process (2.6);                  // the bar of clicks (2 s, starting a bit early) and a bit
+        CHECK_FALSE (transport.isCountingIn());
+        CHECK (transport.getTakeNumber() == 1);
+        rig.process (2.0);
+        CHECK (transport.getTakeNumber() == 2);
+        rig.process (1.9);                  // 6.5 s: the count-in, two takes and some of a third
+        transport.stop();
+        transport.setCountIn (audio::Transport::CountIn::off);
+
+        const auto recorded = clips::getClips (track);
+        REQUIRE (recorded.size() == 1);
+        CHECK (clips::getStartBeat (*recorded[0]) == doctest::Approx (4.0).epsilon (0.02));
+        CHECK (clips::getEndBeat (*recorded[0]) == doctest::Approx (8.0).epsilon (0.02));
+        CHECK (takes::getCount (*recorded[0]) == 3);
+        CHECK (takes::getCurrent (*recorded[0]) == 1);
+    }
+
+    TEST_CASE ("without a loop, or with takes off, a recording goes straight on and has no takes")
+    {
+        RecordingRig rig;
+        auto& track = rig.addAudioTrack ("Vocals");
+        auto& edit = rig.project->getEdit();
+        audio::Transport transport (edit);
+        AudioInputs inputs (edit);
+        AudioInputs::setArmed (track, true);
+        inputs.refresh();
+        edit.dispatchPendingUpdatesSynchronously();
+
+        transport.recordsAudio = [&inputs] { return inputs.anyArmed(); };
+        transport.setRecordsTakes (true);
+        transport.setPositionSeconds (1.0);
+        transport.play();                       // no loop
+        CHECK_FALSE (transport.isRecordingTakes());
+        rig.process (1.5);
+        transport.stop();
+        REQUIRE (clips::getClips (track).size() == 1);
+        CHECK (takes::getCount (*clips::getClips (track)[0]) == 0);
+
+        // One time round isn't worth a list either.
+        rig.project->undo();
+        transport.setLoopBeats (4.0, 8.0);
+        transport.play();
+        CHECK (transport.isRecordingTakes());
+        rig.process (1.0);
+        transport.stop();
+        REQUIRE (clips::getClips (track).size() == 1);
+        CHECK (takes::getCount (*clips::getClips (track)[0]) == 0);
     }
 }

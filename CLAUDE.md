@@ -78,6 +78,8 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Запись звука: готовность/вход — только через `audio::AudioInputs`; запись — `audio::Transport` (`recordsAudio`).
   Тесты записи и живого звука — `test::AudioRig` (`tests/TestAudioRig.h`: свой `core::Session` с
   `HostedAudioDeviceInterface`, тест сам гонит звук и меряет выход), общий тестовый движок без устройств не трогать.
+- Дубли аудиоклипа — только через `core::takes` (не `te::WaveAudioClip::setCurrentTake`: дубли Tracktion
+  требуют его проектов и рендерят в фоне). Запись по кругу включает `Transport::setRecordsTakes`.
 - Автоматизация — только через `audio::automation` (доли и 0..1; правки в текущую транзакцию undo — жест
   начинает вызывающий). Мышь панели — `ui/automation/AutomationGestures` (тесты без окна).
 - Посылы и возвратные дорожки — только через `audio::sends`. `Project::getTracks` — дорожки песни (без

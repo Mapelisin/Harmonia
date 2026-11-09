@@ -55,6 +55,7 @@ add_executable(harmonia_tests
     ui/ArrangementTests.cpp
     ui/MixerTests.cpp
     ui/MidiLearnUiTests.cpp
+    ui/TakeUiTests.cpp
     ui/PluginWindowTests.cpp
     ui/AudioClipTests.cpp
     ui/ClipEditTests.cpp

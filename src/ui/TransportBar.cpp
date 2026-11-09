@@ -35,7 +35,8 @@ namespace harmonia::ui
         };
 
         recordButton.setTooltip ("Record (R): notes played while the song plays go into the clip open in the piano roll,\n"
-                                 "and armed audio tracks record their input (straight on from where the song is)");
+                                 "and armed audio tracks record their input (straight on from where the song is).\n"
+                                 "In Song mode with a loop region, audio is recorded round the loop: a take each time.");
         recordButton.onClick = [this] { noteInput.setRecordArmed (! noteInput.isRecordArmed()); };
 
         writeButton.setTooltip ("Write automation (Ctrl+Shift+A): while the song plays, the knobs and faders of tracks you move\n"
@@ -293,7 +294,10 @@ namespace harmonia::ui
         }
         else
         {
-            positionDisplay.setText (PositionDisplay::barsBeatsText (edit.tempoSequence, seconds), PositionDisplay::clockText (seconds));
+            // Recording round a loop: which take this is, in place of the clock.
+            const auto take = transport.getTakeNumber();
+            positionDisplay.setText (PositionDisplay::barsBeatsText (edit.tempoSequence, seconds),
+                                     take > 0 ? "take " + juce::String (take) : PositionDisplay::clockText (seconds));
         }
 
         auto& project = arrangementModel.getProject();

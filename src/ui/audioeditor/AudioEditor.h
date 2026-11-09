@@ -40,6 +40,9 @@ namespace harmonia::ui::audioeditor
         juce::TextButton& getDoubleButton() noexcept        { return twice; }
         juce::TextButton& getReverseButton() noexcept       { return reverse; }
         juce::TextButton& getShowClipButton() noexcept      { return showClip; }
+
+        /** "Take 2 of 4": the takes of a clip recorded round a loop (hidden without takes). */
+        juce::TextButton& getTakesButton() noexcept         { return takes; }
         juce::ComboBox& getFadeShapeBox() noexcept          { return fadeShape; }
         juce::Label& getFileLabel() noexcept                { return fileInfo; }
 
@@ -56,7 +59,7 @@ namespace harmonia::ui::audioeditor
         juce::Label gainLabel { {}, "Gain" }, pitchLabel { {}, "Pitch" }, tempoLabel { {}, "Loop" }, fadeLabel { {}, "Fades" };
         DragNumber gain, pitch, loopBpm;
         juce::TextButton normalize { "Normalize" }, follow { "Follow tempo" }, halve { juce::String::fromUTF8 ("\xc3\xb7" "2") },
-                         twice { juce::String::fromUTF8 ("\xc3\x97" "2") }, reverse { "Reverse" }, showClip { "Show clip" };
+                         twice { juce::String::fromUTF8 ("\xc3\x97" "2") }, reverse { "Reverse" }, showClip { "Show clip" }, takes;
         juce::ComboBox fadeShape;
         juce::Label fileInfo;
 

@@ -1,5 +1,6 @@
 #include "ui/audioeditor/AudioEditor.h"
 #include "core/AudioTempo.h"
+#include "ui/TakeMenu.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui::audioeditor
@@ -69,7 +70,7 @@ namespace harmonia::ui::audioeditor
         };
 
         for (auto* c : std::initializer_list<juce::Component*> { &gain, &pitch, &loopBpm, &normalize, &follow, &halve, &twice, &reverse,
-                                                                 &showClip, &fadeShape })
+                                                                 &showClip, &takes, &fadeShape })
         {
             c->setWantsKeyboardFocus (false);
             addAndMakeVisible (c);
@@ -142,6 +143,14 @@ namespace harmonia::ui::audioeditor
 
         showClip.setTooltip ("Show the part of the file the clip plays (Ctrl+wheel zooms, the wheel scrolls)");
         showClip.onClick = [this] { waveform.showPlayedPart(); };
+
+        takes.setTooltip ("This clip was recorded round a loop: choose which take it plays.\n"
+                          "Split the clip (Ctrl+E) and each piece can play its own take.");
+        takes.onClick = [this]
+        {
+            if (auto* clip = model.getClip())
+                take_menu::make (arrangement.getProject(), *clip).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&takes));
+        };
     }
 
     //==============================================================================
@@ -165,6 +174,15 @@ namespace harmonia::ui::audioeditor
             c->setEnabled (hasClip);
 
         fileInfo.setText (model.describeFile(), juce::dontSendNotification);
+
+        const auto takesText = hasClip ? take_menu::describe (*clip) : juce::String();
+
+        if (takes.isVisible() != takesText.isNotEmpty() || takes.getButtonText() != takesText)
+        {
+            takes.setVisible (takesText.isNotEmpty());
+            takes.setButtonText (takesText);
+            resized();
+        }
 
         if (! hasClip)
         {
@@ -233,6 +251,12 @@ namespace harmonia::ui::audioeditor
         gap (4);
         place (showClip, 70);
         gap (12);
+
+        if (takes.isVisible())
+        {
+            place (takes, 96);
+            gap (12);
+        }
         fileInfo.setBounds (bar);
     }
 }

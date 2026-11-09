@@ -21,6 +21,7 @@ namespace harmonia::ui
                 { "Home", "Back to the start (of the song, or of the clip in Clip mode)" },
                 { "L", "Clip mode (loop the open clip) / Song mode" },
                 { "R", "Arm recording (when the computer keyboard isn't a piano)" },
+                { "Record with a loop region (Song mode)", "Audio is recorded round the loop: a take each time; choose one in the clip's menu (Takes)" },
                 { "Ctrl+M", "Metronome on / off" },
                 { "Ctrl+Shift+A", "Write automation on / off: knobs and faders moved while the song plays go into their lines" },
                 { "Ctrl+Shift+L", "MIDI Learn on / off: move a knob or fader, then a control on your MIDI keyboard" },
