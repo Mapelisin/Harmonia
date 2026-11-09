@@ -4,7 +4,9 @@
 
 Файл называется `Harmonia-Setup-<версия>.exe` (например `Harmonia-Setup-0.54.0.exe`).
 
-- Его собирает GitHub при каждом изменении программы: страница
+- **Проще всего:** страница [Releases](https://github.com/Mapelisin/Harmonia/releases/latest) → внизу **Assets** →
+  `Harmonia-Setup-<версия>.exe`. Входить в GitHub не нужно. Выпуск выходит после каждого пятого этапа разработки.
+- Самая свежая сборка (между выпусками) — её собирает GitHub при каждом изменении программы: страница
   [Actions](https://github.com/Mapelisin/Harmonia/actions) → последний зелёный запуск **CI** → внизу **Artifacts** →
   **Harmonia-Setup** (скачается zip-архив, установщик внутри). Нужно войти в GitHub.
 - Или на своём компьютере: `tools\build.cmd windows-release`, затем `tools\make-installer.cmd` — файл появится в

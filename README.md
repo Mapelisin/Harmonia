@@ -13,7 +13,7 @@
 ![Язык](https://img.shields.io/badge/C%2B%2B-20-4f9fe0)
 ![Статус](https://img.shields.io/badge/статус-в%20разработке-e0a24f)
 
-[Установка](docs/user/install.md) · [Шпаргалки](#шпаргалки) · [Что умеет](#что-уже-умеет) · [Планы](#что-дальше) · [Сборка](#сборка-из-исходников)
+[**Скачать**](https://github.com/Mapelisin/Harmonia/releases/latest) · [Установка](docs/user/install.md) · [Шпаргалки](#шпаргалки) · [Что умеет](#что-уже-умеет) · [Планы](#что-дальше) · [Сборка](#сборка-из-исходников)
 
 <img src="docs/images/arrangement.png" alt="Аранжировка и piano roll" width="900">
 
@@ -99,8 +99,9 @@ Harmonia — это DAW (цифровая звуковая рабочая ста
 
 ## Установка
 
-Нужна 64-битная Windows 10 или 11. Готовых выпусков пока нет: установщик собирается автоматически при каждом
-изменении программы. Как его скачать и поставить — [docs/user/install.md](docs/user/install.md).
+Нужна 64-битная Windows 10 или 11. Установщик `Harmonia-Setup-<версия>.exe` — на странице
+[**Releases**](https://github.com/Mapelisin/Harmonia/releases/latest); новый выпуск выходит после каждого пятого
+этапа разработки. Как поставить и что ответить на предупреждение Windows — [docs/user/install.md](docs/user/install.md).
 
 ## Шпаргалки
 
