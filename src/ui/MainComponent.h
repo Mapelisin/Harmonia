@@ -1,6 +1,8 @@
 #pragma once
 
 #include "audio/AudioInputs.h"
+#include "audio/AutomationWriter.h"
+#include "audio/MidiLearn.h"
 #include "audio/MixCheck.h"
 #include "audio/FilePreview.h"
 #include "audio/MidiInputs.h"
@@ -130,6 +132,14 @@ namespace harmonia::ui
 
         void toggleMetronome();
 
+        /** Writing automation on / off (Ctrl+Shift+A, the Write button). */
+        void toggleAutomationWriting();
+        audio::automation::Writer& getAutomationWriter() noexcept       { return automationWriter; }
+
+        /** MIDI Learn for whatever is moved next, on / off (Ctrl+Shift+L, Edit menu). */
+        void toggleMidiLearn();
+        audio::midi_learn::Controller& getMidiControls() noexcept       { return midiControls; }
+
         /** File > Settings (Ctrl+,): the sound card, MIDI keyboards, plugins. */
         void showSettings();
 
@@ -179,12 +189,14 @@ namespace harmonia::ui
         audio::MidiInputs midiInputs { project.getEdit() };
         audio::AudioInputs audioInputs { project.getEdit() };
         NoteInput noteInput { pianoRollModel, notePreview, playbackClock };
+        audio::midi_learn::Controller midiControls { project.getEdit() };
+        audio::automation::Writer automationWriter { project.getEdit() };
         FileCommands* fileCommands = nullptr;
 
         juce::ReferenceCountedObjectPtr<te::AudioTrack> currentTrack;
         core::note_ops::BeatRange playedLoop { -1.0, -1.0 };
 
-        TransportBar transportBar { transport, project.getEdit(), noteInput, arrangementModel };
+        TransportBar transportBar { transport, project.getEdit(), noteInput, arrangementModel, automationWriter };
         MainMenu mainMenu { *this };
         juce::MenuBarComponent menuBar { &mainMenu };
         CpuMeter cpuMeter;

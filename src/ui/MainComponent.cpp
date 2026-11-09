@@ -39,7 +39,14 @@ namespace harmonia::ui
         arrangementModel.addListener (this);
         arrangementModel.onCurrentChanged = [this] { currentChanged(); };
 
-        midiInputs.onMessage = [this] (const juce::MidiMessage& m, double wallMs) { noteInput.handleMidiMessage (m, wallMs); };
+        // A MIDI control assigned to a setting (or being assigned) moves that, not the notes.
+        midiInputs.onMessage = [this] (const juce::MidiMessage& m, double wallMs)
+        {
+            if (! midiControls.handle (m))
+                noteInput.handleMidiMessage (m, wallMs);
+        };
+        midiControls.onMessage = [this] (const juce::String& text) { showMessage (text); };
+        automationWriter.onChanged = [this] { transportBar.refresh(); };
         midiInputs.onDevicesChanged = [this] { updateMidiStatus(); };
         noteInput.onStateChanged = [this]
         {
@@ -161,6 +168,8 @@ namespace harmonia::ui
         noteInput.onStateChanged = nullptr;
         midiInputs.onMessage = nullptr;
         midiInputs.onDevicesChanged = nullptr;
+        midiControls.onMessage = nullptr;
+        automationWriter.onChanged = nullptr;
         transport.stop();
         noteInput.finishTake();
         notePreview.setTrack (nullptr);
@@ -500,6 +509,14 @@ namespace harmonia::ui
         {
             const auto shift = mods.isShiftDown();
 
+            if (shift && (letter == 'A' || letter == 'L'))
+            {
+                if (letter == 'A') toggleAutomationWriting();
+                else               toggleMidiLearn();
+
+                return true;
+            }
+
             switch (letter)
             {
                 case 'N': if (fileCommands != nullptr && ! shift) fileCommands->newProject(); return ! shift;
@@ -585,6 +602,21 @@ namespace harmonia::ui
         auto& edit = project.getEdit();
         edit.clickTrackEnabled = ! edit.clickTrackEnabled.get();
         transportBar.refresh();
+    }
+
+    void MainComponent::toggleAutomationWriting()
+    {
+        automationWriter.setOn (! automationWriter.isOn());
+        showMessage (automationWriter.isOn() ? "Writing automation: knobs and faders moved while the song plays go into their lines (Ctrl+Shift+A: off)"
+                                             : "Writing automation off");
+    }
+
+    void MainComponent::toggleMidiLearn()
+    {
+        if (midiControls.isLearning())
+            midiControls.stopLearning();
+        else
+            midiControls.startLearning();
     }
 
     void MainComponent::showWarning (const juce::String& text)

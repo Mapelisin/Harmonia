@@ -19,6 +19,8 @@ add_library(harmonia_ui STATIC
     StatusBar.cpp
     DragNumber.h
     DragNumber.cpp
+    ParameterMenu.h
+    ParameterMenu.cpp
     ParameterPanel.h
     ParameterPanel.cpp
     PresetMenu.h

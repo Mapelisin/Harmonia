@@ -3,6 +3,8 @@ add_library(harmonia_audio STATIC
     AudioInputs.cpp
     Automation.h
     Automation.cpp
+    AutomationWriter.h
+    AutomationWriter.cpp
     DeviceStatus.h
     DeviceStatus.cpp
     DeviceSetup.h
@@ -32,6 +34,8 @@ add_library(harmonia_audio STATIC
     Instruments.cpp
     MidiInputs.h
     MidiInputs.cpp
+    MidiLearn.h
+    MidiLearn.cpp
     NotePreview.h
     NotePreview.cpp
     PlaybackClock.h

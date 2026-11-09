@@ -5,6 +5,7 @@
 #include "audio/Sends.h"
 #include "audio/Sidechain.h"
 #include "core/Tracks.h"
+#include "ui/ParameterMenu.h"
 #include "ui/PresetMenu.h"
 #include "ui/Theme.h"
 #include "ui/arrangement/TrackHeaders.h"
@@ -158,13 +159,31 @@ namespace harmonia::ui::mixer
             slider.setWantsKeyboardFocus (false);
             slider.setColour (juce::Slider::trackColourId, theme::mixer::send.withAlpha (0.55f));
             slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-            slider.onDragStart = [this] { owner.model.getProject().beginGesture ("Send to " + returnTrack->getName()); };
+            slider.onDragStart = [this]
+            {
+                owner.model.getProject().beginGesture ("Send to " + returnTrack->getName());
+                dragging = true;
+                touchSend();
+            };
+            slider.onDragEnd = [this]
+            {
+                dragging = false;
+                touch.end();
+            };
             slider.onValueChange = [this]
             {
                 if (owner.track != nullptr && ! audio::sends::setLevel (*owner.track, *returnTrack, (float) slider.getValue()))
                     owner.tell ("No room on " + owner.track->getName() + " for another send", true);
 
+                // The first drag of a send makes it: held from then on.
+                if (dragging)
+                    touchSend();
+
                 repaint();
+            };
+            slider.onPopupMenu = [this]
+            {
+                owner.showParameterMenu (getParameter(), slider);
             };
             addAndMakeVisible (slider);
             refresh();
@@ -173,10 +192,17 @@ namespace harmonia::ui::mixer
         te::AudioTrack& getReturnTrack() const noexcept     { return *returnTrack; }
         juce::Slider& getSlider() noexcept                  { return slider; }
 
+        /** Its level's setting, or nullptr while the track sends nothing there. */
+        te::AutomatableParameter* getParameter() const
+        {
+            auto* send = owner.track != nullptr ? audio::sends::getSend (*owner.track, *returnTrack) : nullptr;
+            return send != nullptr ? send->gain.get() : nullptr;
+        }
+
         void refresh()
         {
-            slider.setTooltip ("Send to " + returnTrack->getName() + ": how much of this track goes through that return's "
-                               "effects (drag; double-click: none)");
+            slider.setTooltip (owner.withControl ("Send to " + returnTrack->getName() + ": how much of this track goes through that return's "
+                                                  "effects (drag; double-click: none; right button: MIDI Learn)", getParameter()));
 
             if (! slider.isMouseButtonDown() && owner.track != nullptr)
                 slider.setValue (audio::sends::getLevel (*owner.track, *returnTrack), juce::dontSendNotification);
@@ -211,7 +237,15 @@ namespace harmonia::ui::mixer
     private:
         ChannelStrip& owner;
         juce::ReferenceCountedObjectPtr<te::AudioTrack> returnTrack;
-        juce::Slider slider;
+        MenuSlider slider;
+        audio::automation::Touch touch;
+        bool dragging = false;
+
+        void touchSend()
+        {
+            if (auto* parameter = getParameter(); parameter != nullptr && ! touch.isOn())
+                touch.begin (*parameter);
+        }
     };
 
     //==============================================================================
@@ -265,7 +299,19 @@ namespace harmonia::ui::mixer
         pan.setDoubleClickReturnValue (true, 0.0);
         pan.setScrollWheelEnabled (false);
         pan.setColour (juce::Slider::rotarySliderFillColourId, theme::mixer::fader);
-        pan.onDragStart = [this] { model.getProject().beginGesture ("Pan"); };
+        pan.onDragStart = [this]
+        {
+            model.getProject().beginGesture ("Pan");
+
+            if (auto* plugin = getVolumePlugin())
+                panTouch.begin (*plugin->panParam);
+        };
+        pan.onDragEnd = [this] { panTouch.end(); };
+        pan.onPopupMenu = [this]
+        {
+            auto* plugin = getVolumePlugin();
+            showParameterMenu (plugin != nullptr ? plugin->panParam.get() : nullptr, pan);
+        };
         pan.onValueChange = [this]
         {
             if (auto* plugin = getVolumePlugin())
@@ -280,7 +326,19 @@ namespace harmonia::ui::mixer
         volume.setDoubleClickReturnValue (true, (double) te::decibelsToVolumeFaderPosition (0.0f));
         volume.setScrollWheelEnabled (false);   // the wheel scrolls the mixer
         volume.setColour (juce::Slider::trackColourId, theme::mixer::fader);
-        volume.onDragStart = [this] { model.getProject().beginGesture (isMaster() ? "Master volume" : "Track volume"); };
+        volume.onDragStart = [this]
+        {
+            model.getProject().beginGesture (isMaster() ? "Master volume" : "Track volume");
+
+            if (auto* plugin = getVolumePlugin())
+                volumeTouch.begin (*plugin->volParam);
+        };
+        volume.onDragEnd = [this] { volumeTouch.end(); };
+        volume.onPopupMenu = [this]
+        {
+            auto* plugin = getVolumePlugin();
+            showParameterMenu (plugin != nullptr ? plugin->volParam.get() : nullptr, volume);
+        };
         volume.onValueChange = [this]
         {
             if (auto* plugin = getVolumePlugin())
@@ -298,8 +356,6 @@ namespace harmonia::ui::mixer
             label->setInterceptsMouseClicks (false, false);
         }
 
-        pan.setTooltip ("Pan (double-click: centre)");
-        volume.setTooltip ("Volume (double-click: 0 dB)");
 
         if (! isMaster())
         {
@@ -501,6 +557,8 @@ namespace harmonia::ui::mixer
 
             volumeText.setText (volumeToText (plugin->getVolumeDb()), juce::dontSendNotification);
             panText.setText (panToText (plugin->getPan()), juce::dontSendNotification);
+            pan.setTooltip (withControl ("Pan (double-click: centre; right button: MIDI Learn)", plugin->panParam.get()));
+            volume.setTooltip (withControl ("Volume (double-click: 0 dB; right button: MIDI Learn)", plugin->volParam.get()));
         }
 
         if (track != nullptr)
@@ -666,6 +724,18 @@ namespace harmonia::ui::mixer
         refresh();
         tell (type.name + " added to " + name.getText(), false);
         effects::showEditor (*plugin);
+    }
+
+    void ChannelStrip::showParameterMenu (te::AutomatableParameter* parameter, juce::Component& target)
+    {
+        parameter_menu::make (parameter, "MIDI Learn: turn this send up first")
+            .showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target));
+    }
+
+    juce::String ChannelStrip::withControl (const juce::String& tooltip, te::AutomatableParameter* parameter) const
+    {
+        const auto badge = parameter != nullptr ? parameter_menu::getBadge (*parameter) : juce::String();
+        return badge.isEmpty() ? tooltip : tooltip + " - " + (badge == "Learn..." ? "waiting for a MIDI control" : "moved by " + badge);
     }
 
     void ChannelStrip::showAddMenu()

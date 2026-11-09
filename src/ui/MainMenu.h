@@ -21,6 +21,10 @@ namespace harmonia::ui
         void menuItemSelected (int, int) override {}
 
         juce::PopupMenu createEditMenu();
+
+        /** MIDI Learn, and the song's MIDI controls (each one to forget): at the end of Edit. */
+        void addMidiLearnItems (juce::PopupMenu&);
+
         juce::PopupMenu createViewMenu();
         juce::PopupMenu createTrackMenu();
         juce::PopupMenu createTransportMenu();

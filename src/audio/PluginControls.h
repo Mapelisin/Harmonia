@@ -34,6 +34,9 @@ namespace harmonia::audio
 
         te::Plugin& getPlugin() const                       { return *plugin; }
 
+        /** The automatable parameter behind it (nullptr for a property control). */
+        te::AutomatableParameter* getParameter() const      { return parameter.get(); }
+
     private:
         PluginControl() = default;
 

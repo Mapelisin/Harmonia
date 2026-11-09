@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/AutomationWriter.h"
 #include "audio/Transport.h"
 #include "core/Tempo.h"
 #include "ui/DragNumber.h"
@@ -11,7 +12,7 @@
 
 namespace harmonia::ui
 {
-    /** Back to the start, stop, play, record, the counter (bar.beat.sixteenth and time), the
+    /** Back to the start, stop, play, record, writing automation, the counter (bar.beat.sixteenth and time), the
         tempo (drag, type or tap it) and the time signature, metronome, count-in, what Play plays
         (clip or song), and the note input settings: the computer keyboard piano and how recorded
         notes are quantized. */
@@ -19,7 +20,7 @@ namespace harmonia::ui
                                private juce::Timer
     {
     public:
-        TransportBar (audio::Transport&, te::Edit&, NoteInput&, arrangement::ArrangementModel&);
+        TransportBar (audio::Transport&, te::Edit&, NoteInput&, arrangement::ArrangementModel&, audio::automation::Writer&);
         ~TransportBar() override;
 
         void resized() override;
@@ -40,6 +41,7 @@ namespace harmonia::ui
         IconButton& getStopButton() noexcept            { return stopButton; }
         IconButton& getRecordButton() noexcept          { return recordButton; }
         IconButton& getClickButton() noexcept           { return clickButton; }
+        juce::TextButton& getWriteButton() noexcept     { return writeButton; }
         PositionDisplay& getPositionDisplay() noexcept  { return positionDisplay; }
 
         DragNumber& getTempoBox() noexcept              { return tempoBox; }
@@ -55,11 +57,12 @@ namespace harmonia::ui
         te::Edit& edit;
         NoteInput& noteInput;
         arrangement::ArrangementModel& arrangementModel;
+        audio::automation::Writer& automationWriter;
 
         IconButton toStartButton { "To start", icons::toStart() }, stopButton { "Stop", icons::stop() },
                    playButton { "Play", icons::play() }, recordButton { "Record", icons::record() },
                    clickButton { "Metronome", icons::metronome() };
-        juce::TextButton countInButton { "Count-in" }, modeButton, keysButton;
+        juce::TextButton writeButton { "Write" }, countInButton { "Count-in" }, modeButton, keysButton;
         PositionDisplay positionDisplay;
         juce::ComboBox quantizeBox;
         DragNumber tempoBox;

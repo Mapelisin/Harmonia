@@ -113,7 +113,36 @@ namespace harmonia::ui
             menu.addItem (makeItem ("Deselect", "Ctrl+D", selected, on (main, [] (MainComponent& m) { m.getPianoRollModel().deselectAll(); })));
         }
 
+        menu.addSeparator();
+        addMidiLearnItems (menu);
         return menu;
+    }
+
+    void MainMenu::addMidiLearnItems (juce::PopupMenu& menu)
+    {
+        namespace learn = audio::midi_learn;
+        auto& edit = main.getArrangementModel().getEdit();
+
+        menu.addItem (makeItem ("MIDI Learn", "Ctrl+Shift+L", true, on (main, [] (MainComponent& m) { m.toggleMidiLearn(); }),
+                                main.getMidiControls().isLearning()));
+
+        // What moves what, each with a way to forget it.
+        juce::PopupMenu controls;
+        const auto mappings = learn::getAll (edit);
+
+        for (const auto& mapping : mappings)
+        {
+            controls.addItem (makeItem ("Forget: " + mapping.control.describe() + " -> " + learn::describe (*mapping.parameter), {}, true,
+                                        on (main, [parameter = mapping.parameter] (MainComponent&) { learn::forget (*parameter); })));
+        }
+
+        if (mappings.empty())
+            controls.addItem ("None yet: Edit > MIDI Learn, or right-click a knob or fader", false, false, nullptr);
+        else
+            controls.addItem (makeItem ("Forget them all", {}, true,
+                                        on (main, [] (MainComponent& m) { learn::forgetAll (m.getArrangementModel().getEdit()); })));
+
+        menu.addSubMenu ("MIDI controls of this song", controls);
     }
 
     //==============================================================================
@@ -190,6 +219,8 @@ namespace harmonia::ui
             auto& input = m.getNoteInput();
             input.setRecordArmed (! input.isRecordArmed());
         }), noteInput.isRecordArmed()));
+        menu.addItem (makeItem ("Write automation", "Ctrl+Shift+A", true, on (main, [] (MainComponent& m) { m.toggleAutomationWriting(); }),
+                                main.getAutomationWriter().isOn()));
         menu.addSeparator();
         menu.addItem (makeItem ("Play the song", "L", true, on (main, [] (MainComponent& m) { m.setPlayMode (arrangement::PlayMode::song); }), song));
         menu.addItem (makeItem ("Play the open clip in a loop", "L", true,

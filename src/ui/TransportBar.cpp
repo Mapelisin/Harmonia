@@ -3,8 +3,9 @@
 
 namespace harmonia::ui
 {
-    TransportBar::TransportBar (audio::Transport& t, te::Edit& e, NoteInput& n, arrangement::ArrangementModel& a)
-        : transport (t), edit (e), noteInput (n), arrangementModel (a)
+    TransportBar::TransportBar (audio::Transport& t, te::Edit& e, NoteInput& n, arrangement::ArrangementModel& a,
+                                audio::automation::Writer& w)
+        : transport (t), edit (e), noteInput (n), arrangementModel (a), automationWriter (w)
     {
         toStartButton.setTooltip ("Back to the start (Home)");
         toStartButton.onClick = [this]
@@ -36,6 +37,15 @@ namespace harmonia::ui
         recordButton.setTooltip ("Record (R): notes played while the song plays go into the clip open in the piano roll,\n"
                                  "and armed audio tracks record their input (straight on from where the song is)");
         recordButton.onClick = [this] { noteInput.setRecordArmed (! noteInput.isRecordArmed()); };
+
+        writeButton.setTooltip ("Write automation (Ctrl+Shift+A): while the song plays, the knobs and faders of tracks you move\n"
+                                "(with the mouse or a MIDI control) are written into their automation lines.\n"
+                                "Let go, and the line goes on as it was.");
+        writeButton.onClick = [this]
+        {
+            automationWriter.setOn (! automationWriter.isOn());
+            refresh();
+        };
 
         clickButton.setTooltip ("Metronome (Ctrl+M)");
         clickButton.onClick = [this]
@@ -97,7 +107,7 @@ namespace harmonia::ui
         recordButton.setIconColour (theme::colour::record);
         recordButton.setOnColour (theme::colour::record.withAlpha (0.45f));
 
-        for (auto* c : std::initializer_list<juce::Component*> { &toStartButton, &stopButton, &playButton, &recordButton,
+        for (auto* c : std::initializer_list<juce::Component*> { &toStartButton, &stopButton, &playButton, &recordButton, &writeButton,
                                                                  &positionDisplay, &tempoBox, &timeSigButton, &tapButton,
                                                                  &clickButton, &countInButton, &modeButton,
                                                                  &keysButton, &quantizeBox })
@@ -118,12 +128,12 @@ namespace harmonia::ui
     namespace
     {
         constexpr int iconButtonWidth = 32, iconButtonHeight = 28, gap = 4, groupGap = 16;
-        constexpr int positionWidth = 196, positionHeight = 32, quantizeWidth = 150;
+        constexpr int positionWidth = 196, positionHeight = 32, quantizeWidth = 150, writeWidth = 50;
     }
 
     int TransportBar::getPreferredWidth()
     {
-        return 4 * (iconButtonWidth + gap) + groupGap          // to start, stop, play, record
+        return 4 * (iconButtonWidth + gap) + writeWidth + groupGap   // to start, stop, play, record, write
              + positionWidth + groupGap
              + 78 + gap + 40 + gap + 40 + groupGap              // tempo, time signature, tap
              + iconButtonWidth + gap + 76 + gap + 54 + groupGap // metronome, count-in, clip / song
@@ -142,7 +152,8 @@ namespace harmonia::ui
         place (toStartButton, iconButtonWidth, iconButtonHeight);
         place (stopButton, iconButtonWidth, iconButtonHeight);
         place (playButton, iconButtonWidth, iconButtonHeight);
-        place (recordButton, iconButtonWidth, iconButtonHeight, groupGap);
+        place (recordButton, iconButtonWidth, iconButtonHeight);
+        place (writeButton, writeWidth, theme::size::buttonHeight, groupGap);
         place (positionDisplay, positionWidth, positionHeight, groupGap);
         place (tempoBox, 78);
         place (timeSigButton, 40);
@@ -243,6 +254,10 @@ namespace harmonia::ui
         recordButton.setIconColour (recording ? juce::Colours::white : theme::colour::record);
 
         clickButton.setToggleState (edit.clickTrackEnabled.get(), juce::dontSendNotification);
+
+        const auto writing = automationWriter.isOn();
+        writeButton.setColour (juce::TextButton::buttonColourId, writing ? theme::colour::record.withAlpha (0.55f) : theme::colour::surfaceRaised);
+        writeButton.setColour (juce::TextButton::textColourOffId, writing ? juce::Colours::white : theme::colour::textSecondary);
 
         const auto countIn = transport.getCountIn();
         countInButton.setButtonText (countIn == audio::Transport::CountIn::twoBars ? "Count 2 bars"

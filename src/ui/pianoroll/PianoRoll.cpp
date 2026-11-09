@@ -273,10 +273,10 @@ namespace harmonia::ui::pianoroll
 
             switch (letter)
             {
-                case 'L': model.legato(); return true;
+                case 'L': if (mods.isShiftDown()) return false; model.legato(); return true;
                 case 'U': model.chop(); return true;
                 case 'G': model.glue(); return true;
-                case 'A': model.selectAll(); return true;
+                case 'A': if (mods.isShiftDown()) return false; model.selectAll(); return true;
                 case 'D': model.deselectAll(); return true;
                 case 'C': model.copy(); return true;
                 case 'X': model.cut(); return true;

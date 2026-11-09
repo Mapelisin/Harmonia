@@ -98,6 +98,11 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   (хранит Tracktion); плагины в своих процессах вкл/выкл — `Session::setPluginSandboxOn` (в тестах включено на
   старте). Скан плагинов — один на программу (`PluginScanner::startScan` вернёт false).
 - Эффекты — через `audio::effects` (порядок в списке плагинов: инструмент, эффекты, громкость, индикатор).
+- MIDI Learn — только через `audio::midi_learn` (привязки в песне, с undo; окно держит один `Controller`,
+  остальные находят его `Controller::find`). Запись автоматизации вкл/выкл — `audio::automation::Writer`.
+  Ползунок, который двигает параметр мышью, берёт его `automation::beginTouch` / `endTouch` (или `Touch`),
+  не `parameterChangeGestureBegin` напрямую: мышь и MIDI-ручка могут держать параметр одновременно.
+  Меню ПКМ ползунка — `ui::parameter_menu`, сам ползунок — `ui::MenuSlider`.
 - Пресеты — только через `audio::presets` (меню — `ui::preset_menu`, папка в тестах — своя временная). Новый
   встроенный плагин должен уметь `restorePluginStateFromValueTree` (иначе jassert); настройки VST грузятся
   своим действием undo, не `restorePluginStateFromValueTree` напрямую.

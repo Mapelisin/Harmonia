@@ -1,4 +1,5 @@
 #include "audio/PluginControls.h"
+#include "audio/AutomationWriter.h"
 
 namespace harmonia::audio
 {
@@ -147,12 +148,12 @@ namespace harmonia::audio
         plugin->edit.getUndoManager().beginNewTransaction ("Change " + getName());
 
         if (parameter != nullptr)
-            parameter->parameterChangeGestureBegin();
+            automation::beginTouch (*parameter);
     }
 
     void PluginControl::endChange()
     {
         if (parameter != nullptr)
-            parameter->parameterChangeGestureEnd();
+            automation::endTouch (*parameter);
     }
 }

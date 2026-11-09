@@ -6,7 +6,8 @@ namespace harmonia::ui
 {
     /** Harmonia's own window content for a plugin without an editor: a bar with its presets,
         then one row per setting (name, slider or choice, value). A slider drag is one undo step;
-        double-click resets. Follows changes made elsewhere (undo, automation, a preset). */
+        double-click resets; right-click: MIDI Learn. Follows changes made elsewhere (undo,
+        automation, a preset, a MIDI control). */
     class ParameterPanel final : public juce::Component,
                                  private juce::Timer
     {
@@ -21,6 +22,12 @@ namespace harmonia::ui
         int getIdealHeight() const;
 
         int getNumRows() const noexcept         { return rows.size(); }
+
+        /** The row's "CC 21" / "Learn..." mark (MIDI Learn), as last refreshed. */
+        juce::String getBadge (int row) const;
+
+        /** Shows each row's current value and mark again (the window does it 10 times a second). */
+        void refresh();
 
         juce::TextButton& getPresetsButton() noexcept   { return presetsButton; }
         const juce::Label& getMessage() const noexcept  { return message; }

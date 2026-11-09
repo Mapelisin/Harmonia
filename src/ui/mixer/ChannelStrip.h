@@ -1,6 +1,8 @@
 #pragma once
 
+#include "audio/AutomationWriter.h"
 #include "audio/Effects.h"
+#include "ui/ParameterMenu.h"
 #include "ui/arrangement/ArrangementModel.h"
 #include "ui/mixer/LevelMeter.h"
 
@@ -91,7 +93,8 @@ namespace harmonia::ui::mixer
         juce::Component sendList;
         juce::OwnedArray<Send> sends;
         int numSendRows = 0;   // the same on every strip, so the faders line up
-        juce::Slider pan, volume;
+        MenuSlider pan, volume;
+        audio::automation::Touch panTouch, volumeTouch;     // written while automation is written
         juce::Label panText, volumeText;
         LevelMeter meter;
         juce::TextButton mute { "M" }, solo { "S" };
@@ -108,6 +111,8 @@ namespace harmonia::ui::mixer
         void askToRenameBus();
         void refreshOutput();
         void showAddMenu();
+        void showParameterMenu (te::AutomatableParameter*, juce::Component& target);
+        juce::String withControl (const juce::String& tooltip, te::AutomatableParameter*) const;
         void tell (const juce::String&, bool isProblem);
         juce::Colour getColour() const;
 

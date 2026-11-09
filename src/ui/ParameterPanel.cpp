@@ -1,5 +1,6 @@
 #include "ui/ParameterPanel.h"
 #include "audio/Presets.h"
+#include "ui/ParameterMenu.h"
 #include "ui/PresetMenu.h"
 #include "ui/Theme.h"
 
@@ -7,7 +8,7 @@ namespace harmonia::ui
 {
     namespace
     {
-        constexpr int nameWidth = 150, valueWidth = 90, margin = 10;
+        constexpr int nameWidth = 150, valueWidth = 90, badgeWidth = 52, margin = 10;
     }
 
     //==============================================================================
@@ -25,6 +26,16 @@ namespace harmonia::ui
             value.setColour (juce::Label::textColourId, theme::colour::textSecondary);
             value.setFont (juce::FontOptions (theme::size::smallFontSize));
             value.setJustificationType (juce::Justification::centredRight);
+
+            // Which MIDI control moves it.
+            badge.setColour (juce::Label::textColourId, theme::colour::accent);
+            badge.setFont (juce::FontOptions (theme::size::smallFontSize));
+            badge.setJustificationType (juce::Justification::centredRight);
+
+            for (auto* label : { &name, &value, &badge })
+                label->setInterceptsMouseClicks (false, false);     // a right-click on the row: its menu
+
+            slider.onPopupMenu = [this] { showMenu(); };
 
             if (! control.getChoices().isEmpty())
             {
@@ -72,8 +83,17 @@ namespace harmonia::ui
 
             addAndMakeVisible (name);
             addAndMakeVisible (value);
+            addAndMakeVisible (badge);
             refresh();
         }
+
+        void mouseDown (const juce::MouseEvent& e) override
+        {
+            if (e.mods.isPopupMenu())
+                showMenu();
+        }
+
+        const juce::Label& getBadge() const noexcept    { return badge; }
 
         void refresh()
         {
@@ -82,6 +102,8 @@ namespace harmonia::ui
             else if (! slider.isMouseButtonDown())
                 slider.setValue ((double) control.getRange().convertTo0to1 (control.getValue()), juce::dontSendNotification);
 
+            auto* parameter = control.getParameter();
+            badge.setText (parameter != nullptr ? parameter_menu::getBadge (*parameter) : juce::String(), juce::dontSendNotification);
             showValue();
         }
 
@@ -90,6 +112,7 @@ namespace harmonia::ui
             auto area = getLocalBounds().reduced (margin, 2);
             name.setBounds (area.removeFromLeft (nameWidth));
             value.setBounds (area.removeFromRight (valueWidth));
+            badge.setBounds (area.removeFromRight (badgeWidth));
             area.removeFromRight (6);
             slider.setBounds (area);
             choice.setBounds (area.withSizeKeepingCentre (std::min (area.getWidth(), 160), area.getHeight()));
@@ -97,9 +120,15 @@ namespace harmonia::ui
 
     private:
         audio::PluginControl control;
-        juce::Label name, value;
-        juce::Slider slider;
+        juce::Label name, value, badge;
+        MenuSlider slider;
         juce::ComboBox choice;
+
+        void showMenu()
+        {
+            parameter_menu::make (control.getParameter(), "No MIDI Learn: this setting isn't a knob a control can move")
+                .showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this));
+        }
 
         void showValue()
         {
@@ -183,9 +212,19 @@ namespace harmonia::ui
             rows[i]->setBounds (0, margin + i * rowHeight, width, rowHeight);
     }
 
-    void ParameterPanel::timerCallback()
+    juce::String ParameterPanel::getBadge (int row) const
+    {
+        return juce::isPositiveAndBelow (row, rows.size()) ? rows[row]->getBadge().getText() : juce::String();
+    }
+
+    void ParameterPanel::refresh()
     {
         for (auto* row : rows)
             row->refresh();
+    }
+
+    void ParameterPanel::timerCallback()
+    {
+        refresh();
     }
 }
