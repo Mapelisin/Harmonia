@@ -118,6 +118,9 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Исправления Tracktion — патчи в `external/patches/tracktion_engine` (решение 21), их накладывает настройка CMake.
   Правишь движок — потом `git -C external/tracktion_engine diff > <патч>`; меняешь готовый патч — сначала
   `git -C external/tracktion_engine checkout -- .`. В `git status` подмодуль с патчем не виден (`ignore = dirty`).
+- Повтор аудиоклипа по кругу и кроссфейды на наложении — через `core::audio_clips` (`setLooping`,
+  `setCrossfades`); `core::clips::isLooping` — только про MIDI-клипы. Где клип рисуется или пересчитывается
+  из долей в секунды файла — учитывать петлю (`getLoopFileSeconds`, `getLoopSongStartBeat`).
 - Растяжение и высота аудиоклипа — только через `core::audio_tempo`. Каждый новый аудиоклип и каждый клип
   открытого проекта — через `core::audio_clips::prepareForPlayback`: иначе движок готовит копии файла в фоне
   (растянутую, или WAV для FLAC/Ogg/MP3), а экспорт ждёт их вечно. Обычный клип играет путём движка (без него

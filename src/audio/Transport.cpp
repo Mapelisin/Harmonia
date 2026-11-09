@@ -1,4 +1,5 @@
 #include "audio/Transport.h"
+#include "core/AudioClips.h"
 #include "core/Takes.h"
 
 namespace harmonia::audio
@@ -70,6 +71,12 @@ namespace harmonia::audio
         {
             if (recordingTakes)
                 core::takes::adoptRecorded (edit);
+
+            // What was recorded plays the way every audio clip does (crossfades where they overlap).
+            for (auto* track : te::getAudioTracks (edit))
+                for (auto* clip : track->getClips())
+                    if (auto* audioClip = dynamic_cast<te::AudioClipBase*> (clip))
+                        core::audio_clips::prepareForPlayback (*audioClip);
 
             recordingTakes = false;
             transport().looping = loopWanted;

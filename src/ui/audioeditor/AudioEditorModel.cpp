@@ -1,4 +1,5 @@
 #include "ui/audioeditor/AudioEditorModel.h"
+#include "core/AudioClips.h"
 #include "core/AudioTempo.h"
 
 namespace harmonia::ui::audioeditor
@@ -40,6 +41,10 @@ namespace harmonia::ui::audioeditor
         if (clip == nullptr)
             return {};
 
+        // A looping clip: the part of the file that repeats.
+        if (const auto loop = core::audio_clips::getLoopFileSeconds (*clip); ! loop.isEmpty())
+            return loop;
+
         return { beatToFileSeconds (clips::getStartBeat (*clip)), beatToFileSeconds (clips::getEndBeat (*clip)) };
     }
 
@@ -62,6 +67,13 @@ namespace harmonia::ui::audioeditor
         if (clip == nullptr)
             return 0.0;
 
+        // A looping clip: as its first time round lies in the song.
+        if (const auto loop = core::audio_clips::getLoopFileSeconds (*clip); ! loop.isEmpty())
+        {
+            const auto rounds = (beat - core::audio_clips::getLoopSongStartBeat (*clip)) / core::audio_clips::getLoopLengthBeats (*clip);
+            return loop.getStart() + rounds * loop.getLength();
+        }
+
         // As the arrangement draws it: song time from where the file would begin, at the clip's speed.
         const auto songTime = clip->edit.tempoSequence.toTime (te::BeatPosition::fromBeats (beat));
         return (songTime - clip->getPosition().getStartOfSource()).inSeconds() * audio_tempo::getPlaybackSpeed (*clip);
@@ -73,6 +85,10 @@ namespace harmonia::ui::audioeditor
 
         if (clip == nullptr)
             return 0.0;
+
+        if (const auto loop = core::audio_clips::getLoopFileSeconds (*clip); ! loop.isEmpty())
+            return core::audio_clips::getLoopSongStartBeat (*clip)
+                 + (seconds - loop.getStart()) / loop.getLength() * core::audio_clips::getLoopLengthBeats (*clip);
 
         const auto speed = std::max (1.0e-6, audio_tempo::getPlaybackSpeed (*clip));
         const auto songTime = clip->getPosition().getStartOfSource() + te::TimeDuration::fromSeconds (seconds / speed);

@@ -1,5 +1,6 @@
 #include "ui/arrangement/ClipArea.h"
 #include "ui/TrackColours.h"
+#include "core/AudioClips.h"
 #include "core/AudioTempo.h"
 #include "core/Clips.h"
 #include "ui/Theme.h"
@@ -16,6 +17,12 @@ namespace harmonia::ui::arrangement
 
         /** After a sound clip's name, what it does to its file: " · 95 BPM" when it follows the
             song's tempo, " · +3 st" when it is higher. */
+        bool isLoopingAudio (const te::Clip& clip)
+        {
+            const auto* audio = dynamic_cast<const te::AudioClipBase*> (&clip);
+            return audio != nullptr && core::audio_clips::isLooping (*audio);
+        }
+
         juce::String getAudioTag (const te::Clip& clip)
         {
             const auto* audio = dynamic_cast<const te::AudioClipBase*> (&clip);
@@ -204,7 +211,7 @@ namespace harmonia::ui::arrangement
             }
 
             const auto name = (d.linked ? juce::String::fromUTF8 ("\xe2\x88\x9e ") : juce::String())
-                            + (core::clips::isLooping (*d.clip) ? juce::String::fromUTF8 ("\xe2\x86\xbb ") : juce::String())
+                            + (core::clips::isLooping (*d.clip) || isLoopingAudio (*d.clip) ? juce::String::fromUTF8 ("\xe2\x86\xbb ") : juce::String())
                             + d.clip->getName() + getAudioTag (*d.clip);
             g.setColour (colours::clipText);
             g.setFont (juce::FontOptions (theme::size::smallFontSize));
@@ -333,6 +340,48 @@ namespace harmonia::ui::arrangement
 
         auto& thumbnail = getWaveform (clip);
         g.setColour (colour.brighter (0.55f));
+
+        // A looping clip: its part of the file again each time round, a line where each begins.
+        const auto loopBeats = core::audio_clips::getLoopLengthBeats (clip);
+        const auto loopFile = core::audio_clips::getLoopFileSeconds (clip);
+
+        if (loopBeats > 0.0 && ! loopFile.isEmpty())
+        {
+            const auto firstStart = core::audio_clips::getLoopSongStartBeat (clip);
+            const auto firstRound = std::max (0.0, std::floor ((view.xToBeat ((float) visible.getX()) - firstStart) / loopBeats));
+            const auto seams = view.beatToX (loopBeats) - view.beatToX (0.0) >= 4.0f;
+
+            for (auto round = firstRound; ; round += 1.0)
+            {
+                const auto x0 = view.beatToX (firstStart + round * loopBeats), x1 = view.beatToX (firstStart + (round + 1.0) * loopBeats);
+
+                if (x0 >= (float) visible.getRight() || x1 - x0 < 1.0e-3f)
+                    break;
+
+                const auto part = visible.toFloat().getIntersection ({ x0, (float) visible.getY(), x1 - x0, (float) visible.getHeight() })
+                                         .getSmallestIntegerContainer().getIntersection (visible);
+
+                if (part.isEmpty())
+                    continue;
+
+                const auto secondsAt = [&] (int x)
+                {
+                    return te::TimePosition::fromSeconds (loopFile.getStart() + loopFile.getLength() * (double) ((float) x - x0) / (double) (x1 - x0));
+                };
+
+                thumbnail.drawChannels (g, part, { secondsAt (part.getX()), secondsAt (part.getRight()) }, clip.getGain());
+
+                if (seams && round > 0.0 && x0 > body.getX() + 1.0f)
+                {
+                    g.setColour (colour.brighter (0.4f).withAlpha (0.6f));
+                    g.fillRect (juce::Rectangle<float> (x0, body.getY(), 1.0f, body.getHeight()));
+                    g.setColour (colour.brighter (0.55f));
+                }
+            }
+
+            return;
+        }
+
         thumbnail.drawChannels (g, visible, { fileTimeAt (visible.getX()), fileTimeAt (visible.getRight()) },
                                 clip.getGain());
     }

@@ -43,6 +43,7 @@ namespace harmonia::ui
                 { "Drag a clip", "Move it (to another track too); Alt: without the grid" },
                 { "Shift+drag / Ctrl+drag", "A linked copy / an independent copy" },
                 { "Drag a clip's edge", "Hide or show its beginning or end (a looping clip repeats)" },
+                { "Audio clip over another", "They crossfade over the overlap (the clip's menu turns that off); its menu also loops it" },
                 { "Right button", "Delete the clips under the mouse" },
                 { "Double-click empty space", "A new one-bar clip" },
                 { "Clip's corner mark", "Its menu: rename, colour, loop, copies, split; sounds: reverse, normalize..." },

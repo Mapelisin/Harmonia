@@ -4,6 +4,8 @@ namespace harmonia::core::audio_clips
 {
     namespace
     {
+        const juce::Identifier crossfadesOffId ("hNoCrossfades");      // on an audio clip's node
+
         /** FLAC, Ogg, MP3...: files the engine can't read straight from the disk while it plays. */
         bool isCompressed (const te::AudioFile& file)
         {
@@ -76,6 +78,13 @@ namespace harmonia::core::audio_clips
         // Setting a value a clip already has changes nothing (and adds nothing to undo).
         clip.setAutoPitch (false);
 
+        // Crossfades with the clips it overlaps, unless turned off for it.
+        if (! clip.getAutoCrossfade() && ! clip.state.hasProperty (crossfadesOffId))
+        {
+            clip.setAutoCrossfade (true);
+            clip.updateAutoCrossfadesAsync (true);
+        }
+
         if (clip.getAutoTempo() || std::abs (clip.getPitchChange()) > 0.001f)
         {
             clip.setUsesProxy (false);
@@ -89,5 +98,113 @@ namespace harmonia::core::audio_clips
             clip.setUsesProxy (true);
             makeDecodedCopy (clip);
         }
+    }
+
+    bool isLooping (const te::AudioClipBase& clip)
+    {
+        return clip.isLooping();
+    }
+
+    void setLooping (te::AudioClipBase& clip, bool shouldLoop)
+    {
+        if (shouldLoop == clip.isLooping())
+            return;
+
+        if (! shouldLoop)
+        {
+            clip.disableLooping();
+            prepareForPlayback (clip);
+            return;
+        }
+
+        const auto position = clip.getPosition();
+        const auto offset = position.getOffset();
+
+        if (clip.getAutoTempo())
+        {
+            // Beats of the loop, counted at the tempo where the clip starts (as the engine does).
+            const auto beatsPerSecond = clip.edit.tempoSequence.getBeatsPerSecondAt (position.getStart());
+            const auto start = te::BeatPosition::fromBeats (offset.inSeconds() * beatsPerSecond);
+            clip.setLoopRangeBeats ({ start, start + (clip.getEndBeat() - clip.getStartBeat()) });
+        }
+        else
+        {
+            const auto length = std::min (clip.getSourceLength() / clip.getSpeedRatio() - offset, position.getLength());
+
+            if (length <= te::TimeDuration())
+                return;
+
+            clip.setLoopRange ({ te::toPosition (offset), te::toPosition (offset) + length });
+        }
+
+        // The clip starts at the loop's start.
+        clip.setOffset ({});
+        prepareForPlayback (clip);
+    }
+
+    double getLoopLengthBeats (const te::AudioClipBase& clip)
+    {
+        if (! clip.isLooping())
+            return 0.0;
+
+        if (clip.beatBasedLooping())
+            return clip.getLoopLengthBeats().inBeats();
+
+        const auto& tempo = clip.edit.tempoSequence;
+        const auto start = clip.getPosition().getStart();
+        return (tempo.toBeats (start + clip.getLoopLength()) - tempo.toBeats (start)).inBeats();
+    }
+
+    double getLoopSongStartBeat (const te::AudioClipBase& clip)
+    {
+        const auto& tempo = clip.edit.tempoSequence;
+        const auto position = clip.getPosition();
+
+        // A tempo-following clip's offset is counted in beats at the tempo where it starts.
+        if (clip.beatBasedLooping())
+            return tempo.toBeats (position.getStart()).inBeats()
+                 - position.getOffset().inSeconds() * tempo.getBeatsPerSecondAt (position.getStart());
+
+        return tempo.toBeats (position.getStart() - position.getOffset()).inBeats();
+    }
+
+    juce::Range<double> getLoopFileSeconds (const te::AudioClipBase& clip)
+    {
+        if (! clip.isLooping())
+            return {};
+
+        if (clip.beatBasedLooping())
+        {
+            const auto bpm = clip.getLoopInfo().getBpm (clip.getAudioFile().getInfo());
+
+            if (bpm <= 0.0)
+                return {};
+
+            const auto start = clip.getLoopStartBeats().inBeats() * 60.0 / bpm;
+            return { start, start + clip.getLoopLengthBeats().inBeats() * 60.0 / bpm };
+        }
+
+        const auto start = clip.getLoopStart().inSeconds();
+        return { start, start + clip.getLoopLength().inSeconds() };
+    }
+
+    bool hasCrossfades (const te::AudioClipBase& clip)
+    {
+        return clip.getAutoCrossfade();
+    }
+
+    void setCrossfades (te::AudioClipBase& clip, bool shouldCrossfade)
+    {
+        if (clip.getAutoCrossfade() == shouldCrossfade)
+            return;
+
+        // Remembered: clips without it get crossfades when a song is opened.
+        if (shouldCrossfade)
+            clip.state.removeProperty (crossfadesOffId, &clip.edit.getUndoManager());
+        else
+            clip.state.setProperty (crossfadesOffId, true, &clip.edit.getUndoManager());
+
+        clip.setAutoCrossfade (shouldCrossfade);
+        clip.updateAutoCrossfadesAsync (true);
     }
 }

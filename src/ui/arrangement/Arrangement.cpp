@@ -8,6 +8,7 @@
 #include "core/Tracks.h"
 #include "ui/ComputerKeyboard.h"
 #include "ui/FileDrag.h"
+#include "core/AudioClips.h"
 #include "core/Tempo.h"
 #include "ui/TakeMenu.h"
 #include "ui/Theme.h"
@@ -595,6 +596,19 @@ namespace harmonia::ui::arrangement
                           withAudioClip (reversed ? "Play forwards" : "Reverse", [reversed] (te::AudioClipBase& a)
                           {
                               core::clips::setReversed (a, ! reversed);
+                          }));
+            const auto looping = core::audio_clips::isLooping (*audio);
+            menu.addItem ("Loop (repeats when made longer)", true, looping,
+                          withAudioClip (looping ? "Play once" : "Loop", [looping] (te::AudioClipBase& a)
+                          {
+                              core::audio_clips::setLooping (a, ! looping);
+                          }));
+
+            const auto crossfades = core::audio_clips::hasCrossfades (*audio);
+            menu.addItem ("Crossfade where it overlaps another clip", true, crossfades,
+                          withAudioClip (crossfades ? "No crossfades" : "Crossfades", [crossfades] (te::AudioClipBase& a)
+                          {
+                              core::audio_clips::setCrossfades (a, ! crossfades);
                           }));
             menu.addSeparator();
             addTempoAndPitchItems (menu, *audio);
