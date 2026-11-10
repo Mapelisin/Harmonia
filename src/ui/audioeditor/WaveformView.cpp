@@ -193,6 +193,13 @@ namespace harmonia::ui::audioeditor
         paintWave (g, *clip, body);
         paintEdges (g, body);
 
+        // The beat being moved: its line, bright.
+        if (const auto beat = gestures.getMovedBeat())
+        {
+            g.setColour (theme::arrangement::clipOpen);
+            g.fillRect (std::round (view.secondsToX (model.beatToFileSeconds (*beat))), 0.0f, 1.0f, bounds.getHeight());
+        }
+
         if (playheadX.has_value())
         {
             g.setColour (colours::playhead);
@@ -224,6 +231,21 @@ namespace harmonia::ui::audioeditor
                             juce::Justification::centredLeft, false);
             }
         });
+
+        // Where the sound's tempo changes (a beat found off the others, or put by hand): a mark.
+        g.setColour (theme::arrangement::clipOpen.withAlpha (0.85f));
+
+        for (const auto seconds : model.getTempoChangeSeconds())
+        {
+            const auto x = view.secondsToX (seconds);
+
+            if (x < ruler.getX() - 4.0f || x > ruler.getRight() + 4.0f)
+                continue;
+
+            juce::Path mark;
+            mark.addTriangle (x - 3.5f, ruler.getBottom() - 7.0f, x + 3.5f, ruler.getBottom() - 7.0f, x, ruler.getBottom() - 1.0f);
+            g.fillPath (mark);
+        }
     }
 
     void WaveformView::paintWave (juce::Graphics& g, te::AudioClipBase& clip, juce::Rectangle<float> body)
@@ -353,12 +375,22 @@ namespace harmonia::ui::audioeditor
         playheadX = x;
     }
 
+    juce::String WaveformView::getTooltip()
+    {
+        if (getMouseXYRelative().y >= rulerHeight || ! model.canMoveBeats())
+            return {};
+
+        return "Drag a line: that beat of the song goes over another moment of the sound (near a hit, onto it; Alt: anywhere). "
+               "Double-click a line: back between its neighbours";
+    }
+
     //==============================================================================
     void WaveformView::resized()
     {
         const auto first = view.width <= 0.0f;
         view.width = (float) getWidth();
         gestures.setBody (getLocalBounds().toFloat().withTrimmedTop ((float) rulerHeight));
+        gestures.setRuler (getLocalBounds().toFloat().withHeight ((float) rulerHeight));
 
         if (first)
             showPlayedPart();

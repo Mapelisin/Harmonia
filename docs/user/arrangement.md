@@ -341,7 +341,21 @@ sound a little differently from beat to beat. It is the same one click on **Foll
 
 What stays as it was played is the feel inside a beat: a snare that is always a little late is still a
 little late. After a long break with nothing to hear (more than about four bars) the count can come out a
-sixteenth off; a single beat can't be moved by hand yet.
+sixteenth off: put it right by hand, as below.
+
+**A beat by hand.** If Harmonia heard a beat in the wrong place (one hit played late, a first beat taken
+wrong, the count off after a break), move that beat yourself. In the audio clip editor, with **Follow
+tempo** on, the ruler above the waveform shows the song's grid lying over the sound:
+- **drag a line of the ruler** to where the hit is in the waveform. Near a hit the line jumps onto it (the
+  readout says "on a hit"); with **Alt** it stays where the mouse is;
+- the lines either side stay where they are, and the clip stays in its place in the song: only the stretch
+  of sound between those lines is played a little faster or slower. Zoomed in, the lines are sixteenths
+  (you correct one hit); zoomed out, they are bars;
+- **double-click a line** to let that beat go back between its neighbours;
+- a small mark ▼ in the ruler shows every place where the sound's tempo changes: the beats Harmonia found
+  in uneven playing, and the ones you moved.
+
+Each move is one **Ctrl+Z**. A beat can't be put past its neighbour lines, nor very close to them.
 
 In the audio clip menu (▾):
 - **Follow the song tempo**: turn on or off. If you turn it off, the clip plays at its own speed again, from

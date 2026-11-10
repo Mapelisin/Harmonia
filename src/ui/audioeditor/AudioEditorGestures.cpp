@@ -45,8 +45,35 @@ namespace harmonia::ui::audioeditor
                                      view.secondsToX (model.getFadeOutStartSeconds()));
     }
 
+    std::optional<double> AudioEditorGestures::getBeatLineAt (juce::Point<float> position) const
+    {
+        if (! ruler.contains (position) || ! model.canMoveBeats())
+            return {};
+
+        // The lines the ruler draws: the nearest of them, if the mouse is on it.
+        const auto lineBeats = getSnapContext().lineBeats;
+
+        if (lineBeats <= 0.0)
+            return {};
+
+        const auto beat = std::round (model.fileSecondsToBeat (view.xToSeconds (position.x)) / lineBeats) * lineBeats;
+
+        if (std::abs (view.secondsToX (model.beatToFileSeconds (beat)) - position.x) > edgeGrabPixels)
+            return {};
+
+        return beat;
+    }
+
+    std::optional<double> AudioEditorGestures::getMovedBeat() const
+    {
+        return kind == Kind::beat ? std::optional<double> (grabbedBeat) : std::nullopt;
+    }
+
     AudioEditorGestures::Zone AudioEditorGestures::hitTest (juce::Point<float> position) const
     {
+        if (getBeatLineAt (position).has_value())
+            return Zone::beat;
+
         if (model.getClip() == nullptr || ! body.contains (position))
             return Zone::none;
 
@@ -102,6 +129,24 @@ namespace harmonia::ui::audioeditor
 
         const auto zone = hitTest (p.position);
 
+        if (const auto beat = getBeatLineAt (p.position))
+        {
+            // Double-click: the beat back between its neighbours.
+            if (p.clicks >= 2)
+            {
+                model.resetBeat (*beat);
+                return;
+            }
+
+            // The lines either side of it are what stays.
+            model.beginChange ("Move beat");
+            kind = Kind::beat;
+            grabbedBeat = *beat;
+            grabbedSpanBeats = getSnapContext().lineBeats;
+            isOnHit = false;
+            return;
+        }
+
         if (zone == Zone::fadeIn || zone == Zone::fadeOut || zone == Zone::gain)
         {
             // Double-click: back to none / 0 dB.
@@ -147,6 +192,7 @@ namespace harmonia::ui::audioeditor
             case Kind::fadeIn:
             case Kind::fadeOut:
             case Kind::gain:        if (dragged) dragHandle (p); break;
+            case Kind::beat:        if (dragged) dragBeat (p); break;
 
             case Kind::pan:
                 view.scrollByPixels (-(double) (p.position.x - lastPosition.x));
@@ -166,7 +212,8 @@ namespace harmonia::ui::audioeditor
 
     void AudioEditorGestures::up (const Pointer& p)
     {
-        if (kind == Kind::click && ! dragged && onPositionChosen != nullptr && model.getClip() != nullptr)
+        // (A beat line clicked and not dragged is a click like any other.)
+        if ((kind == Kind::click || kind == Kind::beat) && ! dragged && onPositionChosen != nullptr && model.getClip() != nullptr)
             onPositionChosen (std::max (0.0, model.fileSecondsToBeat (view.xToSeconds (p.position.x))));
 
         kind = Kind::none;
@@ -194,7 +241,8 @@ namespace harmonia::ui::audioeditor
             case Kind::trimStart:
             case Kind::trimEnd:
             case Kind::fadeIn:
-            case Kind::fadeOut:     return juce::MouseCursor::LeftRightResizeCursor;
+            case Kind::fadeOut:
+            case Kind::beat:        return juce::MouseCursor::LeftRightResizeCursor;
             case Kind::gain:        return juce::MouseCursor::UpDownResizeCursor;
             case Kind::pan:         return juce::MouseCursor::DraggingHandCursor;
             case Kind::click:
@@ -207,7 +255,8 @@ namespace harmonia::ui::audioeditor
             case Zone::startEdge:
             case Zone::endEdge:
             case Zone::fadeIn:
-            case Zone::fadeOut:     return juce::MouseCursor::LeftRightResizeCursor;
+            case Zone::fadeOut:
+            case Zone::beat:        return juce::MouseCursor::LeftRightResizeCursor;
             case Zone::gain:        return juce::MouseCursor::UpDownResizeCursor;
             case Zone::none:
             default:                return juce::MouseCursor::NormalCursor;
@@ -260,12 +309,44 @@ namespace harmonia::ui::audioeditor
             model.setFadeOutBeats (clips::getEndBeat (*clip) - beat);
     }
 
+    void AudioEditorGestures::dragBeat (const Pointer& p)
+    {
+        auto seconds = view.xToSeconds (p.position.x);
+        isOnHit = false;
+
+        // Onto the nearest hit of the sound, if the mouse is near one.
+        if (! p.mods.isAltDown())
+        {
+            const auto& hits = model.getHitSeconds();
+            const auto after = std::lower_bound (hits.begin(), hits.end(), seconds);
+            auto nearest = after;
+
+            if (after == hits.end() || (after != hits.begin() && seconds - *(after - 1) < *after - seconds))
+                nearest = after == hits.begin() ? hits.end() : after - 1;
+
+            if (nearest != hits.end() && std::abs (*nearest - seconds) * view.pixelsPerSecond <= hitSnapPixels)
+            {
+                seconds = *nearest;
+                isOnHit = true;
+            }
+        }
+
+        model.moveBeat (grabbedBeat, seconds, grabbedSpanBeats);
+    }
+
     std::optional<std::pair<juce::String, juce::Point<float>>> AudioEditorGestures::getReadout() const
     {
         auto* clip = model.getClip();
 
         if (clip == nullptr || ! dragged)
             return {};
+
+        if (kind == Kind::beat)
+        {
+            const auto text = describePosition (grabbedBeat, model.getArrangement().getBeatsPerBar())
+                            + (isOnHit ? juce::String (": on a hit") : ": at " + juce::String (model.beatToFileSeconds (grabbedBeat), 3) + " s");
+            return std::make_pair (text, juce::Point<float> (view.secondsToX (model.beatToFileSeconds (grabbedBeat)), body.getY() + 30.0f));
+        }
 
         if (kind == Kind::trimStart || kind == Kind::trimEnd)
         {

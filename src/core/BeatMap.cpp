@@ -127,6 +127,72 @@ namespace harmonia::core
         return BeatMap (std::move (scaledChanges));
     }
 
+    std::optional<BeatMap> BeatMap::withBeatAt (double beat, double seconds, double span) const
+    {
+        constexpr double same = 1.0e-9;
+
+        if (beat <= same || span <= same)
+            return std::nullopt;
+
+        const auto lower = std::max (0.0, beat - span), upper = beat + span;
+        const auto lowerSeconds = toSeconds (lower), upperSeconds = toSeconds (upper);
+
+        // Where it may be depends on its neighbours alone: however it is dragged, the tempo
+        // either side of it is never more than four times what an even one would be.
+        const auto between = upperSeconds - lowerSeconds;
+        const auto share = (beat - lower) / (upper - lower);
+        const auto at = std::clamp (seconds, lowerSeconds + 0.25 * share * between, upperSeconds - 0.25 * (1.0 - share) * between);
+
+        // The tempo in effect at a beat, as it was.
+        const auto tempoAt = [this] (double b)
+        {
+            auto next = std::upper_bound (changes->begin() + 1, changes->end(), b + same,
+                                          [] (double value, const Change& change) { return value < change.beat; });
+            return (next - 1)->bpm;
+        };
+
+        std::vector<Change> moved;
+
+        for (const auto& change : *changes)
+            if (change.beat < lower - same)
+                add (moved, change.beat, change.bpm);
+
+        add (moved, lower, 60.0 * (beat - lower) / (at - lowerSeconds));
+        add (moved, beat, 60.0 * (upper - beat) / (upperSeconds - at));
+        add (moved, upper, tempoAt (upper));
+
+        for (const auto& change : *changes)
+            if (change.beat > upper + same)
+                add (moved, change.beat, change.bpm);
+
+        return BeatMap (std::move (moved));
+    }
+
+    std::optional<BeatMap> BeatMap::withoutChangeAt (double beat) const
+    {
+        const auto found = std::find_if (changes->begin() + 1, changes->end(),
+                                         [beat] (const Change& change) { return std::abs (change.beat - beat) < 1.0e-6; });
+
+        if (found == changes->end())
+            return std::nullopt;
+
+        std::vector<Change> without;
+
+        for (auto change = changes->begin(); change != changes->end(); ++change)
+        {
+            if (change == found)
+                continue;
+
+            // The change before it takes the sound to the one after it (the last one just goes on).
+            if (change + 1 == found && found + 1 != changes->end())
+                add (without, change->beat, 60.0 * ((found + 1)->beat - change->beat) / ((found + 1)->seconds - change->seconds));
+            else
+                add (without, change->beat, change->bpm);
+        }
+
+        return BeatMap (std::move (without));
+    }
+
     BeatMap BeatMap::reversed (double fileSeconds) const
     {
         // What was the last stretch of the file is the first now; a change past the end of the

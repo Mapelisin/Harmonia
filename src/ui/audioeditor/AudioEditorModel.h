@@ -93,8 +93,35 @@ namespace harmonia::ui::audioeditor
         /** Can the clip follow the tempo (a plain sound file clip)? */
         bool canFollowTempo() const;
 
+        //==============================================================================
+        // Beats by hand: while the clip follows the tempo, a beat of the song can be put over
+        // another moment of the file (where the hit really is).
+
+        bool canMoveBeats() const;
+
+        /** Into the current undo step: the moment `fileSeconds` plays on `songBeat`; the beats
+            `spanBeats` either side stay as they are. False if nothing changed. */
+        bool moveBeat (double songBeat, double fileSeconds, double spanBeats);
+
+        /** One undo step: the beat goes back between its neighbours. False if the sound's tempo
+            doesn't change at that beat. */
+        bool resetBeat (double songBeat);
+
+        /** Where in the file the sound's tempo changes (seconds, in order): the beats found off
+            one tempo, and those put by hand. */
+        std::vector<double> getTempoChangeSeconds() const;
+
+        /** The hits of the clip's sound (seconds, in order), listened for once for each file: a
+            beat dragged near one goes onto it. */
+        const std::vector<double>& getHitSeconds();
+
     private:
         arrangement::ArrangementModel& arrangement;
+
+        // The hits last listened for, and of which file (as it was then).
+        std::vector<double> hitSeconds;
+        juce::File hitsFile;
+        juce::Time hitsFileTime;
 
         te::WaveAudioClip* getWaveClip() const;
     };

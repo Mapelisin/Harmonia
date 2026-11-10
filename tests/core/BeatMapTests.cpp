@@ -78,6 +78,71 @@ TEST_SUITE ("core: where the beats of a sound are")
         CHECK (twice.toSeconds (5.0) == doctest::Approx (1.15));
     }
 
+    TEST_CASE ("a beat put elsewhere by hand: its neighbours and all beyond them stay, the tempo either side of it gives")
+    {
+        // 120 BPM: a beat every half second. The fifth beat's hit is 40 ms late.
+        const BeatMap steady (120.0);
+        const auto moved = steady.withBeatAt (5.0, 2.54);
+        REQUIRE (moved.has_value());
+        CHECK_FALSE (moved->isSteady());
+        CHECK (moved->toSeconds (5.0) == doctest::Approx (2.54));
+
+        for (const auto beat : { 0.0, 1.0, 3.5, 4.0, 6.0, 6.5, 20.0 })
+        {
+            CAPTURE (beat);
+            CHECK (moved->toSeconds (beat) == doctest::Approx (steady.toSeconds (beat)));
+        }
+
+        // Evenly from the neighbours to it.
+        CHECK (moved->toSeconds (4.5) == doctest::Approx (2.27));
+        CHECK (moved->toSeconds (5.5) == doctest::Approx (2.77));
+        CHECK (moved->getChanges().size() == 4);       // from the start, from 4, from 5, from 6
+
+        // Not past a neighbour, nor nearer one than a quarter of the way it was.
+        CHECK (steady.withBeatAt (5.0, 9.0)->toSeconds (5.0) == doctest::Approx (2.875));
+        CHECK (steady.withBeatAt (5.0, 0.0)->toSeconds (5.0) == doctest::Approx (2.125));
+
+        // The neighbours can be nearer (the lines of a finer grid) or further (bars).
+        const auto fine = steady.withBeatAt (5.0, 2.52, 0.25);
+        REQUIRE (fine.has_value());
+        CHECK (fine->toSeconds (4.75) == doctest::Approx (2.375));
+        CHECK (fine->toSeconds (5.0) == doctest::Approx (2.52));
+        CHECK (fine->toSeconds (5.25) == doctest::Approx (2.625));
+
+        // Within a beat of the file's start, the start is the neighbour; the start itself stays.
+        const auto early = steady.withBeatAt (0.5, 0.3);
+        REQUIRE (early.has_value());
+        CHECK (early->toSeconds (0.0) == doctest::Approx (0.0));
+        CHECK (early->toSeconds (0.5) == doctest::Approx (0.3));
+        CHECK (early->toSeconds (1.5) == doctest::Approx (0.75));
+        CHECK_FALSE (steady.withBeatAt (0.0, 0.1).has_value());
+
+        // Moved again, it is where it is put last; the next beat moved, this one stays.
+        const auto again = moved->withBeatAt (5.0, 2.48);
+        REQUIRE (again.has_value());
+        CHECK (again->toSeconds (5.0) == doctest::Approx (2.48));
+        CHECK (again->toSeconds (4.0) == doctest::Approx (2.0));
+
+        const auto next = moved->withBeatAt (6.0, 3.05);
+        REQUIRE (next.has_value());
+        CHECK (next->toSeconds (5.0) == doctest::Approx (2.54));
+        CHECK (next->toSeconds (6.0) == doctest::Approx (3.05));
+        CHECK (next->toSeconds (7.0) == doctest::Approx (3.5));
+
+        // Let go, it is back between its neighbours: one tempo again. As text and back, the same.
+        const auto back = moved->withoutChangeAt (5.0);
+        REQUIRE (back.has_value());
+        CHECK (back->isSteady());
+        CHECK (back->toSeconds (5.0) == doctest::Approx (2.5));
+        CHECK_FALSE (steady.withoutChangeAt (5.0).has_value());
+        CHECK_FALSE (moved->withoutChangeAt (4.5).has_value());
+
+        const auto read = BeatMap::fromString (moved->toString());
+        REQUIRE (read.has_value());
+        CHECK (read->toSeconds (5.0) == doctest::Approx (2.54).epsilon (1.0e-6));
+        CHECK (read->toSeconds (9.0) == doctest::Approx (4.5).epsilon (1.0e-6));
+    }
+
     TEST_CASE ("played backwards, the beats are as far from the end as they were from the start")
     {
         const auto map = BeatMap::fromBeats ({ 0.25, 0.75, 1.15, 1.45 });

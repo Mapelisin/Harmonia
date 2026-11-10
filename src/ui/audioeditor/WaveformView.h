@@ -10,6 +10,7 @@ namespace harmonia::ui::audioeditor
         dimmed), its start and end lines, fades, gain, and the playhead. Mouse input goes to
         AudioEditorGestures. */
     class WaveformView final : public juce::Component,
+                               public juce::TooltipClient,
                                private juce::Timer
     {
     public:
@@ -34,6 +35,9 @@ namespace harmonia::ui::audioeditor
         /** What the editor shows instead of a waveform, if anything ("File missing: ..."), as of
             the last clipChanged. */
         const juce::String& getMessage() const noexcept     { return message; }
+
+        /** Over the ruler, while the clip's beats can be moved: how. */
+        juce::String getTooltip() override;
 
         void paint (juce::Graphics&) override;
         void resized() override;

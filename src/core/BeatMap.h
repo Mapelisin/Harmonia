@@ -52,6 +52,19 @@ namespace harmonia::core
         /** The map of the same sound played backwards, its file being `fileSeconds` long. */
         BeatMap reversed (double fileSeconds) const;
 
+        /** The same sound with one of its beats elsewhere in the file: `beat` at `seconds`. The
+            beats `span` before and after it stay where they are (before it: the file's start,
+            if that is nearer), and so does everything beyond them; from each of them to the beat
+            the tempo is what takes one to the other. The beat stays between them, no nearer
+            either than a quarter of where an even tempo from one to the other would have it:
+            `seconds` is brought within that. Nothing for a beat at or before the file's start. */
+        std::optional<BeatMap> withBeatAt (double beat, double seconds, double span = 1.0) const;
+
+        /** The same sound without the change of tempo at `beat` (a beat put elsewhere by hand,
+            or one found off the others): one tempo from the change before it to the one after
+            it. Nothing if the tempo doesn't change at that beat. */
+        std::optional<BeatMap> withoutChangeAt (double beat) const;
+
         /** The first at beat 0, the others in order. */
         const std::vector<Change>& getChanges() const noexcept      { return *changes; }
 

@@ -67,6 +67,14 @@ namespace harmonia::ui
                 { "Drag a track header", "Move the track up or down" },
                 { "Track header: right button > Folder", "Put neighbouring tracks into a folder; its button collapses it to one row with mute and solo for all" } } },
 
+            { "Audio clip editor (below, on an audio track)", {
+                { "Drag the start or end line", "Show more or less of the sound (Alt: without the grid)" },
+                { "Handles at the top of the sound", "Fade in, fade out (across), gain (up and down); double-click resets" },
+                { "Follow tempo", "Puts the sound on the song's grid: its tempo and beats are measured from the sound" },
+                { "Drag a line in the ruler (Follow tempo on)", "Put that beat on another moment of the sound: near a hit, onto it (Alt: anywhere)" },
+                { "Double-click a line in the ruler", "Let that beat go back between its neighbours" },
+                { "Click / wheel / Ctrl+wheel", "Playhead there / scroll / zoom" },
+            } },
             { "Piano roll: tools", {
                 { "P", "Draw: click for a note, drag to move, its right edge for the length" },
                 { "B", "Paint: drag to paint a row of notes" },

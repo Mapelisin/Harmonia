@@ -529,6 +529,10 @@ TEST_SUITE ("audio clip editor")
             CHECK (std::abs (editor.getModel().fileSecondsToBeat (hits[(size_t) n]) - (8.0 + n)) < 0.01);
         }
 
+        // Over the ruler the editor says how a beat is moved by hand.
+        CHECK (editor.getWaveform().getGestures().getBeatLineAt ({ editor.getWaveform().getView().secondsToX (hits[3]), 10.0f })
+                   .value_or (-1.0) == doctest::Approx (11.0));
+
         // Set HARMONIA_SNAPSHOT_DIR to look at the beats over the waveform.
         if (const auto dir = juce::SystemStats::getEnvironmentVariable ("HARMONIA_SNAPSHOT_DIR", {}); dir.isNotEmpty())
         {
@@ -560,6 +564,177 @@ TEST_SUITE ("audio clip editor")
         CHECK_FALSE (audio_tempo::followsTempo (*clip));
         CHECK (clip->getPosition().getOffset().inSeconds() == doctest::Approx (0.0));
         CHECK_FALSE (project->canUndo());
+    }
+
+    TEST_CASE ("beats by hand: a line dragged in the ruler puts that beat elsewhere in the sound; double-click lets it go")
+    {
+        // The tone of the fixture: 8 beats at 120 BPM, a beat every 50 pixels from x = 100.
+        EditorFixture f;
+        f.gestures.setRuler ({ 0.0f, 0.0f, 1000.0f, 20.0f });
+        auto* wave = dynamic_cast<te::WaveAudioClip*> (f.clip);
+        REQUIRE (wave != nullptr);
+        const juce::ModifierKeys alt (left | juce::ModifierKeys::altModifier);
+        const juce::Point<float> onBeat2 { 201.0f, 10.0f };
+
+        // At its own speed the sound has no beats to move: the ruler is a ruler.
+        CHECK_FALSE (f.model.canMoveBeats());
+        CHECK_FALSE (f.gestures.getBeatLineAt (onBeat2).has_value());
+        CHECK (f.gestures.hitTest (onBeat2) == AudioEditorGestures::Zone::none);
+
+        audio_tempo::setFollowsTempo (*wave, 120.0);
+        dispatch();
+        f.project->clearUndoHistory();
+        REQUIRE (f.model.canMoveBeats());
+        CHECK (f.model.getTempoChangeSeconds().empty());
+
+        // The lines of the ruler (here: sixteenths, 12.5 pixels apart) can be taken, in the ruler only.
+        CHECK (f.gestures.getBeatLineAt (onBeat2).value_or (-1.0) == doctest::Approx (2.0));
+        CHECK (f.gestures.getBeatLineAt ({ 214.0f, 10.0f }).value_or (-1.0) == doctest::Approx (2.25));
+        CHECK_FALSE (f.gestures.getBeatLineAt ({ 207.0f, 10.0f }).has_value());
+        CHECK_FALSE (f.gestures.getBeatLineAt ({ 201.0f, 60.0f }).has_value());
+        CHECK (f.gestures.hitTest (onBeat2) == AudioEditorGestures::Zone::beat);
+        CHECK (f.gestures.getCursorFor ({ onBeat2, juce::ModifierKeys() }) == juce::MouseCursor::LeftRightResizeCursor);
+
+        // Beat 2 dragged 5 pixels later (Alt: wherever the mouse is): it is over 1.05 s of the
+        // file now; the lines either side, the clip and the rest of the sound stay.
+        f.gestures.down ({ onBeat2, alt });
+        f.gestures.drag ({ { 203.0f, 10.0f }, alt });
+        f.gestures.drag ({ { 206.0f, 10.0f }, alt });
+        CHECK (f.gestures.getMovedBeat().value_or (-1.0) == doctest::Approx (2.0));
+        auto readout = f.gestures.getReadout();
+        REQUIRE (readout.has_value());
+        CHECK (readout->first == "bar 1, beat 3: at 1.060 s");
+        f.gestures.up ({ { 206.0f, 10.0f }, alt });
+        CHECK_FALSE (f.gestures.getMovedBeat().has_value());
+
+        CHECK (f.model.beatToFileSeconds (2.0) == doctest::Approx (1.06).epsilon (0.0005));
+        CHECK (f.model.beatToFileSeconds (1.75) == doctest::Approx (0.875).epsilon (0.0005));
+        CHECK (f.model.beatToFileSeconds (2.25) == doctest::Approx (1.125).epsilon (0.0005));
+        CHECK (f.model.beatToFileSeconds (6.0) == doctest::Approx (3.0).epsilon (0.0005));
+        CHECK (clips::getStartBeat (*f.clip) == doctest::Approx (0.0));
+        CHECK (clips::getEndBeat (*f.clip) == doctest::Approx (8.0).epsilon (0.0005));
+        CHECK (audio_tempo::followsBeatByBeat (*f.clip));
+        CHECK (f.project->getUndoDescription() == "Move beat");
+
+        // Marked in the ruler: where the tempo changes now.
+        const auto marks = f.model.getTempoChangeSeconds();
+        REQUIRE (marks.size() == 3);
+        CHECK (marks[1] == doctest::Approx (1.06).epsilon (0.0005));
+
+        // No further than three quarters of the way to the next line.
+        f.drag ({ 206.0f, 10.0f }, { 400.0f, 10.0f }, juce::ModifierKeys::altModifier);
+        CHECK (f.model.beatToFileSeconds (2.0) == doctest::Approx (1.125 - 0.25 * 0.125).epsilon (0.0005));
+
+        // One Ctrl+Z each.
+        f.project->undo();
+        CHECK (f.model.beatToFileSeconds (2.0) == doctest::Approx (1.06).epsilon (0.0005));
+
+        // Double-click its line: back between its neighbours, one tempo again.
+        f.doubleClick ({ f.xAtBeat (2.0), 10.0f });
+        CHECK (f.model.beatToFileSeconds (2.0) == doctest::Approx (1.0).epsilon (0.0005));
+        CHECK_FALSE (audio_tempo::followsBeatByBeat (*f.clip));
+        CHECK (f.model.getTempoChangeSeconds().empty());
+        CHECK (f.project->getUndoDescription() == "Reset beat");
+
+        f.project->undo();
+        CHECK (audio_tempo::followsBeatByBeat (*f.clip));
+        f.project->undo();
+        CHECK_FALSE (audio_tempo::followsBeatByBeat (*f.clip));
+        CHECK_FALSE (f.project->canUndo());
+
+        // A line clicked and not dragged: the playhead goes there, nothing is moved.
+        auto chosen = -1.0;
+        f.gestures.onPositionChosen = [&chosen] (double beat) { chosen = beat; };
+        f.gestures.down ({ onBeat2, juce::ModifierKeys (left) });
+        f.gestures.up ({ onBeat2, juce::ModifierKeys (left) });
+        CHECK (chosen == doctest::Approx (2.02).epsilon (0.001));
+        CHECK_FALSE (f.project->canUndo());
+    }
+
+    TEST_CASE ("a beat dragged near a hit of the sound goes onto the hit; with Alt, where the mouse is")
+    {
+        // 12 hits at 100 BPM after a quarter of a second, the fifth 40 ms late, in a song at 120.
+        test::TempFolder temp;
+        const auto file = temp.getFile ("Late.wav");
+        std::vector<double> hits;
+        {
+            constexpr double rate = 44100.0;
+
+            for (int i = 0; i < 12; ++i)
+                hits.push_back (0.25 + 0.6 * i + (i == 4 ? 0.04 : 0.0));
+
+            juce::AudioBuffer<float> buffer (1, (int) ((hits.back() + 0.4) * rate));
+            buffer.clear();
+
+            for (const auto hit : hits)
+                for (int i = 0; i < 441; ++i)
+                    buffer.setSample (0, (int) std::round (hit * rate) + i, 0.9f * (float) std::sin (i * 0.1425) * (float) std::exp (-i / 132.0));
+
+            std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (file);
+            auto writer = juce::WavAudioFormat().createWriterFor (stream, juce::AudioFormatWriterOptions {}.withSampleRate (rate)
+                                                                              .withNumChannels (1).withBitsPerSample (16));
+            REQUIRE (writer != nullptr);
+            writer->writeFromAudioSampleBuffer (buffer, 0, buffer.getNumSamples());
+        }
+
+        auto project = core::Project::createEmpty (test::session());
+        ui::arrangement::ArrangementModel arrangement (*project);
+        auto* track = arrangement.addAudioTrack();
+        REQUIRE (track != nullptr);
+        juce::String error;
+        auto* clip = project->addAudioClip (*track, file, 4.0, error);
+        REQUIRE_MESSAGE (clip != nullptr, error.toStdString());
+        core::beat_finder::Beat beat;
+        beat.bpm = 100.0;
+        beat.firstBeatSeconds = 0.25;
+        audio_tempo::setFollowsTempo (*clip, beat);
+        audio_tempo::startOnBeat (*clip, beat);
+        arrangement.setCurrentTrack (track);
+        dispatch();
+        project->clearUndoHistory();
+
+        AudioEditorModel model (arrangement);
+        View view;
+        view.width = 1000.0f;
+        view.fileSeconds = model.getFileSeconds();
+        view.pixelsPerSecond = 100.0;
+        view.leftSeconds = 0.0;
+        AudioEditorGestures gestures (model, view);
+        gestures.setRuler ({ 0.0f, 0.0f, 1000.0f, 20.0f });
+        gestures.setBody ({ 0.0f, 20.0f, 1000.0f, 200.0f });
+
+        // The hits of the file are listened for once.
+        const auto& heard = model.getHitSeconds();
+        REQUIRE (heard.size() == 12);
+        CHECK (std::abs (heard[4] - hits[4]) < 0.002);
+        CHECK (&model.getHitSeconds() == &heard);
+
+        // Beat 8 of the song (the fifth of the sound) is over 2.65 s; its hit is at 2.69. The line
+        // dragged three pixels towards it lands on it.
+        const juce::ModifierKeys keys (left);
+        CHECK (model.beatToFileSeconds (8.0) == doctest::Approx (2.65).epsilon (0.0005));
+        const juce::Point<float> line { 265.0f, 10.0f };
+        REQUIRE (gestures.getBeatLineAt (line).value_or (-1.0) == doctest::Approx (8.0));
+        gestures.down ({ line, keys });
+        gestures.drag ({ { 268.0f, 10.0f }, keys });
+        const auto readout = gestures.getReadout();
+        REQUIRE (readout.has_value());
+        CHECK (readout->first == "bar 3, beat 1: on a hit");
+        gestures.up ({ { 268.0f, 10.0f }, keys });
+        CHECK (std::abs (model.beatToFileSeconds (8.0) - hits[4]) < 0.002);
+        CHECK (project->getUndoDescription() == "Move beat");
+
+        // The hits either side are still under their beats.
+        CHECK (std::abs (model.beatToFileSeconds (7.0) - hits[3]) < 0.0005);
+        CHECK (std::abs (model.beatToFileSeconds (9.0) - hits[5]) < 0.0005);
+
+        // With Alt: where the mouse is, hit or no hit.
+        project->undo();
+        const juce::ModifierKeys alt (left | juce::ModifierKeys::altModifier);
+        gestures.down ({ line, alt });
+        gestures.drag ({ { 268.0f, 10.0f }, alt });
+        gestures.up ({ { 268.0f, 10.0f }, alt });
+        CHECK (model.beatToFileSeconds (8.0) == doctest::Approx (2.68).epsilon (0.0005));
     }
 
     TEST_CASE ("the main window paints the audio clip editor in place of the piano roll on an audio track")

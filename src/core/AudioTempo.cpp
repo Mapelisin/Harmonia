@@ -149,45 +149,119 @@ namespace harmonia::core::audio_tempo
         }
     }
 
-    std::optional<beat_finder::Beat> measure (te::Engine& engine, const juce::File& file, double nearBpm)
+    namespace
     {
-        // A whole take of a song, played by hand, is what drifts most.
-        constexpr double longestSeconds = 300.0;
-        std::unique_ptr<juce::AudioFormatReader> reader (te::AudioFileUtils::createReaderFor (engine, file));
-
-        if (reader == nullptr || reader->lengthInSamples <= 0 || reader->sampleRate <= 0.0 || reader->numChannels == 0)
-            return std::nullopt;
-
-        const auto whole = reader->lengthInSamples <= (juce::int64) (longestSeconds * reader->sampleRate);
-        const auto numSamples = (int) std::min<juce::int64> (reader->lengthInSamples, (juce::int64) (longestSeconds * reader->sampleRate));
-        const auto channels = std::min (2, (int) reader->numChannels);
-
-        // Both sides together, read a piece at a time.
-        std::vector<float> sound ((size_t) numSamples);
-        constexpr int pieceSamples = 1 << 16;
-        juce::AudioBuffer<float> piece (channels, pieceSamples);
-
-        for (int done = 0; done < numSamples; done += pieceSamples)
+        /** The hits of a sound file (both sides together), and how long the file is in seconds,
+            if all of it was read (0: it is longer than is read). Nothing if it can't be read. */
+        struct HeardHits
         {
-            const auto count = std::min (pieceSamples, numSamples - done);
+            std::vector<beat_finder::Hit> hits;
+            double wholeSeconds = 0.0;
+        };
 
-            if (! reader->read (&piece, 0, count, done, true, channels > 1))
+        std::optional<HeardHits> hearHits (te::Engine& engine, const juce::File& file)
+        {
+            // A whole take of a song, played by hand, is what drifts most.
+            constexpr double longestSeconds = 300.0;
+            std::unique_ptr<juce::AudioFormatReader> reader (te::AudioFileUtils::createReaderFor (engine, file));
+
+            if (reader == nullptr || reader->lengthInSamples <= 0 || reader->sampleRate <= 0.0 || reader->numChannels == 0)
                 return std::nullopt;
 
-            if (channels > 1)
+            const auto whole = reader->lengthInSamples <= (juce::int64) (longestSeconds * reader->sampleRate);
+            const auto numSamples = (int) std::min<juce::int64> (reader->lengthInSamples, (juce::int64) (longestSeconds * reader->sampleRate));
+            const auto channels = std::min (2, (int) reader->numChannels);
+
+            // Read a piece at a time.
+            std::vector<float> sound ((size_t) numSamples);
+            constexpr int pieceSamples = 1 << 16;
+            juce::AudioBuffer<float> piece (channels, pieceSamples);
+
+            for (int done = 0; done < numSamples; done += pieceSamples)
             {
-                piece.addFrom (0, 0, piece, 1, 0, count);
-                piece.applyGain (0, 0, count, 0.5f);
+                const auto count = std::min (pieceSamples, numSamples - done);
+
+                if (! reader->read (&piece, 0, count, done, true, channels > 1))
+                    return std::nullopt;
+
+                if (channels > 1)
+                {
+                    piece.addFrom (0, 0, piece, 1, 0, count);
+                    piece.applyGain (0, 0, count, 0.5f);
+                }
+
+                std::copy_n (piece.getReadPointer (0), count, sound.begin() + done);
             }
 
-            std::copy_n (piece.getReadPointer (0), count, sound.begin() + done);
+            // Of a file cut short here, the length says nothing about its beats.
+            return HeardHits { beat_finder::findHits (sound.data(), numSamples, reader->sampleRate),
+                               whole ? reader->lengthInSamples / reader->sampleRate : 0.0 };
         }
 
-        const auto hits = beat_finder::findHits (sound.data(), numSamples, reader->sampleRate);
+        /** Has a clip following the tempo take its beats to be where `given` has them, the clip
+            staying where it is and as long. False if they were there already. */
+        bool setBeats (te::WaveAudioClip& clip, const BeatMap& given)
+        {
+            const auto map = BeatMap::fromString (given.toString()).value_or (given);
+            const auto text = map.isSteady() ? juce::String() : map.toString();
+            const auto current = getBeatMap (clip);
 
-        // Of a file cut short here, the length says nothing about its beats.
-        auto beat = beat_finder::findBeat (hits, whole ? reader->lengthInSamples / reader->sampleRate : 0.0, nearBpm);
-        return beat;
+            if (current.has_value() && current->toString() == map.toString())
+                return false;
+
+            // The engine takes the file for as many beats long as the map counts in it.
+            const auto info = clip.getAudioFile().getInfo();
+
+            if (const auto fileSeconds = info.getLengthInSeconds(); fileSeconds > 0.0)
+                clip.getLoopInfo().setBpm (map.toBeats (fileSeconds) * 60.0 / fileSeconds, info);
+
+            if (text.isEmpty())
+                clip.state.removeProperty (te::IDs::sourceTempoMap, &clip.edit.getUndoManager());
+            else
+                clip.state.setProperty (te::IDs::sourceTempoMap, text, &clip.edit.getUndoManager());
+
+            return true;
+        }
+    }
+
+    std::optional<beat_finder::Beat> measure (te::Engine& engine, const juce::File& file, double nearBpm)
+    {
+        const auto heard = hearHits (engine, file);
+        return heard.has_value() ? beat_finder::findBeat (heard->hits, heard->wholeSeconds, nearBpm) : std::nullopt;
+    }
+
+    std::vector<beat_finder::Hit> findHits (te::Engine& engine, const juce::File& file)
+    {
+        auto heard = hearHits (engine, file);
+        return heard.has_value() ? std::move (heard->hits) : std::vector<beat_finder::Hit>();
+    }
+
+    bool moveBeat (te::WaveAudioClip& clip, double songBeat, double fileSeconds, double spanBeats)
+    {
+        const auto map = getBeatMap (clip);
+
+        if (! map.has_value())
+            return false;
+
+        const auto beat = FileUnderSong (clip).toFileBeat (songBeat);
+        const auto moved = map->withBeatAt (beat, fileSeconds, spanBeats);
+
+        // (Put where it is already, to a hundredth of a millisecond, it isn't moved.)
+        if (! moved.has_value() || std::abs (moved->toSeconds (beat) - map->toSeconds (beat)) < 1.0e-5)
+            return false;
+
+        return setBeats (clip, *moved);
+    }
+
+    bool resetBeat (te::WaveAudioClip& clip, double songBeat)
+    {
+        const auto map = getBeatMap (clip);
+
+        if (! map.has_value())
+            return false;
+
+        const auto without = map->withoutChangeAt (FileUnderSong (clip).toFileBeat (songBeat));
+        return without.has_value() && setBeats (clip, *without);
     }
 
     std::optional<double> guessFromLength (double seconds, double songBpm)

@@ -600,6 +600,82 @@ TEST_SUITE ("audio: clips follow the song tempo")
         CHECK (waitWhileReversing (*loop));
     }
 
+    TEST_CASE ("one hit played late is put on its beat by hand: the others stay where they were")
+    {
+        // 16 hits at 100 BPM after a quarter of a second, the seventh 40 ms late; the song at 120.
+        AudioSong song;
+        auto beats = speedingUp (16, 0.25, 100.0, 100.0);
+        beats[6] += 0.04;
+        const auto file = writeClicksAt (song.temp.getFile ("Late.wav"), beats, 0.5);
+        auto* clip = song.add (file, 4.0);
+        song.project->getEdit().dispatchPendingUpdatesSynchronously();
+
+        core::beat_finder::Beat beat;
+        beat.bpm = 100.0;
+        beat.firstBeatSeconds = 0.25;
+        audio_tempo::setFollowsTempo (*clip, beat);
+        audio_tempo::startOnBeat (*clip, beat);
+        CHECK_FALSE (audio_tempo::followsBeatByBeat (*clip));
+        const auto endBeat = core::clips::getEndBeat (*clip);
+
+        // How far each hit of the exported song is from its beat (beat 4 + n: 2 s + n / 2).
+        const auto exportedOff = [&song]
+        {
+            double sampleRate = 0.0;
+            const auto rendered = song.render (sampleRate);
+            auto clicks = findClicks (rendered, sampleRate);
+            REQUIRE (clicks.size() == 16);
+
+            for (size_t i = 0; i < clicks.size(); ++i)
+                clicks[i] -= 2.0 + 0.5 * (double) i;
+
+            return clicks;
+        };
+
+        // As played: the seventh hit late (40 ms of the file is a third of a tenth of a second at 120).
+        auto off = exportedOff();
+        CHECK (off[6] > 0.028);
+        CHECK (std::abs (off[5]) < 0.004);
+
+        // Beat 10 of the song is put where that hit is in the file.
+        song.project->beginGesture ("Move beat");
+        CHECK (audio_tempo::moveBeat (*clip, 10.0, beats[6]));
+        CHECK_FALSE (audio_tempo::moveBeat (*clip, 10.0, beats[6]));       // it is there already
+        CHECK (audio_tempo::followsBeatByBeat (*clip));
+        CHECK (core::clips::getStartBeat (*clip) == doctest::Approx (4.0));
+        CHECK (core::clips::getEndBeat (*clip) == doctest::Approx (endBeat));
+
+        off = exportedOff();
+
+        for (size_t i = 0; i < off.size(); ++i)
+        {
+            CAPTURE (i);
+            CHECK (std::abs (off[i]) < 0.004);
+        }
+
+        // Let go: as played again, one tempo. And one Ctrl+Z each.
+        song.project->beginGesture ("Reset beat");
+        CHECK (audio_tempo::resetBeat (*clip, 10.0));
+        CHECK_FALSE (audio_tempo::resetBeat (*clip, 10.0));
+        CHECK_FALSE (audio_tempo::followsBeatByBeat (*clip));
+        CHECK (audio_tempo::getLoopBpm (*clip).value_or (0.0) == doctest::Approx (100.0));
+
+        song.project->undo();
+        CHECK (audio_tempo::followsBeatByBeat (*clip));
+        CHECK (std::abs (audio_tempo::FileUnderSong (*clip).toFileSeconds (10.0) - beats[6]) < 0.0005);
+        song.project->undo();
+        CHECK_FALSE (audio_tempo::followsBeatByBeat (*clip));
+
+        // The hits of the file, for putting beats on: each where it is.
+        const auto hits = audio_tempo::findHits (test::session().getEngine(), file);
+        REQUIRE (hits.size() == 16);
+        CHECK (std::abs (hits[6].seconds - beats[6]) < 0.002);
+
+        // A clip at its own speed has no beats to move.
+        audio_tempo::setFollowsTempo (*clip, std::nullopt);
+        CHECK_FALSE (audio_tempo::moveBeat (*clip, 10.0, 3.0));
+    }
+
     TEST_CASE ("a loop stays on the beats through a change of the song's tempo")
     {
         // The song at 100 BPM for eight beats, at 150 from then on.

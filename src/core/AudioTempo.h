@@ -70,6 +70,22 @@ namespace harmonia::core::audio_tempo
     /** Whether the clip follows beat by beat (its sound doesn't keep one tempo). */
     bool followsBeatByBeat (const te::AudioClipBase&);
 
+    /** The hits of a sound file, in order (core::beat_finder): what a beat moved by hand is put
+        on. Reads the file (its first five minutes): not for the audio thread. */
+    std::vector<beat_finder::Hit> findHits (te::Engine&, const juce::File&);
+
+    /** Puts a beat of the sound of a clip following the tempo elsewhere in its file: the moment
+        `fileSeconds` plays on `songBeat` from now on. The beats of the song `spanBeats` either
+        side stay over what they were over, and so does all beyond them; the clip stays where
+        it is and as long. A sound that kept one tempo is followed beat by beat from then on.
+        Into the current undo step. False if nothing changed (not following; the start of the
+        file; already there). */
+    bool moveBeat (te::WaveAudioClip&, double songBeat, double fileSeconds, double spanBeats = 1.0);
+
+    /** Lets go of a beat put elsewhere (or found off the others): the sound's tempo no longer
+        changes under `songBeat`. Into the current undo step. False if it didn't change there. */
+    bool resetBeat (te::WaveAudioClip&, double songBeat);
+
     /** Plays the clip's sound backwards, or forwards again (core::clips::setReversed is how it
         is asked for): of a sound followed beat by beat the beats are turned round with it. Into
         the current undo step. */
@@ -87,6 +103,10 @@ namespace harmonia::core::audio_tempo
 
         double toFileSeconds (double songBeat) const;
         double toSongBeat (double fileSeconds) const;
+
+        /** Of a clip following the tempo: which beat of its file (as its BeatMap counts them) is
+            under a beat of the song. */
+        double toFileBeat (double songBeat) const noexcept  { return songBeat - beatOfFileStart; }
 
         /** The same length of file under every beat of the song: one stretch of the waveform
             can be drawn under any stretch of beats. Not so for a sound followed beat by beat,

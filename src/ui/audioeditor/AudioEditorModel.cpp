@@ -242,4 +242,61 @@ namespace harmonia::ui::audioeditor
     {
         return getWaveClip() != nullptr;
     }
+
+    //==============================================================================
+    bool AudioEditorModel::canMoveBeats() const
+    {
+        auto* wave = getWaveClip();
+        return wave != nullptr && audio_tempo::followsTempo (*wave) && ! clips::isReversing (*wave);
+    }
+
+    bool AudioEditorModel::moveBeat (double songBeat, double fileSeconds, double spanBeats)
+    {
+        auto* wave = getWaveClip();
+        return wave != nullptr && audio_tempo::moveBeat (*wave, songBeat, fileSeconds, spanBeats);
+    }
+
+    bool AudioEditorModel::resetBeat (double songBeat)
+    {
+        auto* wave = getWaveClip();
+
+        if (wave == nullptr)
+            return false;
+
+        beginChange ("Reset beat");
+        return audio_tempo::resetBeat (*wave, songBeat);
+    }
+
+    std::vector<double> AudioEditorModel::getTempoChangeSeconds() const
+    {
+        std::vector<double> seconds;
+
+        if (auto* clip = getClip())
+            if (const auto map = audio_tempo::getBeatMap (*clip))
+                for (const auto& change : map->getChanges())
+                    if (change.beat > 0.0)
+                        seconds.push_back (change.seconds);
+
+        return seconds;
+    }
+
+    const std::vector<double>& AudioEditorModel::getHitSeconds()
+    {
+        auto* clip = getClip();
+        const auto file = clip != nullptr ? clip->getCurrentSourceFile() : juce::File();
+        const auto time = file.getLastModificationTime();
+
+        if (file != hitsFile || time != hitsFileTime)
+        {
+            hitsFile = file;
+            hitsFileTime = time;
+            hitSeconds.clear();
+
+            if (file.existsAsFile())
+                for (const auto& hit : audio_tempo::findHits (clip->edit.engine, file))
+                    hitSeconds.push_back (hit.seconds);
+        }
+
+        return hitSeconds;
+    }
 }
