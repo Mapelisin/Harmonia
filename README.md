@@ -69,7 +69,7 @@ expect bugs.
   and loop recording of takes.
 - Audio clip editor: fades, gain, reverse, normalize, stretching to the tempo and changing the pitch.
 - Follow tempo puts any sample on the grid with one click: its tempo (72.3 BPM too) and first beat are
-  measured from the sound itself.
+  measured from the sound itself. Playing that speeds up and slows down is straightened beat by beat.
 - Overlapping audio clips crossfade by themselves; an audio clip can loop when made longer.
 
 **Mixer and effects**

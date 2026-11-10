@@ -1,11 +1,16 @@
 #pragma once
 
 #include "core/BeatFinder.h"
+#include "core/BeatMap.h"
 #include "core/Tracktion.h"
 
 /** Sound that follows the song: a loop recorded at its own tempo stretched (or squeezed) so that
     its beats fall on the song's, at any song tempo; and the pitch of a sound changed without
-    changing its speed. Both are done by the engine while it plays (Signalsmith Stretch). */
+    changing its speed. Both are done by the engine while it plays (Signalsmith Stretch).
+
+    A sound that doesn't keep one tempo (somebody playing) follows beat by beat: the clip keeps
+    where each beat of its file is (a BeatMap), and the engine plays each on a beat of the song
+    (patch 0004). */
 namespace harmonia::core::audio_tempo
 {
     /** The tempi a loop may have. */
@@ -21,10 +26,10 @@ namespace harmonia::core::audio_tempo
     std::optional<double> findLoopBpm (te::Engine&, const juce::File&, double songBpm);
 
     /** The beat of a sound file measured from its sound (core::beat_finder): its tempo, to
-        hundredths, and where its first beat is. Of the tempi that fit the same hits (twice or
-        half as fast) the one nearest `nearBpm`. Nothing: no steady beat to hear in it (a pad, a
-        phrase, one hit), or the file can't be read. Reads the file (its first two minutes): not
-        for the audio thread. */
+        hundredths, and where its first beat is; of a sound whose tempo drifts, where each beat
+        is. Of the tempi that fit the same hits (twice or half as fast) the one nearest `nearBpm`.
+        Nothing: no beat to hear in it (a pad, a phrase, one hit), or the file can't be read.
+        Reads the file (its first five minutes): not for the audio thread. */
     std::optional<beat_finder::Beat> measure (te::Engine&, const juce::File&, double nearBpm);
 
     /** The loop tempo a file of `seconds` most likely has if it holds a whole number of bars
@@ -33,9 +38,14 @@ namespace harmonia::core::audio_tempo
 
     /** Makes the clip follow the song's tempo, its file being a loop at `loopBpm`: what it shows
         of the file keeps its beats (a bar of the loop stays a bar of the song), now and whenever
-        the tempo changes. Nothing: back to playing the file at its own speed (same sound, its
-        length in seconds again). Into the current undo step. */
+        the tempo changes. A clip that follows beat by beat goes on doing so, its beats counted
+        anew (twice the tempo: twice the beats). Nothing: back to playing the file at its own
+        speed (same sound, its length in seconds again). Into the current undo step. */
     void setFollowsTempo (te::WaveAudioClip&, std::optional<double> loopBpm);
+
+    /** Makes the clip follow the song's tempo as its beat was measured: at the one tempo found,
+        or, for a sound whose tempo drifts, beat by beat. Into the current undo step. */
+    void setFollowsTempo (te::WaveAudioClip&, const beat_finder::Beat&);
 
     /** A clip following the tempo starts on a beat of its sound: the first beat of `beat` that
         the clip shows (what the file has before it is hidden, not lost: the left edge shows it
@@ -50,12 +60,46 @@ namespace harmonia::core::audio_tempo
 
     bool followsTempo (const te::AudioClipBase&);
 
-    /** The tempo the clip's file is taken to be at, while it follows the song. */
+    /** The tempo the clip's file is taken to be at, while it follows the song (of a sound whose
+        tempo drifts: on the whole). */
     std::optional<double> getLoopBpm (const te::AudioClipBase&);
 
-    /** Seconds of the file played in a second of the song: 1 at its own speed, more when a loop is
-        sped up to the song's tempo (for drawing the waveform under the beats it plays on). */
-    double getPlaybackSpeed (const te::AudioClipBase&);
+    /** Where the beats of the clip's file are, while it follows the song. */
+    std::optional<BeatMap> getBeatMap (const te::AudioClipBase&);
+
+    /** Whether the clip follows beat by beat (its sound doesn't keep one tempo). */
+    bool followsBeatByBeat (const te::AudioClipBase&);
+
+    /** Plays the clip's sound backwards, or forwards again (core::clips::setReversed is how it
+        is asked for): of a sound followed beat by beat the beats are turned round with it. Into
+        the current undo step. */
+    void setReversed (te::AudioClipBase&, bool);
+
+    /** Which moment of its file a clip has under which beat of the song: for drawing the
+        waveform under the beats it plays on, and for showing the song's beats over the file.
+        The clip is taken to go on before its start and after its end. One that repeats: as its
+        first time round lies in the song (where the others begin: core::audio_clips).
+        Made for a paint or a command, not kept: the clip may change. */
+    class FileUnderSong
+    {
+    public:
+        explicit FileUnderSong (const te::AudioClipBase&);
+
+        double toFileSeconds (double songBeat) const;
+        double toSongBeat (double fileSeconds) const;
+
+        /** The same length of file under every beat of the song: one stretch of the waveform
+            can be drawn under any stretch of beats. Not so for a sound followed beat by beat,
+            nor for one playing at its own speed through a change of the song's tempo. */
+        bool isStraight() const noexcept                    { return straight; }
+
+    private:
+        const te::TempoSequence& tempo;
+        std::optional<BeatMap> map;         // of a clip that follows the tempo
+        double beatOfFileStart = 0.0;       // following: the song beat the file's beat 0 is under
+        te::TimePosition timeOfFileStart;   // not following: the song time the file's start is at
+        bool straight = true;
+    };
 
     /** "95", or "92.5" for a tempo between whole numbers. */
     juce::String formatBpm (double bpm);

@@ -156,7 +156,7 @@ TEST_SUITE ("ui: clips follow the song tempo")
         w.project->beginGesture ("Change tempo");
         w.project->setTempoBpm (90.0);
         CHECK (clips::getEndBeat (*clip) == doctest::Approx (8.0));
-        CHECK (core::audio_tempo::getPlaybackSpeed (*clip) == doctest::Approx (0.75));
+        CHECK (core::audio_tempo::FileUnderSong (*clip).toFileSeconds (4.0) == doctest::Approx (2.0));   // as recorded: two beats a second
     }
 
     TEST_CASE ("tempi are written without needless decimals")

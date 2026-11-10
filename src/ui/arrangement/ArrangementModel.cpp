@@ -1766,10 +1766,13 @@ namespace harmonia::ui::arrangement
 
         if (measured.has_value())
         {
-            audio_tempo::setFollowsTempo (clip, measured->bpm);
+            audio_tempo::setFollowsTempo (clip, *measured);
             const auto hidden = audio_tempo::startOnBeat (clip, *measured);
 
-            auto note = "Its beat was measured: " + juce::String (measured->bpm, 2) + " BPM";
+            // A sound that keeps its tempo; or one that doesn't, each beat put on a beat of the song.
+            auto note = measured->drifts() ? "Its tempo isn't steady (around " + audio_tempo::formatBpm (measured->bpm) + " BPM): its "
+                                                 + juce::String ((int) measured->beatSeconds.size()) + " beats were put on the grid one by one"
+                                           : "Its beat was measured: " + juce::String (measured->bpm, 2) + " BPM";
 
             if (hidden > 0.0005)
                 note << ", first beat " << juce::String (hidden, 2) << " s in (the clip starts there now)";

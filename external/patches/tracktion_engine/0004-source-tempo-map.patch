@@ -1,0 +1,84 @@
+diff --git a/modules/tracktion_engine/model/edit/tracktion_Edit.cpp b/modules/tracktion_engine/model/edit/tracktion_Edit.cpp
+index 92adad575af..84dbffd6e94 100644
+--- a/modules/tracktion_engine/model/edit/tracktion_Edit.cpp
++++ b/modules/tracktion_engine/model/edit/tracktion_Edit.cpp
+@@ -167,6 +167,7 @@ struct Edit::TreeWatcher   : public juce::ValueTree::Listener
+                         || i == IDs::currentTake || i == IDs::sequence || i == IDs::repeatSequence
+                         || i == IDs::loopedSequenceType || i == IDs::grooveStrength
+                         || i == IDs::proxyAllowed || i == IDs::resamplingQuality || i == IDs::warpTime
++                        || i == IDs::sourceTempoMap
+                         || i == IDs::disabled || i == IDs::followActionBeats || i == IDs::followActionNumLoops
+                         || i == IDs::followActionDurationType)
+             {
+diff --git a/modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.cpp b/modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.cpp
+index e46f6c79169..4f18212f4f3 100644
+--- a/modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.cpp
++++ b/modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.cpp
+@@ -262,6 +262,42 @@ namespace
+         return map;
+     }
+ 
++    /**
++        The tempo changes of a clip's own sound, for a sound that doesn't keep one tempo (live
++        playing): the clip's "sourceTempoMap" property, pairs of numbers "beat bpm beat bpm...",
++        the beats counted from the start of the file and going up, the first pair at beat 0. Each
++        tempo holds until the next. A clip following the tempo then has the beats of its sound,
++        wherever they are in the file, played on the beats of the Edit.
++        Returns nothing if the clip has no such map (or one that can't be read).
++    */
++    std::vector<tempo::TempoChange> getSourceTempoChanges (const AudioClipBase& clip)
++    {
++        std::vector<tempo::TempoChange> changes;
++        const auto text = clip.state.getProperty (IDs::sourceTempoMap).toString();
++
++        if (text.isEmpty())
++            return changes;
++
++        juce::StringArray numbers;
++        numbers.addTokens (text, " ", {});
++        numbers.removeEmptyStrings();
++
++        for (int i = 0; i + 1 < numbers.size(); i += 2)
++        {
++            const auto beat = numbers[i].getDoubleValue();
++            const auto bpm = numbers[i + 1].getDoubleValue();
++            const bool inOrder = changes.empty() ? beat == 0.0
++                                                 : beat > changes.back().startBeat.inBeats();
++
++            if (! inOrder || bpm <= 0.0)
++                return {};
++
++            changes.push_back ({ BeatPosition::fromBeats (beat), bpm, 1.0f });
++        }
++
++        return changes;
++    }
++
+     /**
+         Returns a tempo::Sequence with the key changes required for a clip to sync to the chord track.
+     */
+@@ -536,7 +572,11 @@ std::unique_ptr<tracktion::graph::Node> createNodeForAudioClip (AudioClipBase& c
+ 
+             if (clip.getAutoTempo() && li.getNumBeats() > 0 && wi.hashCode != 0)
+             {
+-                tempos.push_back ({ 0_bp, li.getBpm (wi), 1.0 });
++                tempos = getSourceTempoChanges (clip);
++
++                if (tempos.empty())
++                    tempos.push_back ({ 0_bp, li.getBpm (wi), 1.0 });
++
+                 timeSigs.push_back ({ 0_bp, li.getNumerator(), li.getDenominator(), false });
+                 syncTempo = WaveNodeRealTime::SyncTempo::yes;
+             }
+diff --git a/modules/tracktion_engine/utilities/tracktion_Identifiers.h b/modules/tracktion_engine/utilities/tracktion_Identifiers.h
+index ca7edbcc3ec..91e2fa2d332 100644
+--- a/modules/tracktion_engine/utilities/tracktion_Identifiers.h
++++ b/modules/tracktion_engine/utilities/tracktion_Identifiers.h
+@@ -369,6 +369,7 @@ namespace IDs
+     DECLARE_ID (autoPitchMode)
+     DECLARE_ID (autoTempo)
+     DECLARE_ID (warpTime)
++    DECLARE_ID (sourceTempoMap)
+     DECLARE_ID (isReversed)
+     DECLARE_ID (transpose)
+     DECLARE_ID (autoDetectBeats)

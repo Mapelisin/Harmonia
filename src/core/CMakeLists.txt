@@ -34,6 +34,12 @@ add_library(harmonia_core STATIC
     Autosave.cpp
     BeatFinder.h
     BeatFinder.cpp
+    BeatFollower.h
+    BeatFollower.cpp
+    BeatGrid.h
+    BeatGrid.cpp
+    BeatMap.h
+    BeatMap.cpp
     Backups.h
     Backups.cpp
     SongFiles.h

@@ -124,6 +124,48 @@ namespace
 
         return sound;
     }
+
+    /** The same drums played by hand: each beat where `beats` has it (seconds), the eighths half
+        way between; the snares `lateSnare` seconds behind their beats. Nothing is played from
+        the beat `restFrom` up to the beat `restTo`. */
+    Sound playedDrums (const std::vector<double>& beats, double lateSnare = 0.0, size_t restFrom = 0, size_t restTo = 0)
+    {
+        Sound sound (beats.back() + 0.5);
+
+        for (size_t b = 0; b + 1 < beats.size(); ++b)
+        {
+            if (b >= restFrom && b < restTo)
+                continue;
+
+            if (b % 2 == 0)     sound.kick (beats[b]);
+            else                sound.snare (beats[b] + lateSnare);
+
+            sound.hat (beats[b]);
+            sound.hat ((beats[b] + beats[b + 1]) / 2.0);
+        }
+
+        return sound;
+    }
+
+    /** Where the beats of somebody playing are: `count` of them from `lead` seconds on, the tempo
+        going from `fromBpm` to `toBpm` on the way and back `waves` times, each beat up to
+        `looseness` seconds early or late. */
+    std::vector<double> playedBeats (int count, double lead, double fromBpm, double toBpm, double waves = 0.5, double looseness = 0.0)
+    {
+        std::mt19937 random (777);
+        std::uniform_real_distribution<double> loose (-1.0, 1.0);
+        std::vector<double> beats;
+        auto at = lead;
+
+        for (int i = 0; i < count; ++i)
+        {
+            beats.push_back (at + looseness * loose (random));
+            const auto along = 0.5 - 0.5 * std::cos (twoPi * waves * i / (count - 1.0));
+            at += 60.0 / (fromBpm + (toBpm - fromBpm) * along);
+        }
+
+        return beats;
+    }
 }
 
 TEST_SUITE ("core: the beat of a sound")
@@ -275,6 +317,98 @@ TEST_SUITE ("core: the beat of a sound")
             CHECK (found.bpm == doctest::Approx (100.0).epsilon (0.0005));
             CHECK (found.wholeLoop);
         }
+    }
+
+    TEST_CASE ("drums that speed up: no one tempo fits, each beat is found where it is")
+    {
+        // From 92 to 104 BPM over twelve bars.
+        const auto beats = playedBeats (49, 0.3, 92.0, 104.0);
+        auto sound = playedDrums (beats);
+        sound.addNoiseFloor (0.002f);
+        const auto beat = sound.analyse (100.0);
+
+        REQUIRE (beat.drifts());
+        CHECK_FALSE (beat.wholeLoop);
+        CHECK (beat.certainty > 0.8);
+        CHECK (std::abs (beat.firstBeatSeconds - 0.3) < 0.004);
+        CHECK (beat.bpm == doctest::Approx (60.0 * 47.0 / (beats[47] - beats[0])).epsilon (0.01));
+
+        // All the beats that have a hit (the last of `beats` is where the sound ends).
+        REQUIRE (beat.beatSeconds.size() >= 48);
+
+        for (size_t i = 0; i < 48; ++i)
+        {
+            CAPTURE (i);
+            CHECK (std::abs (beat.beatSeconds[i] - beats[i]) < 0.003);
+        }
+    }
+
+    TEST_CASE ("a tempo that comes and goes, each beat a little loose: the beats are where the player put them")
+    {
+        // Between 118 and 126 BPM, there and back twice, every beat up to 8 ms off.
+        const auto beats = playedBeats (65, 0.5, 118.0, 126.0, 2.0, 0.008);
+        const auto beat = playedDrums (beats).analyse (120.0);
+
+        REQUIRE (beat.drifts());
+        REQUIRE (beat.beatSeconds.size() >= 64);
+
+        for (size_t i = 0; i < 64; ++i)
+        {
+            CAPTURE (i);
+            CHECK (std::abs (beat.beatSeconds[i] - beats[i]) < 0.003);
+        }
+
+        // In a song twice as fast it is counted in twice the beats: each of them and one between.
+        const auto twice = playedDrums (beats).analyse (240.0);
+        REQUIRE (twice.drifts());
+        REQUIRE (twice.beatSeconds.size() >= 127);
+        CHECK (std::abs (twice.beatSeconds[20] - beats[10]) < 0.003);
+        CHECK (std::abs (twice.beatSeconds[21] - (beats[10] + beats[11]) / 2.0) < 0.004);
+        CHECK (twice.bpm == doctest::Approx (2.0 * beat.bpm).epsilon (0.01));
+    }
+
+    TEST_CASE ("a break of three bars, counted in the head a little fast: the beats after it are the right ones")
+    {
+        // Four bars at 118 BPM, three bars of nothing counted at 121, four bars at 118 again.
+        std::vector<double> beats;
+        auto at = 0.4;
+
+        for (int i = 0; i < 45; ++i)
+        {
+            beats.push_back (at);
+            at += 60.0 / (i >= 16 && i < 28 ? 121.0 : 118.0);
+        }
+
+        const auto beat = playedDrums (beats, 0.0, 16, 28).analyse (120.0);
+        REQUIRE (beat.drifts());
+        REQUIRE (beat.beatSeconds.size() >= 44);
+
+        // By the tempo before it, the break is some 90 ms longer than it was: most of a sixteenth.
+        // The drums come back in on a beat, and that settles which.
+        for (size_t i = 0; i < 44; ++i)
+        {
+            if (i >= 16 && i < 28)
+                continue;
+
+            CAPTURE (i);
+            CHECK (std::abs (beat.beatSeconds[i] - beats[i]) < 0.003);
+        }
+
+        // The beats nobody played are spread evenly over the break.
+        CHECK (std::abs (beat.beatSeconds[22] - beats[22]) < 0.02);
+    }
+
+    TEST_CASE ("feel is not drift: a snare that is always late leaves the tempo steady, and a machine's drums too")
+    {
+        // 100 BPM by the clock, every snare 18 ms behind.
+        const auto beats = playedBeats (33, 0.2, 100.0, 100.0);
+        const auto laidBack = playedDrums (beats, 0.018).analyse (100.0);
+        CHECK_FALSE (laidBack.drifts());
+        CHECK (laidBack.bpm == doctest::Approx (100.0).epsilon (0.001));
+        CHECK (std::abs (laidBack.firstBeatSeconds - 0.2) < 0.004);
+
+        CHECK_FALSE (drums (93.7, 8, 0.35, 0.21).analyse (100.0).drifts());
+        CHECK_FALSE (drums (140.25, 16, 0.1, 0.3).analyse (128.0).drifts());
     }
 
     TEST_CASE ("the tempo nearest the song's is taken: half or double of what another song would hear")

@@ -14,6 +14,7 @@ add_executable(harmonia_tests
     core/ProjectFilesTests.cpp
     core/BackupsTests.cpp
     core/BeatFinderTests.cpp
+    core/BeatMapTests.cpp
     core/NoteTests.cpp
     core/NoteEditorTests.cpp
     core/ClipLinksTests.cpp

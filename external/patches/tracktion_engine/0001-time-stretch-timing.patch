@@ -228,7 +228,7 @@ index 4fb625fe321..0377f1d8d52 100644
          This can be used to size FIFOs for real-time use accordingly.
      */
 diff --git a/modules/tracktion_engine/timestretch/tracktion_TimeStretch.cpp b/modules/tracktion_engine/timestretch/tracktion_TimeStretch.cpp
-index 26fd3d15d2e..78f15945f6a 100644
+index 26fd3d15d2e..ff6dbd74f30 100644
 --- a/modules/tracktion_engine/timestretch/tracktion_TimeStretch.cpp
 +++ b/modules/tracktion_engine/timestretch/tracktion_TimeStretch.cpp
 @@ -87,6 +87,7 @@ struct TimeStretcher::Stretcher
@@ -239,34 +239,55 @@ index 26fd3d15d2e..78f15945f6a 100644
  };
  
  //==============================================================================
-@@ -925,6 +926,7 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
+@@ -925,18 +926,34 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
      {
          stretch.reset();
          hasDoneFinalBlock = false;
-+        inputRemainder = 0.0;
++        inputOwed = 0.0;
++        hasSpeed = false;
      }
  
      bool setSpeedAndPitch (float speedRatio_, float semitonesUp) override
-@@ -936,7 +938,9 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
+     {
++        // What comes out now went in outputLatency() frames of output ago, so the input is that
++        // far ahead of what is heard, at the speed it is read at: outputLatency() / speedRatio
++        // frames. After a change of speed it has to be further ahead (or less far), or everything
++        // from then on is heard late (or early) by the difference. The frames are taken in (or
++        // left out) over the next blocks @see getFramesNeeded
++        if (hasSpeed && speedRatio_ > 0.0f && speedRatio > 0.0f)
++            inputOwed += stretch.outputLatency() * (1.0 / speedRatio_ - 1.0 / speedRatio);
++
+         speedRatio = speedRatio_;
++        hasSpeed = true;
+         stretch.setTransposeSemitones (semitonesUp);
+         return true;
+     }
  
      int getFramesNeeded() const override
      {
 -        return juce::roundToInt (samplesPerOutputBuffer / speedRatio);
 +        // The fraction of a frame left over from each block is carried to the next: rounded each
-+        // time, the sound drifts away from the timeline (e.g. 307 frames for 307.2 every block)
-+        return static_cast<int> (samplesPerOutputBuffer / speedRatio + inputRemainder);
++        // time, the sound drifts away from the timeline (e.g. 307 frames for 307.2 every block).
++        // Frames owed after a change of speed are caught up with gently: no block takes in more
++        // than half as much again as it would, or less than half
++        const auto usual = samplesPerOutputBuffer / (double) speedRatio;
++        return std::max (0, static_cast<int> (usual + juce::jlimit (-0.5 * usual, 0.5 * usual, inputOwed)));
      }
  
      int getMaxFramesNeeded() const override
-@@ -948,6 +952,7 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
+@@ -948,6 +965,11 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
      {
          CRASH_TRACER
          stretch.process (inChannels, numSamples, outChannels, samplesPerOutputBuffer);
-+        inputRemainder = juce::jlimit (0.0, 1.0, inputRemainder + samplesPerOutputBuffer / (double) speedRatio - numSamples);
++
++        // Never more owed than a few changes of speed make: a caller that feeds something else
++        // than was asked for (the end of a file) mustn't be made to catch up with it for ever
++        const double mostOwed = 4.0 * stretch.outputLatency();
++        inputOwed = juce::jlimit (-mostOwed, mostOwed, inputOwed + samplesPerOutputBuffer / (double) speedRatio - numSamples);
          return samplesPerOutputBuffer;
      }
  
-@@ -966,11 +971,17 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
+@@ -966,11 +988,18 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
          return stretch.inputLatency() + stretch.outputLatency();
      }
  
@@ -280,11 +301,12 @@ index 26fd3d15d2e..78f15945f6a 100644
      int numChannels = 0;
      const int samplesPerOutputBuffer;
      float speedRatio = 1.0f;
-+    double inputRemainder = 0.0;
++    double inputOwed = 0.0;     // input frames to take in on top of what the speed asks for
++    bool hasSpeed = false;      // the speed has been set since the last reset
      bool hasDoneFinalBlock = false;
  
      JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SignalsmithStretcher)
-@@ -1383,6 +1394,11 @@ int TimeStretcher::getLatencySamples() const
+@@ -1383,6 +1412,11 @@ int TimeStretcher::getLatencySamples() const
      return stretcher ? stretcher->getLatencySamples() : 0;
  }
  

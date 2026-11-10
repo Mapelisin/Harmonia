@@ -5,6 +5,7 @@
 #include "core/AudioTempo.h"
 #include "core/Clips.h"
 #include "core/Project.h"
+#include "core/TempoChanges.h"
 #include "core/Tracks.h"
 
 using namespace harmonia;
@@ -67,6 +68,57 @@ namespace
         }
 
         return writeWav (file, buffer);
+    }
+
+    /** A click at each of `beats` (seconds), then `tailSeconds` of silence. */
+    juce::File writeClicksAt (const juce::File& file, const std::vector<double>& beats, double tailSeconds)
+    {
+        juce::AudioBuffer<float> buffer (1, (int) std::round ((beats.back() + tailSeconds) * rate));
+        buffer.clear();
+
+        for (const auto beat : beats)
+        {
+            const auto start = (int) std::round (beat * rate);
+
+            for (int i = 0; i < (int) (0.01 * rate) && start + i < buffer.getNumSamples(); ++i)
+                buffer.setSample (0, start + i, 0.9f * (float) std::sin (juce::MathConstants<double>::twoPi * 1000.0 * i / rate)
+                                                     * (float) std::exp (-i / (0.003 * rate)));
+        }
+
+        return writeWav (file, buffer);
+    }
+
+    /** Where somebody speeding up from `fromBpm` to `toBpm` has `count` beats, the first `lead`
+        seconds in. */
+    std::vector<double> speedingUp (int count, double lead, double fromBpm, double toBpm)
+    {
+        std::vector<double> beats;
+        auto at = lead;
+
+        for (int i = 0; i < count; ++i)
+        {
+            beats.push_back (at);
+            at += 60.0 / (fromBpm + (toBpm - fromBpm) * i / (count - 1.0));
+        }
+
+        return beats;
+    }
+
+    /** Lets the engine write the reversed copy of a clip's file (in the background, from a file
+        the test deletes when it ends); false if it takes too long. */
+    bool waitWhileReversing (const te::AudioClipBase& clip)
+    {
+        const auto end = juce::Time::getMillisecondCounterHiRes() + 15000.0;
+
+        while (core::clips::isReversing (clip))
+        {
+            if (juce::Time::getMillisecondCounterHiRes() > end)
+                return false;
+
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+        }
+
+        return true;
     }
 
     juce::File writeSine (const juce::File& file, double seconds, double hz)
@@ -372,6 +424,205 @@ TEST_SUITE ("audio: clips follow the song tempo")
         CHECK_FALSE (audio_tempo::followsTempo (*clip));
         CHECK (clip->getPosition().getOffset().inSeconds() == doctest::Approx (0.0));
         CHECK_FALSE (audio_tempo::slide (*clip, 0.25));
+    }
+
+    TEST_CASE ("a sound that speeds up follows beat by beat: every hit on a beat of the song, whatever the song's tempo")
+    {
+        AudioSong song;
+        song.project->setTempoBpm (100.0);
+
+        // 32 hits, from 92 to 104 BPM, a quarter of a second of silence before them.
+        const auto beats = speedingUp (32, 0.25, 92.0, 104.0);
+        const auto file = writeClicksAt (song.temp.getFile ("Played.wav"), beats, 0.5);
+        auto* clip = song.add (file, 4.0);
+        song.project->getEdit().dispatchPendingUpdatesSynchronously();
+
+        const auto measured = audio_tempo::measure (test::session().getEngine(), file, 100.0);
+        REQUIRE (measured.has_value());
+        REQUIRE (measured->drifts());
+        REQUIRE (measured->beatSeconds.size() == 32);
+
+        song.project->beginGesture ("Follow the tempo");
+        audio_tempo::setFollowsTempo (*clip, *measured);
+        const auto hidden = audio_tempo::startOnBeat (*clip, *measured);
+        CHECK (std::abs (hidden - 0.25) < 0.003);
+        CHECK (audio_tempo::followsTempo (*clip));
+        CHECK (audio_tempo::followsBeatByBeat (*clip));
+        CHECK (core::clips::getStartBeat (*clip) == doctest::Approx (4.0));
+
+        // 31 beats from the first hit to the last, and the tail after it at the last tempo heard.
+        const auto tailBeats = 0.5 / (beats[31] - beats[30]);
+        CHECK (core::clips::getEndBeat (*clip) - core::clips::getStartBeat (*clip) == doctest::Approx (31.0 + tailBeats).epsilon (0.003));
+
+        // Where the hits are in the song as exported: `first` seconds in, then every `apart`.
+        const auto checkExport = [&song] (core::Project& project, double first, double apart)
+        {
+            const auto out = song.temp.getFile ("Played " + juce::String (++song.renders) + ".wav");
+            REQUIRE (audio::exportWav (project.getEdit(), out).isEmpty());
+            double sampleRate = 0.0;
+            const auto rendered = readWav (out, sampleRate);
+            const auto clicks = findClicks (rendered, sampleRate);
+            REQUIRE (clicks.size() == 32);
+
+            for (size_t i = 0; i < clicks.size(); ++i)
+            {
+                CAPTURE (i);
+                CHECK (std::abs (clicks[i] - (first + apart * (double) i)) < 0.004);
+            }
+        };
+
+        // A beat of the song at 100 BPM is 0.6 s: the first hit on beat 4, the others on the next.
+        checkExport (*song.project, 2.4, 0.6);
+
+        // The song faster: on its beats still.
+        song.project->setTempoBpm (125.0);
+        CHECK (core::clips::getStartBeat (*clip) == doctest::Approx (4.0));
+        checkExport (*song.project, 1.92, 0.48);
+
+        // The picture: under beat 4 + n of the song lies where the nth hit is in the file.
+        {
+            const audio_tempo::FileUnderSong under (*clip);
+            CHECK_FALSE (under.isStraight());
+
+            for (const auto n : { 0, 1, 7, 20, 31 })
+            {
+                CAPTURE (n);
+                CHECK (std::abs (under.toFileSeconds (4.0 + n) - beats[(size_t) n]) < 0.002);
+                CHECK (std::abs (under.toSongBeat (beats[(size_t) n]) - (4.0 + n)) < 0.005);
+            }
+        }
+
+        // Saved and opened, it follows as it did.
+        {
+            const auto songFile = song.temp.getFile ("Played.harmonia");
+            REQUIRE (song.project->save (songFile).isEmpty());
+            juce::String error;
+            auto loaded = core::Project::load (test::session(), songFile, error);
+            REQUIRE_MESSAGE (loaded != nullptr, error.toStdString());
+
+            auto* back = dynamic_cast<te::WaveAudioClip*> (core::clips::getClips (*loaded->getTracks().getLast()).getFirst());
+            REQUIRE (back != nullptr);
+            CHECK (audio_tempo::followsBeatByBeat (*back));
+            checkExport (*loaded, 1.92, 0.48);
+        }
+
+        // Taken for twice the tempo, it is still followed beat by beat: a hit every two beats.
+        const auto bpm = audio_tempo::getLoopBpm (*clip);
+        REQUIRE (bpm.has_value());
+        audio_tempo::setFollowsTempo (*clip, *bpm * 2.0);
+        CHECK (audio_tempo::followsBeatByBeat (*clip));
+        CHECK (audio_tempo::getLoopBpm (*clip).value_or (0.0) == doctest::Approx (*bpm * 2.0).epsilon (0.0001));
+        checkExport (*song.project, 1.92, 0.96);
+
+        // Its own tempo again; the sound slid later under the clip as far as its file goes: the
+        // silence before the first hit shows again, at the speed the sound starts with.
+        audio_tempo::setFollowsTempo (*clip, *bpm);
+        CHECK (audio_tempo::slide (*clip, 100.0));
+        CHECK_FALSE (audio_tempo::slide (*clip, 1.0));
+        checkExport (*song.project, 1.92 + 0.48 * 0.25 / (beats[1] - beats[0]), 0.48);
+
+        // Following off: the file at its own speed again, from its start.
+        audio_tempo::setFollowsTempo (*clip, std::nullopt);
+        CHECK_FALSE (audio_tempo::followsTempo (*clip));
+        CHECK_FALSE (audio_tempo::followsBeatByBeat (*clip));
+        CHECK (std::abs (clip->getPosition().getOffset().inSeconds()) < 1.0e-6);
+
+        // One Ctrl+Z: as it was dropped.
+        song.project->undo();
+        CHECK_FALSE (audio_tempo::followsTempo (*clip));
+        CHECK_FALSE (clip->state.hasProperty (te::IDs::sourceTempoMap));
+        CHECK (std::abs (clip->getPosition().getOffset().inSeconds()) < 1.0e-6);
+        CHECK (clip->getPosition().getLength().inSeconds() == doctest::Approx (beats[31] + 0.5).epsilon (0.001));
+    }
+
+    TEST_CASE ("a sound followed beat by beat, played backwards: its beats are turned round with it")
+    {
+        AudioSong song;
+        song.project->setTempoBpm (100.0);
+        const auto beats = speedingUp (16, 0.25, 92.0, 104.0);
+        const auto fileSeconds = beats.back() + 0.5;
+        const auto file = writeClicksAt (song.temp.getFile ("Played.wav"), beats, 0.5);
+        auto* clip = song.add (file, 4.0);
+        song.project->getEdit().dispatchPendingUpdatesSynchronously();
+
+        const auto measured = audio_tempo::measure (test::session().getEngine(), file, 100.0);
+        REQUIRE (measured.has_value());
+        REQUIRE (measured->drifts());
+        audio_tempo::setFollowsTempo (*clip, *measured);
+        audio_tempo::startOnBeat (*clip, *measured);
+        const auto lengthBeats = core::clips::getEndBeat (*clip) - core::clips::getStartBeat (*clip);
+        const auto tailBeats = 0.5 / (beats[15] - beats[14]);
+        CHECK (lengthBeats == doctest::Approx (15.0 + tailBeats).epsilon (0.003));
+
+        // Backwards: as long, in the same place; the silence after the last hit comes first, then
+        // the hits, last to first, each on a beat (the file backwards has them as far from its
+        // end as they were from its start).
+        song.project->beginGesture ("Reverse");
+        core::clips::setReversed (*clip, true);
+        CHECK (core::clips::isReversed (*clip));
+        CHECK (audio_tempo::followsBeatByBeat (*clip));
+        CHECK (core::clips::getStartBeat (*clip) == doctest::Approx (4.0));
+        CHECK (core::clips::getEndBeat (*clip) - core::clips::getStartBeat (*clip) == doctest::Approx (lengthBeats).epsilon (0.0005));
+
+        {
+            const audio_tempo::FileUnderSong under (*clip);
+
+            for (const auto k : { 0, 1, 7, 15 })
+            {
+                CAPTURE (k);
+                CHECK (std::abs (under.toFileSeconds (4.0 + tailBeats + k) - (fileSeconds - beats[(size_t) (15 - k)])) < 0.003);
+            }
+        }
+
+        // Forwards again: as it was.
+        CHECK (waitWhileReversing (*clip));
+        core::clips::setReversed (*clip, false);
+        CHECK (audio_tempo::followsBeatByBeat (*clip));
+        CHECK (core::clips::getEndBeat (*clip) - core::clips::getStartBeat (*clip) == doctest::Approx (lengthBeats).epsilon (0.0005));
+
+        {
+            const audio_tempo::FileUnderSong under (*clip);
+
+            for (const auto n : { 0, 3, 15 })
+            {
+                CAPTURE (n);
+                CHECK (std::abs (under.toFileSeconds (4.0 + n) - beats[(size_t) n]) < 0.003);
+            }
+        }
+
+        // A steady loop is turned round by the engine, as before.
+        auto* loop = song.add (writeClickLoop (song.temp.getFile ("Clicks 100 BPM.wav"), 100.0, 8), 40.0);
+        audio_tempo::setFollowsTempo (*loop, 100.0);
+        core::clips::setReversed (*loop, true);
+        CHECK (core::clips::isReversed (*loop));
+        CHECK_FALSE (audio_tempo::followsBeatByBeat (*loop));
+        CHECK (core::clips::getEndBeat (*loop) - core::clips::getStartBeat (*loop) == doctest::Approx (8.0));
+        CHECK (waitWhileReversing (*loop));
+    }
+
+    TEST_CASE ("a loop stays on the beats through a change of the song's tempo")
+    {
+        // The song at 100 BPM for eight beats, at 150 from then on.
+        AudioSong song;
+        song.project->setTempoBpm (100.0);
+        core::tempo_changes::add (song.project->getEdit(), 8.0, 150.0);
+        auto* clip = song.add (writeClickLoop (song.temp.getFile ("Clicks 100 BPM.wav"), 100.0, 24));
+        audio_tempo::setFollowsTempo (*clip, 100.0);
+        CHECK (core::clips::getEndBeat (*clip) == doctest::Approx (24.0));
+
+        double sampleRate = 0.0;
+        const auto rendered = song.render (sampleRate);
+        const auto clicks = findClicks (rendered, sampleRate);
+        REQUIRE (clicks.size() == 24);
+
+        // The stretcher is a tenth of a second behind what it is fed, and catches up after the
+        // change of speed: otherwise every hit after it would be late, by a third of that.
+        for (size_t i = 0; i < clicks.size(); ++i)
+        {
+            CAPTURE (i);
+            const auto expected = i <= 8 ? 0.6 * (double) i : 4.8 + 0.4 * (double) (i - 8);
+            CHECK (std::abs (clicks[i] - expected) < 0.004);
+        }
     }
 
     TEST_CASE ("a loop following the tempo is saved with its tempo")

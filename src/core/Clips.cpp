@@ -1,4 +1,5 @@
 #include "core/Clips.h"
+#include "core/AudioTempo.h"
 #include "core/Tracks.h"
 #include "core/ClipLinks.h"
 #include "core/Controllers.h"
@@ -464,8 +465,7 @@ namespace harmonia::core::clips
 
     void setReversed (te::AudioClipBase& clip, bool shouldBeReversed)
     {
-        if (clip.getIsReversed() != shouldBeReversed)
-            clip.setIsReversed (shouldBeReversed);
+        audio_tempo::setReversed (clip, shouldBeReversed);
     }
 
     bool isReversing (const te::AudioClipBase& clip)

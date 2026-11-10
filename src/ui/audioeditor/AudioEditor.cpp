@@ -109,8 +109,10 @@ namespace harmonia::ui::audioeditor
 
         loopBpm.setRange (audio_tempo::minLoopBpm, audio_tempo::maxLoopBpm);
         loopBpm.setSteps (1.0, 0.1);
-        loopBpm.textFromValue = [] (double bpm) { return audio_tempo::formatBpm (bpm) + " BPM"; };
-        loopBpm.setTooltip ("The tempo the loop was recorded at: it is played faster or slower to fit the song");
+        loopBpm.textFromValue = [this] (double bpm)
+        {
+            return (model.followsBeatByBeat() ? "~" : "") + audio_tempo::formatBpm (bpm) + " BPM";
+        };
         loopBpm.onGestureStart = [this] { model.beginChange ("Loop tempo"); };
         loopBpm.onValueChange = [this] (double bpm) { model.setLoopBpm (bpm); };
     }
@@ -227,6 +229,10 @@ namespace harmonia::ui::audioeditor
         follow.setToggleState (loop.has_value(), juce::dontSendNotification);
         loopBpm.setEnabled (loop.has_value());
         loopBpm.setValue (loop.value_or (arrangement.getProject().getTempoBpm()));
+        loopBpm.setTooltip (model.followsBeatByBeat()
+                                ? "The sound's tempo on the whole. It doesn't keep one tempo: each of its beats is played on a beat of the song (the lines over the waveform)"
+                                : "The tempo the loop was recorded at: it is played faster or slower to fit the song");
+        loopBpm.repaint();
         halve.setEnabled (loop.has_value() && *loop / 2.0 >= audio_tempo::minLoopBpm - 0.05);
         twice.setEnabled (loop.has_value() && *loop * 2.0 <= audio_tempo::maxLoopBpm + 0.05);
         earlier.setEnabled (model.canSlide());

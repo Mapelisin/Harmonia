@@ -366,23 +366,33 @@ namespace harmonia::ui::arrangement
             return;
 
         // Which stretch of the file plays there (faster or slower when a loop follows the tempo).
-        const auto& tempo = model.getEdit().tempoSequence;
-        const auto sourceStart = clip.getPosition().getStartOfSource();
-        const auto speed = core::audio_tempo::getPlaybackSpeed (clip);
-        const auto fileTimeAt = [&] (int x)
-        {
-            const auto songTime = tempo.toTime (te::BeatPosition::fromBeats (view.xToBeat ((float) x)));
-            return te::TimePosition::fromSeconds ((songTime - sourceStart).inSeconds() * speed);
-        };
-
+        // A sound followed beat by beat has more of its file under some beats than under others:
+        // it is drawn a narrow strip at a time, each under the beats it plays on.
+        const core::audio_tempo::FileUnderSong underSong (clip);
         auto& thumbnail = getWaveform (clip);
         g.setColour (colour.brighter (0.55f));
 
+        // Draws `area`, the file lying as if the song were `beatsLater` beats further on.
+        const auto drawWaveform = [&] (juce::Rectangle<int> area, double beatsLater)
+        {
+            const auto fileTimeAt = [&] (int x)
+            {
+                return te::TimePosition::fromSeconds (underSong.toFileSeconds (view.xToBeat ((float) x) - beatsLater));
+            };
+
+            const auto stripWidth = underSong.isStraight() ? area.getWidth() : 32;
+
+            for (auto x = area.getX(); x < area.getRight(); x += stripWidth)
+            {
+                const auto strip = area.withX (x).withRight (std::min (area.getRight(), x + stripWidth));
+                thumbnail.drawChannels (g, strip, { fileTimeAt (strip.getX()), fileTimeAt (strip.getRight()) }, clip.getGain());
+            }
+        };
+
         // A looping clip: its part of the file again each time round, a line where each begins.
         const auto loopBeats = core::audio_clips::getLoopLengthBeats (clip);
-        const auto loopFile = core::audio_clips::getLoopFileSeconds (clip);
 
-        if (loopBeats > 0.0 && ! loopFile.isEmpty())
+        if (loopBeats > 0.0 && ! core::audio_clips::getLoopFileSeconds (clip).isEmpty())
         {
             const auto firstStart = core::audio_clips::getLoopSongStartBeat (clip);
             const auto firstRound = std::max (0.0, std::floor ((view.xToBeat ((float) visible.getX()) - firstStart) / loopBeats));
@@ -401,12 +411,8 @@ namespace harmonia::ui::arrangement
                 if (part.isEmpty())
                     continue;
 
-                const auto secondsAt = [&] (int x)
-                {
-                    return te::TimePosition::fromSeconds (loopFile.getStart() + loopFile.getLength() * (double) ((float) x - x0) / (double) (x1 - x0));
-                };
-
-                thumbnail.drawChannels (g, part, { secondsAt (part.getX()), secondsAt (part.getRight()) }, clip.getGain());
+                // As the first time round lies in the song, that many times round later.
+                drawWaveform (part, round * loopBeats);
 
                 if (seams && round > 0.0 && x0 > body.getX() + 1.0f)
                 {
@@ -419,8 +425,7 @@ namespace harmonia::ui::arrangement
             return;
         }
 
-        thumbnail.drawChannels (g, visible, { fileTimeAt (visible.getX()), fileTimeAt (visible.getRight()) },
-                                clip.getGain());
+        drawWaveform (visible, 0.0);
     }
 
     void ClipArea::paintFadesAndGain (juce::Graphics& g, te::AudioClipBase& clip, const DrawnClip& d, juce::Rectangle<float> body)

@@ -16,31 +16,143 @@ namespace harmonia::core::audio_tempo
             return (clip.getEndBeat() - clip.getStartBeat()).inBeats();
         }
 
-        /** The clip from its start for that many beats of the song (whatever the tempo does on
-            the way), its offset scaled by `offsetFactor`. */
-        void setLengthBeats (te::AudioClipBase& clip, double beats, double offsetFactor)
+        /** The beats of its file a clip following the tempo shows, counted as its map counts
+            them. (The engine counts the clip's offset in beats at the tempo where it starts.) */
+        juce::Range<double> getShownBeats (const te::Clip& clip)
+        {
+            const auto from = clip.getPosition().getOffset().inSeconds() * getSongBeatsPerSecond (clip);
+            return { from, from + getLengthBeats (clip) };
+        }
+
+        /** The clip from its start for `shown.getLength()` beats of the song (whatever the tempo
+            does on the way), showing its file from the beat `shown.getStart()`. */
+        void showBeats (te::AudioClipBase& clip, juce::Range<double> shown)
         {
             const auto& tempo = clip.edit.tempoSequence;
-            const auto position = clip.getPosition();
-            const auto start = position.getStart();
-            const auto end = tempo.toTime (tempo.toBeats (start) + te::BeatDuration::fromBeats (beats));
-            const auto offset = te::TimeDuration::fromSeconds (position.getOffset().inSeconds() * offsetFactor);
+            const auto start = clip.getPosition().getStart();
+            const auto end = tempo.toTime (tempo.toBeats (start) + te::BeatDuration::fromBeats (shown.getLength()));
+            const auto offset = te::TimeDuration::fromSeconds (shown.getStart() / getSongBeatsPerSecond (clip));
             clip.setPosition (te::ClipPosition { { start, end }, offset });
         }
 
-        /** The clip from its start for that many seconds, its offset scaled. */
-        void setLengthSeconds (te::AudioClipBase& clip, double seconds, double offsetFactor)
+        /** What a clip plays of its file, in seconds of the file. */
+        struct Played
         {
-            const auto position = clip.getPosition();
-            const auto start = position.getStart();
-            const auto offset = te::TimeDuration::fromSeconds (position.getOffset().inSeconds() * offsetFactor);
-            clip.setPosition (te::ClipPosition { { start, start + te::TimeDuration::fromSeconds (seconds) }, offset });
+            juce::Range<double> shown;          // of a clip that doesn't repeat
+            juce::Range<double> loop;           // of one that does: what repeats,
+            double into = 0.0, rounds = 0.0;    // how far into it the clip starts, how many times round it goes
+        };
+
+        /** `map`: where the beats of its file are, if the clip follows the tempo. */
+        Played getPlayed (const te::AudioClipBase& clip, const std::optional<BeatMap>& map)
+        {
+            Played played;
+
+            if (map.has_value())
+            {
+                const auto beats = getShownBeats (clip);
+                played.shown = { map->toSeconds (beats.getStart()), map->toSeconds (beats.getEnd()) };
+
+                if (const auto length = clip.getLoopLengthBeats().inBeats(); clip.isLooping() && length > 0.0)
+                {
+                    const auto from = clip.getLoopStartBeats().inBeats();
+                    played.loop = { map->toSeconds (from), map->toSeconds (from + length) };
+                    played.into = beats.getStart() / length;
+                    played.rounds = beats.getLength() / length;
+                }
+            }
+            else
+            {
+                const auto position = clip.getPosition();
+                const auto from = position.getOffset().inSeconds();
+                played.shown = { from, from + position.getLength().inSeconds() };
+
+                if (const auto length = clip.getLoopLength().inSeconds(); clip.isLooping() && length > 0.0)
+                {
+                    const auto loopStart = clip.getLoopStart().inSeconds();
+                    played.loop = { loopStart, loopStart + length };
+                    played.into = from / length;
+                    played.rounds = played.shown.getLength() / length;
+                }
+            }
+
+            return played;
+        }
+
+        /** Has a clip following the tempo play that of its file, its beats being where `map` has them. */
+        void play (te::AudioClipBase& clip, const BeatMap& map, const Played& played)
+        {
+            if (played.loop.isEmpty())
+            {
+                showBeats (clip, { map.toBeats (played.shown.getStart()), map.toBeats (played.shown.getEnd()) });
+                return;
+            }
+
+            // The same of the file repeats, as many times round as before.
+            const juce::Range<double> beats (map.toBeats (played.loop.getStart()), map.toBeats (played.loop.getEnd()));
+            clip.setLoopRangeBeats ({ te::BeatPosition::fromBeats (beats.getStart()), te::BeatPosition::fromBeats (beats.getEnd()) });
+            showBeats (clip, { played.into * beats.getLength(), (played.into + played.rounds) * beats.getLength() });
+        }
+
+        /** Makes the clip follow the tempo with its beats where `given` has them (or go on
+            following, with its beats there now). What it plays of its file stays. */
+        void follow (te::WaveAudioClip& clip, const BeatMap& given)
+        {
+            // As it will be read back from the clip, by Harmonia and by the engine.
+            const auto map = BeatMap::fromString (given.toString()).value_or (given);
+            const auto previous = getBeatMap (clip);
+            const auto played = getPlayed (clip, previous);
+            const auto info = clip.getAudioFile().getInfo();
+            const auto fileSeconds = info.getLengthInSeconds();
+            auto* undo = &clip.edit.getUndoManager();
+
+            // The engine takes the file for so many beats long: as many as the map counts in it.
+            auto& loopInfo = clip.getLoopInfo();
+            loopInfo.setBpm (fileSeconds > 0.0 ? map.toBeats (fileSeconds) * 60.0 / fileSeconds : map.getChanges().front().bpm, info);
+
+            // It counts the loop's bars by its time signature, which a file without loop data
+            // doesn't have (0 / 0, and counting bars of no beats never ends).
+            if (loopInfo.getNumerator() <= 0 || loopInfo.getDenominator() <= 0)
+            {
+                loopInfo.setNumerator (4);
+                loopInfo.setDenominator (4);
+            }
+
+            // Following first: until then the clip can't be longer than the file at its own speed.
+            if (! previous.has_value())
+                clip.setAutoTempo (true);
+
+            if (map.isSteady())
+                clip.state.removeProperty (te::IDs::sourceTempoMap, undo);
+            else
+                clip.state.setProperty (te::IDs::sourceTempoMap, map.toString(), undo);
+
+            play (clip, map, played);
+            audio_clips::prepareForPlayback (clip);
+        }
+
+        /** The map last read from a clip (a long one is asked for at every line of a drawing). */
+        struct ReadMap
+        {
+            juce::String text;
+            std::optional<BeatMap> map;
+        };
+
+        std::optional<BeatMap> readMap (const juce::String& text)
+        {
+            thread_local ReadMap last;
+
+            if (last.text != text)
+                last = { text, BeatMap::fromString (text) };
+
+            return last.map;
         }
     }
 
     std::optional<beat_finder::Beat> measure (te::Engine& engine, const juce::File& file, double nearBpm)
     {
-        constexpr double longestSeconds = 120.0;
+        // A whole take of a song, played by hand, is what drifts most.
+        constexpr double longestSeconds = 300.0;
         std::unique_ptr<juce::AudioFormatReader> reader (te::AudioFileUtils::createReaderFor (engine, file));
 
         if (reader == nullptr || reader->lengthInSamples <= 0 || reader->sampleRate <= 0.0 || reader->numChannels == 0)
@@ -49,19 +161,29 @@ namespace harmonia::core::audio_tempo
         const auto whole = reader->lengthInSamples <= (juce::int64) (longestSeconds * reader->sampleRate);
         const auto numSamples = (int) std::min<juce::int64> (reader->lengthInSamples, (juce::int64) (longestSeconds * reader->sampleRate));
         const auto channels = std::min (2, (int) reader->numChannels);
-        juce::AudioBuffer<float> buffer (channels, numSamples);
 
-        if (! reader->read (&buffer, 0, numSamples, 0, true, channels > 1))
-            return std::nullopt;
+        // Both sides together, read a piece at a time.
+        std::vector<float> sound ((size_t) numSamples);
+        constexpr int pieceSamples = 1 << 16;
+        juce::AudioBuffer<float> piece (channels, pieceSamples);
 
-        // Both sides together.
-        if (channels > 1)
+        for (int done = 0; done < numSamples; done += pieceSamples)
         {
-            buffer.addFrom (0, 0, buffer, 1, 0, numSamples);
-            buffer.applyGain (0, 0, numSamples, 0.5f);
+            const auto count = std::min (pieceSamples, numSamples - done);
+
+            if (! reader->read (&piece, 0, count, done, true, channels > 1))
+                return std::nullopt;
+
+            if (channels > 1)
+            {
+                piece.addFrom (0, 0, piece, 1, 0, count);
+                piece.applyGain (0, 0, count, 0.5f);
+            }
+
+            std::copy_n (piece.getReadPointer (0), count, sound.begin() + done);
         }
 
-        const auto hits = beat_finder::findHits (buffer.getReadPointer (0), numSamples, reader->sampleRate);
+        const auto hits = beat_finder::findHits (sound.data(), numSamples, reader->sampleRate);
 
         // Of a file cut short here, the length says nothing about its beats.
         auto beat = beat_finder::findBeat (hits, whole ? reader->lengthInSamples / reader->sampleRate : 0.0, nearBpm);
@@ -111,100 +233,123 @@ namespace harmonia::core::audio_tempo
 
     void setFollowsTempo (te::WaveAudioClip& clip, std::optional<double> loopBpm)
     {
-        const auto songBps = getSongBeatsPerSecond (clip);
+        const auto previous = getBeatMap (clip);
 
         if (loopBpm.has_value())
         {
             const auto bpm = juce::jlimit (minLoopBpm, maxLoopBpm, *loopBpm);
-            const auto info = clip.getAudioFile().getInfo();
-            const auto previous = getLoopBpm (clip);
-            auto& loopInfo = clip.getLoopInfo();
-            loopInfo.setBpm (bpm, info);
+            const auto current = getLoopBpm (clip);
 
-            // The engine counts the loop's bars by its time signature, which a file without loop
-            // data doesn't have (0 / 0, and counting bars of no beats never ends).
-            if (loopInfo.getNumerator() <= 0 || loopInfo.getDenominator() <= 0)
-            {
-                loopInfo.setNumerator (4);
-                loopInfo.setDenominator (4);
-            }
+            // A sound followed beat by beat stays so: the same beats, counted anew.
+            if (previous.has_value() && ! previous->isSteady() && current.has_value())
+                follow (clip, previous->scaled (bpm / *current));
+            else
+                follow (clip, BeatMap (bpm));
+        }
+        else if (previous.has_value())
+        {
+            // What it plays of its file, at the file's own speed again.
+            const auto played = getPlayed (clip, previous);
+            const auto start = clip.getPosition().getStart();
+            const auto seconds = [] (double s) { return te::TimeDuration::fromSeconds (s); };
 
-            // A second of the file lasts bpm / 60 beats of the loop, played as beats of the song.
-            // Following first: until then the clip can't be longer than the file at its own speed.
-            if (previous.has_value())
+            clip.setAutoTempo (false);
+            clip.state.removeProperty (te::IDs::sourceTempoMap, &clip.edit.getUndoManager());
+
+            if (played.loop.isEmpty())
             {
-                setLengthBeats (clip, getLengthBeats (clip) * bpm / *previous, bpm / *previous);
+                clip.setPosition (te::ClipPosition { { start, start + seconds (played.shown.getLength()) }, seconds (played.shown.getStart()) });
             }
             else
             {
-                const auto seconds = clip.getPosition().getLength().inSeconds();
-                clip.setAutoTempo (true);
-                setLengthBeats (clip, seconds * bpm / 60.0, bpm / 60.0 / songBps);
+                // (The engine turns the beats that repeat into seconds by the song's tempo, not the sound's.)
+                const auto length = played.loop.getLength();
+                clip.setLoopRange ({ te::TimePosition::fromSeconds (played.loop.getStart()), te::TimePosition::fromSeconds (played.loop.getEnd()) });
+                clip.setPosition (te::ClipPosition { { start, start + seconds (played.rounds * length) }, seconds (played.into * length) });
             }
 
-            audio_clips::prepareForPlayback (clip);
-        }
-        else if (const auto previous = getLoopBpm (clip))
-        {
-            // Its beats played at the loop's own tempo again.
-            const auto seconds = getLengthBeats (clip) / (*previous / 60.0);
-            clip.setAutoTempo (false);
-            setLengthSeconds (clip, seconds, songBps / (*previous / 60.0));
             audio_clips::prepareForPlayback (clip);
         }
     }
 
+    void setFollowsTempo (te::WaveAudioClip& clip, const beat_finder::Beat& beat)
+    {
+        if (beat.drifts())
+        {
+            if (const auto map = BeatMap::fromBeats (beat.beatSeconds))
+            {
+                follow (clip, *map);
+                return;
+            }
+        }
+
+        follow (clip, BeatMap (juce::jlimit (minLoopBpm, maxLoopBpm, beat.bpm)));
+    }
+
     double startOnBeat (te::WaveAudioClip& clip, const beat_finder::Beat& beat)
     {
-        const auto bpm = getLoopBpm (clip);
+        const auto map = getBeatMap (clip);
 
-        if (! bpm.has_value() || beat.bpm <= 0.0 || audio_clips::isLooping (clip))
+        if (! map.has_value() || beat.bpm <= 0.0 || audio_clips::isLooping (clip))
             return 0.0;
 
-        const auto songBps = getSongBeatsPerSecond (clip);
-        const auto loopBps = *bpm / 60.0;
-        const auto position = clip.getPosition();
-        const auto shownFrom = position.getOffset().inSeconds() * songBps / loopBps;       // seconds of the file
-        const auto beatSeconds = 60.0 / beat.bpm;
+        const auto shown = getShownBeats (clip);
+        const auto shownFrom = map->toSeconds (shown.getStart());       // seconds of the file
 
         // The first beat at or after where the clip starts showing its file (a hair before counts).
-        const auto steps = std::max (0.0, std::ceil ((shownFrom - beat.firstBeatSeconds - 0.004) / beatSeconds));
-        const auto startsAt = beat.firstBeatSeconds + steps * beatSeconds;
-        const auto hidden = startsAt - shownFrom;
-        const auto lengthBeats = getLengthBeats (clip) - hidden * loopBps;
+        auto startsAt = 0.0;
 
-        if (hidden < 0.0005 || lengthBeats < 0.25)
+        if (beat.drifts())
+        {
+            const auto& beats = beat.beatSeconds;
+            const auto found = std::lower_bound (beats.begin(), beats.end(), shownFrom - 0.004);
+
+            if (found != beats.end())
+            {
+                startsAt = *found;
+            }
+            else
+            {
+                // Past the last beat heard: on as the last two go.
+                const auto step = beats.size() > 1 ? beats.back() - beats[beats.size() - 2] : 60.0 / beat.bpm;
+                startsAt = beats.back() + std::ceil ((shownFrom - beats.back() - 0.004) / step) * step;
+            }
+        }
+        else
+        {
+            const auto beatSeconds = 60.0 / beat.bpm;
+            const auto steps = std::max (0.0, std::ceil ((shownFrom - beat.firstBeatSeconds - 0.004) / beatSeconds));
+            startsAt = beat.firstBeatSeconds + steps * beatSeconds;
+        }
+
+        const auto hidden = startsAt - shownFrom;
+        const auto from = map->toBeats (startsAt);
+
+        if (hidden < 0.0005 || shown.getEnd() - from < 0.25)
             return 0.0;
 
-        const auto& tempo = clip.edit.tempoSequence;
-        const auto start = position.getStart();
-        const auto end = tempo.toTime (tempo.toBeats (start) + te::BeatDuration::fromBeats (lengthBeats));
-        clip.setPosition (te::ClipPosition { { start, end }, te::TimeDuration::fromSeconds (startsAt * loopBps / songBps) });
+        showBeats (clip, { from, shown.getEnd() });
         return hidden;
     }
 
     bool slide (te::WaveAudioClip& clip, double beats)
     {
-        const auto bpm = getLoopBpm (clip);
+        const auto map = getBeatMap (clip);
 
-        if (! bpm.has_value() || std::abs (beats) < 1.0e-9 || audio_clips::isLooping (clip))
+        if (! map.has_value() || std::abs (beats) < 1.0e-9 || audio_clips::isLooping (clip))
             return false;
-
-        const auto songBps = getSongBeatsPerSecond (clip);
-        const auto loopBps = *bpm / 60.0;
-        const auto position = clip.getPosition();
-        const auto fileSeconds = clip.getAudioFile().getLength();
 
         // The sound later: the clip shows its file from an earlier moment; never from before
         // the file, nor from so late that nothing is left of it.
-        const auto shownFrom = position.getOffset().inSeconds() * songBps / loopBps;
-        const auto wanted = shownFrom - beats / loopBps;
-        const auto startsAt = juce::jlimit (0.0, std::max (0.0, fileSeconds - 0.05), wanted);
+        const auto shown = getShownBeats (clip);
+        const auto latest = map->toBeats (std::max (0.0, clip.getAudioFile().getLength() - 0.05));
+        const auto from = juce::jlimit (0.0, latest, shown.getStart() - beats);
 
-        if (std::abs (startsAt - shownFrom) < 1.0e-6)
+        if (std::abs (map->toSeconds (from) - map->toSeconds (shown.getStart())) < 1.0e-6)
             return false;
 
-        clip.setPosition (te::ClipPosition { position.time, te::TimeDuration::fromSeconds (startsAt * loopBps / songBps) });
+        const auto position = clip.getPosition();
+        clip.setPosition (te::ClipPosition { position.time, te::TimeDuration::fromSeconds (from / getSongBeatsPerSecond (clip)) });
         return true;
     }
 
@@ -222,12 +367,97 @@ namespace harmonia::core::audio_tempo
         return bpm > 0.0 ? std::optional<double> (bpm) : std::nullopt;
     }
 
-    double getPlaybackSpeed (const te::AudioClipBase& clip)
+    std::optional<BeatMap> getBeatMap (const te::AudioClipBase& clip)
     {
-        if (const auto bpm = getLoopBpm (clip))
-            return getSongBeatsPerSecond (clip) / (*bpm / 60.0);
+        if (! clip.getAutoTempo())
+            return std::nullopt;
 
-        return 1.0;
+        if (const auto text = clip.state.getProperty (te::IDs::sourceTempoMap).toString(); text.isNotEmpty())
+            if (auto map = readMap (text))
+                return map;
+
+        if (const auto bpm = getLoopBpm (clip))
+            return BeatMap (*bpm);
+
+        return std::nullopt;
+    }
+
+    bool followsBeatByBeat (const te::AudioClipBase& clip)
+    {
+        const auto map = getBeatMap (clip);
+        return map.has_value() && ! map->isSteady();
+    }
+
+    void setReversed (te::AudioClipBase& clip, bool shouldBeReversed)
+    {
+        if (clip.getIsReversed() == shouldBeReversed)
+            return;
+
+        // The engine turns a clip round as one whose sound keeps one tempo. Of a sound followed
+        // beat by beat the beats are turned round here, and the clip plays what it played.
+        const auto map = getBeatMap (clip);
+        const auto fileSeconds = te::AudioFile (clip.edit.engine, clip.getOriginalFile()).getLength();
+
+        if (! map.has_value() || map->isSteady() || fileSeconds <= 0.0)
+        {
+            clip.setIsReversed (shouldBeReversed);
+            return;
+        }
+
+        const auto turnedRound = [fileSeconds] (juce::Range<double> seconds)
+        {
+            return juce::Range<double> (std::max (0.0, fileSeconds - seconds.getEnd()), std::max (0.0, fileSeconds - seconds.getStart()));
+        };
+
+        auto played = getPlayed (clip, map);
+        played.shown = turnedRound (played.shown);
+        played.loop = turnedRound (played.loop);
+
+        clip.setIsReversed (shouldBeReversed);
+
+        const auto backwards = map->reversed (fileSeconds);
+        const auto turned = BeatMap::fromString (backwards.toString()).value_or (backwards);
+        clip.state.setProperty (te::IDs::sourceTempoMap, turned.toString(), &clip.edit.getUndoManager());
+        play (clip, turned, played);
+    }
+
+    //==============================================================================
+    FileUnderSong::FileUnderSong (const te::AudioClipBase& clip)
+        : tempo (clip.edit.tempoSequence), map (getBeatMap (clip))
+    {
+        const auto position = clip.getPosition();
+
+        if (map.has_value())
+        {
+            // The file's beat 0: before the clip's start by its offset, or, of a clip that
+            // repeats, before where its first time round starts by where the loop is in the file.
+            const auto startBeat = tempo.toBeats (position.getStart()).inBeats();
+            const auto offsetBeats = position.getOffset().inSeconds() * getSongBeatsPerSecond (clip);
+            beatOfFileStart = startBeat - offsetBeats - (clip.isLooping() ? clip.getLoopStartBeats().inBeats() : 0.0);
+            straight = map->isSteady();
+        }
+        else
+        {
+            timeOfFileStart = position.getStartOfSource()
+                            - (clip.isLooping() ? te::toDuration (clip.getLoopStart()) : te::TimeDuration());
+            straight = tempo.getNumTempos() <= 1;
+        }
+    }
+
+    double FileUnderSong::toFileSeconds (double songBeat) const
+    {
+        if (map.has_value())
+            return map->toSeconds (songBeat - beatOfFileStart);
+
+        return (tempo.toTime (te::BeatPosition::fromBeats (songBeat)) - timeOfFileStart).inSeconds();
+    }
+
+    double FileUnderSong::toSongBeat (double fileSeconds) const
+    {
+        if (map.has_value())
+            return beatOfFileStart + map->toBeats (fileSeconds);
+
+        return tempo.toBeats (timeOfFileStart + te::TimeDuration::fromSeconds (fileSeconds)).inBeats();
     }
 
     juce::String formatBpm (double bpm)

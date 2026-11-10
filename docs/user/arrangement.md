@@ -174,7 +174,9 @@ are dim. Above it is a ruler with the bars of the song.
   measures its tempo (any tempo, 72.3 BPM too) and finds its first beat, then stretches it so that its hits
   land on the song's beats; the status bar says what it found. **Loop** is the measured tempo (drag or
   type to correct it), **÷2** / **×2** halves or doubles it, **◀ ▶** slide the sound a sixteenth earlier or
-  later under the grid (with Shift, a hair). See "Loops in the tempo of the song" below.
+  later under the grid (with Shift, a hair). Playing that speeds up and slows down is put on the grid beat
+  by beat: **Loop** then shows its tempo on the whole, with a ~ before it. See "Loops in the tempo of the
+  song" below.
 - **Fades**: the fade shape: Linear, S-curve, Fast, Slow.
 - **Reverse**: play backwards.
 - On the right is the file: name, sample rate, mono or stereo, length.
@@ -323,8 +325,23 @@ tempo** in the clip's menu (▾). Harmonia then:
 
 The same hits fit a tempo twice or half as fast: Harmonia takes the one nearest the song's tempo, so that the
 sound is changed least. If it should be the other one, press **÷2** or **×2**. If the first beat was taken
-a step off, **◀ ▶** slide the sound by sixteenths. A sound with no steady beat to hear (a pad, a phrase, a
-single hit, playing that speeds up and slows down) gets a message saying so: then set **Loop** by hand.
+a step off, **◀ ▶** slide the sound by sixteenths. A sound with no beat to hear (a pad, a phrase, a
+single hit) gets a message saying so: then set **Loop** by hand.
+
+**Playing that speeds up and slows down.** A take played by hand, without a click, doesn't keep one tempo:
+no single stretch puts all of it on the grid. Harmonia hears that. It follows the hits along the sound,
+finds where each beat really is, and puts every beat of the sound on a beat of the song, stretching the
+sound a little differently from beat to beat. It is the same one click on **Follow tempo**, and:
+- the status bar says so: "Its tempo isn't steady (around 97 BPM): its 64 beats were put on the grid one by
+  one";
+- **Loop** shows the tempo on the whole, with a ~ before it;
+- in the audio clip editor the song's beat lines lie over the waveform where the sound's beats were found,
+  unevenly if the playing was uneven: you can see what Harmonia heard;
+- **÷2** / **×2** and **◀ ▶** work as for any other sound.
+
+What stays as it was played is the feel inside a beat: a snare that is always a little late is still a
+little late. After a long break with nothing to hear (more than about four bars) the count can come out a
+sixteenth off; a single beat can't be moved by hand yet.
 
 In the audio clip menu (▾):
 - **Follow the song tempo**: turn on or off. If you turn it off, the clip plays at its own speed again, from

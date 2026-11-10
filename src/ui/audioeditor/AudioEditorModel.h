@@ -86,6 +86,10 @@ namespace harmonia::ui::audioeditor
         /** Can the sound be slid (a clip following the tempo that doesn't repeat)? */
         bool canSlide() const;
 
+        /** Does the clip follow beat by beat (its sound doesn't keep one tempo)? The song's beats
+            then lie over the file where the sound's own beats are, unevenly. */
+        bool followsBeatByBeat() const;
+
         /** Can the clip follow the tempo (a plain sound file clip)? */
         bool canFollowTempo() const;
 

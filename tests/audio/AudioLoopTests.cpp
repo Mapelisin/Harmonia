@@ -162,6 +162,79 @@ TEST_SUITE ("audio: looping clips and crossfades")
             CHECK_MESSAGE ((heard[(size_t) beat] > 0.1f) == (beat % 4 == 0), "beat " << beat << " at 60 BPM");
     }
 
+    TEST_CASE ("a clip that repeats goes on repeating the same of its file when it starts following the tempo, is counted anew, and stops")
+    {
+        test::AudioRig rig;
+        auto& track = rig.addAudioTrack ("Loop");
+        rig.project->setTempoBpm (120.0);
+
+        // Two bars recorded at 100 BPM (4.8 s). The clip repeats the first (2.4 s), three times round.
+        const auto file = writeStretches (rig.temp.getFile ("Slow.wav"), { 0.5f, 0.0f, 0.0f, 0.0f, 0.3f, 0.3f, 0.3f, 0.3f }, 0.6);
+        juce::String error;
+        auto* clip = dynamic_cast<te::WaveAudioClip*> (rig.project->addAudioClip (track, file, 0.0, error));
+        REQUIRE_MESSAGE (clip != nullptr, error.toStdString());
+        clips::setEnd (*clip, 4.8, 0.25);
+        audio_clips::setLooping (*clip, true);
+        clips::setEnd (*clip, 14.4, 0.25);
+        rig.project->getEdit().dispatchPendingUpdatesSynchronously();
+        rig.project->clearUndoHistory();
+
+        const auto checkRepeats = [clip]
+        {
+            const auto repeats = audio_clips::getLoopFileSeconds (*clip);
+            CHECK (std::abs (repeats.getStart()) < 0.001);
+            CHECK (repeats.getEnd() == doctest::Approx (2.4).epsilon (0.001));
+        };
+
+        checkRepeats();
+
+        // Following, the file being at 100 BPM: its first bar still, four beats of the song now,
+        // three times round.
+        rig.project->beginGesture ("Follow the tempo");
+        core::audio_tempo::setFollowsTempo (*clip, 100.0);
+        CHECK (audio_clips::isLooping (*clip));
+        checkRepeats();
+        CHECK (audio_clips::getLoopLengthBeats (*clip) == doctest::Approx (4.0).epsilon (0.001));
+        CHECK (clips::getEndBeat (*clip) == doctest::Approx (12.0).epsilon (0.001));
+
+        // The tone on the first beat of each time round.
+        const auto heard = playStretches (rig, 12, 0.5);
+        for (int beat = 0; beat < 12; ++beat)
+            CHECK_MESSAGE ((heard[(size_t) beat] > 0.1f) == (beat % 4 == 0), "beat " << beat);
+
+        // Taken for 50 BPM: two beats a time round, six in all, the same of the file.
+        rig.project->beginGesture ("Loop tempo");
+        core::audio_tempo::setFollowsTempo (*clip, 50.0);
+        checkRepeats();
+        CHECK (audio_clips::getLoopLengthBeats (*clip) == doctest::Approx (2.0).epsilon (0.001));
+        CHECK (clips::getEndBeat (*clip) == doctest::Approx (6.0).epsilon (0.001));
+
+        // At its own speed again: 2.4 s a time round, three times.
+        rig.project->beginGesture ("Play at its own speed");
+        core::audio_tempo::setFollowsTempo (*clip, std::nullopt);
+        CHECK_FALSE (core::audio_tempo::followsTempo (*clip));
+        CHECK (audio_clips::isLooping (*clip));
+        checkRepeats();
+        CHECK (clip->getPosition().getLength().inSeconds() == doctest::Approx (7.2).epsilon (0.001));
+
+        // One Ctrl+Z each, back to before it followed.
+        rig.project->undo();
+        CHECK (core::audio_tempo::getLoopBpm (*clip).value_or (0.0) == doctest::Approx (50.0));
+        checkRepeats();
+        CHECK (clips::getEndBeat (*clip) == doctest::Approx (6.0).epsilon (0.001));
+
+        rig.project->undo();
+        CHECK (core::audio_tempo::getLoopBpm (*clip).value_or (0.0) == doctest::Approx (100.0));
+        checkRepeats();
+        CHECK (clips::getEndBeat (*clip) == doctest::Approx (12.0).epsilon (0.001));
+
+        rig.project->undo();
+        CHECK_FALSE (core::audio_tempo::followsTempo (*clip));
+        CHECK (audio_clips::isLooping (*clip));
+        checkRepeats();
+        CHECK (clips::getEndBeat (*clip) == doctest::Approx (14.4).epsilon (0.001));
+    }
+
     TEST_CASE ("where two audio clips overlap, one fades into the other; apart again, their own fades are back")
     {
         test::AudioRig rig;

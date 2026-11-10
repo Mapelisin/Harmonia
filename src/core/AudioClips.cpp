@@ -1,4 +1,5 @@
 #include "core/AudioClips.h"
+#include "core/AudioTempo.h"
 
 namespace harmonia::core::audio_clips
 {
@@ -175,13 +176,13 @@ namespace harmonia::core::audio_clips
 
         if (clip.beatBasedLooping())
         {
-            const auto bpm = clip.getLoopInfo().getBpm (clip.getAudioFile().getInfo());
+            const auto map = audio_tempo::getBeatMap (clip);
 
-            if (bpm <= 0.0)
+            if (! map.has_value())
                 return {};
 
-            const auto start = clip.getLoopStartBeats().inBeats() * 60.0 / bpm;
-            return { start, start + clip.getLoopLengthBeats().inBeats() * 60.0 / bpm };
+            const auto start = clip.getLoopStartBeats().inBeats();
+            return { map->toSeconds (start), map->toSeconds (start + clip.getLoopLengthBeats().inBeats()) };
         }
 
         const auto start = clip.getLoopStart().inSeconds();

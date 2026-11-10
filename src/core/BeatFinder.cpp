@@ -1,10 +1,14 @@
 #include "core/BeatFinder.h"
+#include "core/BeatFollower.h"
+#include "core/BeatGrid.h"
 
 #include <algorithm>
 #include <cmath>
 
 namespace harmonia::core::beat_finder
 {
+    using namespace grid;
+
     namespace
     {
         constexpr double pi = 3.14159265358979323846;
@@ -13,12 +17,6 @@ namespace harmonia::core::beat_finder
         constexpr double framesPerSecond = 400.0;
         constexpr double lowHz = 150.0, highHz = 2500.0;
 
-        // Hits nearer than this to the grid are on it.
-        constexpr double onGridSeconds = 0.015;
-
-        constexpr double leastCertainty = 0.6;
-        constexpr int fewestHits = 4;
-
         /** The beat is looked for in what the hits are apart from each other, up to this far. */
         constexpr double longestGapSeconds = 5.0;
         constexpr double gapBinSeconds = 0.002;
@@ -26,40 +24,6 @@ namespace harmonia::core::beat_finder
         float onePole (double hz, double sampleRate)
         {
             return (float) (1.0 - std::exp (-2.0 * pi * hz / sampleRate));
-        }
-
-        /** How far `value` is from the nearest whole multiple of `step` (signed). */
-        double offGrid (double value, double step)
-        {
-            return value - std::round (value / step) * step;
-        }
-
-        /** How well the grid `start + n * step` holds the hits: each counts by its strength, less
-            the further off it is. */
-        double fitOf (const std::vector<Hit>& hits, double start, double step, double tolerance)
-        {
-            double sum = 0.0;
-
-            for (const auto& hit : hits)
-            {
-                const auto off = std::abs (offGrid (hit.seconds - start, step));
-
-                if (off < tolerance)
-                    sum += hit.strength * (1.0 - off / tolerance);
-            }
-
-            return sum;
-        }
-
-        /** The strongest hits, at most `count` of them. */
-        std::vector<Hit> strongest (std::vector<Hit> hits, size_t count)
-        {
-            std::sort (hits.begin(), hits.end(), [] (const Hit& a, const Hit& b) { return a.strength > b.strength; });
-
-            if (hits.size() > count)
-                hits.resize (count);
-
-            return hits;
         }
 
         /** A beat period (seconds) the hits repeat with, to within a percent or so: the one that
@@ -146,84 +110,70 @@ namespace harmonia::core::beat_finder
             return best;
         }
 
-        struct Grid
+        /** The beat of a sound that keeps its tempo: one grid for all of it. `period`: the beat
+            it has roughly, in seconds. */
+        std::optional<Beat> steadyBeat (const std::vector<Hit>& hits, double period, double lengthSeconds)
         {
-            double start = 0.0, step = 0.0;     // sixteenths: start + n * step
-        };
+            auto grid = bestGrid (hits, period);
+            auto offSeconds = 0.0;
+            const auto certainty = refine (hits, grid, offSeconds);
 
-        /** The grid of sixteenths nearest `beatPeriod / 4` that the hits sit on best. */
-        Grid bestGrid (const std::vector<Hit>& hits, double beatPeriod)
-        {
-            const auto anchors = strongest (hits, 6);
-            Grid best;
-            auto bestFit = -1.0;
+            if (grid.step <= 0.0 || certainty < leastCertainty)
+                return std::nullopt;
 
-            for (int i = -125; i <= 125; ++i)
+            // The hits on the grid must be a rhythm, not two or three that happen to fit.
+            int onGrid = 0;
+            auto first = 1.0e9, last = -1.0e9;
+
+            for (const auto& hit : hits)
             {
-                const auto step = beatPeriod * (1.0 + i * 0.0002) / 4.0;
-                const auto tolerance = std::min (onGridSeconds * 1.5, step * 0.3);
-
-                for (const auto& anchor : anchors)
+                if (std::abs (offGrid (hit.seconds - grid.start, grid.step)) <= std::min (onGridSeconds, grid.step * 0.3))
                 {
-                    const auto fit = fitOf (hits, anchor.seconds, step, tolerance);
-
-                    if (fit > bestFit)
-                    {
-                        bestFit = fit;
-                        best = { anchor.seconds, step };
-                    }
+                    ++onGrid;
+                    first = std::min (first, hit.seconds);
+                    last = std::max (last, hit.seconds);
                 }
             }
 
-            return best;
-        }
+            const auto beatSeconds = grid.step * 4.0;
 
-        /** The straight line through the hits that are on the grid (their place in the grid against
-            their time): the grid they really keep. Returns how much of the hits' strength is on it. */
-        double refine (const std::vector<Hit>& hits, Grid& grid, double& offGridSeconds)
-        {
-            auto onGrid = 0.0, all = 0.0;
+            if (onGrid < fewestHits || last - first < 1.5 * beatSeconds)
+                return std::nullopt;
 
-            for (int pass = 0; pass < 3; ++pass)
+            Beat beat;
+            beat.bpm = 60.0 / beatSeconds;
+            beat.certainty = certainty;
+            beat.offGridMs = offSeconds * 1000.0;
+
+            if (beat.bpm < minBpm - 0.5 || beat.bpm > maxBpm + 0.5)
+                return std::nullopt;
+
+            // The first beat: where the first clear hit is, on the grid.
+            auto firstClear = hits.front().seconds;
+
+            for (const auto& hit : hits)
             {
-                double sw = 0.0, sn = 0.0, st = 0.0, snn = 0.0, snt = 0.0, squares = 0.0;
-                all = 0.0;
-
-                for (const auto& hit : hits)
+                if (hit.strength >= 0.3f && std::abs (offGrid (hit.seconds - grid.start, grid.step)) <= onGridSeconds)
                 {
-                    all += hit.strength;
-                    const auto n = std::round ((hit.seconds - grid.start) / grid.step);
-                    const auto off = hit.seconds - (grid.start + n * grid.step);
-
-                    if (std::abs (off) > std::min (onGridSeconds, grid.step * 0.3))
-                        continue;
-
-                    const double w = hit.strength;
-                    sw += w;
-                    sn += w * n;
-                    st += w * hit.seconds;
-                    snn += w * n * n;
-                    snt += w * n * hit.seconds;
-                    squares += w * off * off;
+                    firstClear = hit.seconds;
+                    break;
                 }
-
-                onGrid = sw;
-                offGridSeconds = sw > 0.0 ? std::sqrt (squares / sw) : 0.0;
-                const auto spread = sw * snn - sn * sn;
-
-                if (sw <= 0.0 || std::abs (spread) < 1.0e-12)
-                    break;
-
-                const auto step = (sw * snt - sn * st) / spread;
-                const auto start = (st - step * sn) / sw;
-
-                if (step <= 0.0)
-                    break;
-
-                grid = { start, step };
             }
 
-            return all > 0.0 ? onGrid / all : 0.0;
+            beat.firstBeatSeconds = std::max (0.0, grid.start + std::round ((firstClear - grid.start) / grid.step) * grid.step);
+
+            // A loop cut to length: it begins on its first beat and is a whole number of beats long.
+            const auto beatsLong = lengthSeconds / beatSeconds;
+            const auto wholeBeats = std::round (beatsLong);
+
+            if (lengthSeconds > 0.0 && beat.firstBeatSeconds < 0.02 && wholeBeats >= 2.0 && std::abs (beatsLong - wholeBeats) < 0.02)
+            {
+                beat.wholeLoop = true;
+                beat.bpm = wholeBeats * 60.0 / lengthSeconds;
+                beat.firstBeatSeconds = 0.0;
+            }
+
+            return beat;
         }
     }
 
@@ -396,66 +346,18 @@ namespace harmonia::core::beat_finder
         if (period <= 0.0)
             return std::nullopt;
 
-        auto grid = bestGrid (hits, period);
-        auto offSeconds = 0.0;
-        const auto certainty = refine (hits, grid, offSeconds);
+        auto steady = steadyBeat (hits, period, lengthSeconds);
 
-        if (grid.step <= 0.0 || certainty < leastCertainty)
-            return std::nullopt;
+        // A loop cut to length is as steady as it gets.
+        if (steady.has_value() && steady->wholeLoop)
+            return steady;
 
-        // The hits on the grid must be a rhythm, not two or three that happen to fit.
-        int onGrid = 0;
-        auto first = 1.0e9, last = -1.0e9;
+        auto followed = followBeat (hits, period);
 
-        for (const auto& hit : hits)
-        {
-            if (std::abs (offGrid (hit.seconds - grid.start, grid.step)) <= std::min (onGridSeconds, grid.step * 0.3))
-            {
-                ++onGrid;
-                first = std::min (first, hit.seconds);
-                last = std::max (last, hit.seconds);
-            }
-        }
+        if (followed.has_value() && (! steady.has_value() || wanders (*followed, *steady)))
+            return followed;
 
-        const auto beatSeconds = grid.step * 4.0;
-
-        if (onGrid < fewestHits || last - first < 1.5 * beatSeconds)
-            return std::nullopt;
-
-        Beat beat;
-        beat.bpm = 60.0 / beatSeconds;
-        beat.certainty = certainty;
-        beat.offGridMs = offSeconds * 1000.0;
-
-        if (beat.bpm < minBpm - 0.5 || beat.bpm > maxBpm + 0.5)
-            return std::nullopt;
-
-        // The first beat: where the first clear hit is, on the grid.
-        auto firstClear = hits.front().seconds;
-
-        for (const auto& hit : hits)
-        {
-            if (hit.strength >= 0.3f && std::abs (offGrid (hit.seconds - grid.start, grid.step)) <= onGridSeconds)
-            {
-                firstClear = hit.seconds;
-                break;
-            }
-        }
-
-        beat.firstBeatSeconds = std::max (0.0, grid.start + std::round ((firstClear - grid.start) / grid.step) * grid.step);
-
-        // A loop cut to length: it begins on its first beat and is a whole number of beats long.
-        const auto beatsLong = lengthSeconds / beatSeconds;
-        const auto wholeBeats = std::round (beatsLong);
-
-        if (lengthSeconds > 0.0 && beat.firstBeatSeconds < 0.02 && wholeBeats >= 2.0 && std::abs (beatsLong - wholeBeats) < 0.02)
-        {
-            beat.wholeLoop = true;
-            beat.bpm = wholeBeats * 60.0 / lengthSeconds;
-            beat.firstBeatSeconds = 0.0;
-        }
-
-        return beat;
+        return steady;
     }
 
     std::optional<Beat> analyse (const float* samples, int numSamples, double sampleRate, double nearBpm)

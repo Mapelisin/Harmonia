@@ -451,6 +451,117 @@ TEST_SUITE ("audio clip editor")
         CHECK (wasProblem);
     }
 
+    TEST_CASE ("Follow tempo on a sound that doesn't keep its tempo: said so, the song's beats lie over its hits")
+    {
+        // 24 hits speeding up from 110 to 124 BPM after 0.2 s of silence, in a song at 120.
+        test::TempFolder temp;
+        const auto file = temp.getFile ("Played.wav");
+        std::vector<double> hits;
+        {
+            constexpr double rate = 44100.0;
+            auto at = 0.2;
+
+            for (int i = 0; i < 24; ++i)
+            {
+                hits.push_back (at);
+                at += 60.0 / (110.0 + 14.0 * i / 23.0);
+            }
+
+            juce::AudioBuffer<float> buffer (1, (int) ((hits.back() + 0.4) * rate));
+            buffer.clear();
+
+            for (const auto hit : hits)
+                for (int i = 0; i < 441; ++i)
+                    buffer.setSample (0, (int) std::round (hit * rate) + i, 0.9f * (float) std::sin (i * 0.1425) * (float) std::exp (-i / 132.0));
+
+            std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (file);
+            auto writer = juce::WavAudioFormat().createWriterFor (stream, juce::AudioFormatWriterOptions {}.withSampleRate (rate)
+                                                                              .withNumChannels (1).withBitsPerSample (16));
+            REQUIRE (writer != nullptr);
+            writer->writeFromAudioSampleBuffer (buffer, 0, buffer.getNumSamples());
+        }
+
+        auto project = core::Project::createEmpty (test::session());
+        ui::arrangement::ArrangementModel arrangement (*project);
+        auto* track = arrangement.addAudioTrack();
+        REQUIRE (track != nullptr);
+        juce::String error;
+        auto* clip = project->addAudioClip (*track, file, 8.0, error);
+        REQUIRE_MESSAGE (clip != nullptr, error.toStdString());
+        arrangement.setCurrentTrack (track);
+        dispatch();
+        project->clearUndoHistory();
+
+        audio::Transport transport { project->getEdit() };
+        AudioEditor editor { arrangement, transport };
+        editor.setBounds (0, 0, 1200, 300);
+        juce::String said;
+        auto wasProblem = true;
+        editor.onMessage = [&said, &wasProblem] (const juce::String& text, bool isProblem) { said = text; wasProblem = isProblem; };
+        editor.refresh();
+        CHECK_FALSE (editor.getModel().followsBeatByBeat());
+
+        // One click.
+        editor.getFollowButton().onClick();
+        editor.refresh();
+        REQUIRE (audio_tempo::followsBeatByBeat (*clip));
+        CHECK (editor.getModel().followsBeatByBeat());
+        CHECK (said.startsWith ("Its tempo isn't steady (around 11"));
+        CHECK (said.contains ("its 24 beats were put on the grid one by one"));
+        CHECK (said.contains ("first beat 0.20 s in"));
+        CHECK_FALSE (wasProblem);
+        CHECK (project->getUndoDescription() == "Follow the song tempo");
+
+        // Its tempo is "about": on the whole.
+        auto& number = editor.getLoopBpmNumber();
+        CHECK (number.getValue() > 110.0);
+        CHECK (number.getValue() < 124.0);
+        CHECK (number.textFromValue (number.getValue()).startsWith ("~11"));
+
+        // The clip starts on the first hit, and each beat of the song lies over a hit: the lines
+        // over the waveform show where the sound's beats were found.
+        CHECK (clips::getStartBeat (*clip) == doctest::Approx (8.0));
+
+        for (const auto n : { 0, 1, 5, 12, 23 })
+        {
+            CAPTURE (n);
+            CHECK (std::abs (editor.getModel().beatToFileSeconds (8.0 + n) - hits[(size_t) n]) < 0.003);
+            CHECK (std::abs (editor.getModel().fileSecondsToBeat (hits[(size_t) n]) - (8.0 + n)) < 0.01);
+        }
+
+        // Set HARMONIA_SNAPSHOT_DIR to look at the beats over the waveform.
+        if (const auto dir = juce::SystemStats::getEnvironmentVariable ("HARMONIA_SNAPSHOT_DIR", {}); dir.isNotEmpty())
+        {
+            dispatch (300);
+            const auto png = juce::File (dir).getChildFile ("audio-editor-beats.png");
+            png.deleteFile();
+            juce::FileOutputStream stream (png);
+            juce::PNGImageFormat().writeImageToStream (editor.createComponentSnapshot (editor.getLocalBounds()), stream);
+        }
+
+        // Half the tempo: still beat by beat, a hit every half beat.
+        editor.getHalveButton().onClick();
+        editor.refresh();
+        CHECK (audio_tempo::followsBeatByBeat (*clip));
+        CHECK (std::abs (editor.getModel().fileSecondsToBeat (hits[4]) - 10.0) < 0.01);
+        project->undo();
+        CHECK (std::abs (editor.getModel().fileSecondsToBeat (hits[4]) - 12.0) < 0.01);
+
+        // Off: its own speed again, nothing "about" it. One Ctrl+Z each.
+        editor.refresh();
+        editor.getFollowButton().onClick();
+        editor.refresh();
+        CHECK_FALSE (audio_tempo::followsTempo (*clip));
+        CHECK_FALSE (editor.getModel().followsBeatByBeat());
+        project->undo();
+        CHECK (audio_tempo::followsBeatByBeat (*clip));
+        project->undo();
+        dispatch();
+        CHECK_FALSE (audio_tempo::followsTempo (*clip));
+        CHECK (clip->getPosition().getOffset().inSeconds() == doctest::Approx (0.0));
+        CHECK_FALSE (project->canUndo());
+    }
+
     TEST_CASE ("the main window paints the audio clip editor in place of the piano roll on an audio track")
     {
         test::TempFolder temp;
