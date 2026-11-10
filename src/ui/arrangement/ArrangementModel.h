@@ -179,6 +179,11 @@ namespace harmonia::ui::arrangement
         /** As addTrack, but a drum track (audio::instruments::makeDrumTrack) called "Drums". */
         te::AudioTrack* addDrumTrack();
 
+        /** As addTrack, but the track plays Harmonia's sampler: with `sound` (and is named after
+            it), or empty and called "Sampler". A sound that can't be read: nullptr, the reason in
+            `error`, and nothing added. */
+        te::AudioTrack* addSamplerTrack (const juce::File& sound, juce::String& error);
+
         /** Imports audio files at `beat` (snapped down to the grid): the first onto the track at
             `trackIndex` if that is an audio track, the others (or all) onto new audio tracks
             below it, named after the files. Selects the new clips and switches to song mode.
@@ -372,7 +377,9 @@ namespace harmonia::ui::arrangement
     private:
         core::Project& project;
 
-        te::AudioTrack* addInstrumentTrack (bool drums);
+        /** A new track called `name` with an empty clip; `giveInstrument` puts its instrument on. */
+        te::AudioTrack* addInstrumentTrack (const juce::String& undoName, const juce::String& name,
+                                            const std::function<void (te::AudioTrack&)>& giveInstrument);
 
         juce::ReferenceCountedObjectPtr<te::AudioTrack> currentTrack;
         juce::ReferenceCountedObjectPtr<te::MidiClip> openedClip;

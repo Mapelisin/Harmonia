@@ -143,6 +143,12 @@ namespace harmonia::ui
             machine, "Use as a drum sound" with its drums (the one chosen plays the file). */
         void addDrumSoundItems (juce::PopupMenu&, const juce::File&);
 
+        /** The sound as an instrument: a new sampler track that plays it, or (the current track
+            plays the sampler) the sound of that one. */
+        void addSamplerItems (juce::PopupMenu&, const juce::File&);
+        void addSamplerTrack (const juce::File&);
+        void useInSampler (const juce::File&);
+
         /** The file becomes the sound of that key of the current track's drum machine. */
         void useAsDrumSound (const juce::File&, int note);
 

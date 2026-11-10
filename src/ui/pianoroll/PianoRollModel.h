@@ -131,6 +131,19 @@ namespace harmonia::ui::pianoroll
         /** Whether the key of the drum machine plays a sample. */
         bool hasDrumSample (int pitch) const;
 
+        /** Harmonia's sampler, if the open clip's track plays it (else nullptr). */
+        te::Plugin* getSampler() const;
+
+        /** The sampler plays this sound file from now on (one undo step). Returns an empty string,
+            or why it can't (no sampler, not a sound). */
+        juce::String setSamplerSound (const juce::File&);
+
+        /** The key that plays the sampler's sound as it is (no sampler: -1). */
+        int getSamplerRoot() const;
+
+        /** Makes `pitch` that key (one undo step). */
+        void setSamplerRoot (int pitch);
+
         //==============================================================================
         // Notes for drawing and hit-testing (rebuilt lazily after changes)
 

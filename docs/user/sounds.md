@@ -27,7 +27,7 @@ Folders come first, then sounds (WAV, AIFF, FLAC, OGG, MP3…) and MIDI files. O
 | Click a folder | Open it |
 | **Backspace** or **Up** | The folder above |
 | The search box | Finds sounds whose name contains these letters, in this folder **and in all folders inside it**. Next to a sound found in a folder inside, grey text says which one (`Drums/Acoustic`). What is right here comes first, then by name; no more than 500 |
-| Right-click a sound | Listen / put into the song / show in File Explorer |
+| Right-click a sound | Listen / put into the song / show in File Explorer / **New sampler track playing this sound** (the sound becomes an instrument: its keys play it higher and lower) / make it a drum of the current drum track |
 | Right-click a folder | Open / add to places / show in File Explorer |
 
 A MIDI file from the browser is placed the same way as a sound: the notes go onto a track with an instrument.

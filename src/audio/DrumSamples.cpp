@@ -22,53 +22,6 @@ namespace harmonia::audio::drum_kit
         {
             return drums.state.getChildWithName (samplesTag).getChildWithProperty (noteId, note);
         }
-
-        /** Four-point interpolation between y0 and y1 (ym the sample before, y2 the one after). */
-        float interpolate (float ym, float y0, float y1, float y2, float t)
-        {
-            const auto c = 0.5f * (y1 - ym);
-            const auto v = y0 - y1;
-            const auto w = c + v;
-            const auto a = w + v + 0.5f * (y2 - y0);
-            const auto b = w + a;
-            return (((a * t) - b) * t + c) * t + y0;
-        }
-    }
-
-    //==============================================================================
-    SampleData::Ptr SampleData::load (te::Engine& engine, const juce::File& file, juce::String& error)
-    {
-        error = {};
-
-        if (! file.existsAsFile())
-        {
-            error = "File not found: " + file.getFullPathName();
-            return {};
-        }
-
-        auto& formats = engine.getAudioFileFormatManager().readFormatManager;
-        std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
-
-        if (reader == nullptr || reader->lengthInSamples <= 0 || reader->sampleRate <= 0.0 || reader->numChannels == 0)
-        {
-            error = "Can't read " + file.getFileName() + " as a sound";
-            return {};
-        }
-
-        const auto length = (int) std::min<juce::int64> (reader->lengthInSamples, (juce::int64) (maxSeconds * reader->sampleRate));
-        const auto channels = std::min (2, (int) reader->numChannels);
-
-        Ptr data (new SampleData());
-        data->sampleRate = reader->sampleRate;
-        data->audio.setSize (channels, length);
-
-        if (! reader->read (&data->audio, 0, length, 0, true, channels > 1))
-        {
-            error = "Can't read " + file.getFileName() + " as a sound";
-            return {};
-        }
-
-        return data;
     }
 
     //==============================================================================
@@ -101,16 +54,6 @@ namespace harmonia::audio::drum_kit
         if (! active || data == nullptr)
             return;
 
-        const auto& audio = data->audio;
-        const auto length = audio.getNumSamples();
-        const auto* first = audio.getReadPointer (0);
-        const auto* second = audio.getNumChannels() > 1 ? audio.getReadPointer (1) : first;
-
-        const auto at = [length] (const float* channel, int index)
-        {
-            return index >= 0 && index < length ? channel[index] : 0.0f;
-        };
-
         for (int i = 0; i < numSamples; ++i)
         {
             if (position >= endAt)
@@ -119,15 +62,13 @@ namespace harmonia::audio::drum_kit
                 return;
             }
 
-            const auto index = (int) position;
-            const auto t = (float) (position - (double) index);
             auto gain = level * fade;
 
             if (position > fadeFrom)
                 gain *= (float) ((endAt - position) / std::max (1.0, endAt - fadeFrom));
 
-            left[i] += gain * interpolate (at (first, index - 1), at (first, index), at (first, index + 1), at (first, index + 2), t);
-            right[i] += gain * interpolate (at (second, index - 1), at (second, index), at (second, index + 1), at (second, index + 2), t);
+            left[i] += gain * data->getSampleAt (0, position);
+            right[i] += gain * data->getSampleAt (1, position);
 
             position += step;
             ++age;
@@ -183,10 +124,7 @@ namespace harmonia::audio::drum_kit
         if (! isKey (note))
             return "Not a key of the drum machine";
 
-        // Read once here to say why it can't be used (the drum machine reads it again for itself).
-        juce::String error;
-
-        if (SampleData::load (drums.edit.engine, file, error) == nullptr)
+        if (const auto error = SampleData::check (drums.edit.engine, file); error.isNotEmpty())
             return error;
 
         auto* undoManager = &drums.edit.getUndoManager();

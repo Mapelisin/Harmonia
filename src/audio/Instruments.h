@@ -19,6 +19,14 @@ namespace harmonia::audio::instruments
     /** Whether the track plays Harmonia's drum machine. */
     bool playsDrumKit (te::AudioTrack&);
 
+    /** Replaces the track's instrument with Harmonia's sampler (audio::sampler): empty, or
+        playing `sound`. A sound that can't be read gives its reason, and the track keeps its
+        instrument. */
+    juce::String useSampler (te::AudioTrack&, const juce::File& sound = {});
+
+    /** Whether the track plays Harmonia's sampler. */
+    bool playsSampler (te::AudioTrack&);
+
     /** An instrument track with no notes yet that plays the built-in synth (or nothing), as a new
         track does: free to become what the first part put on it needs. */
     bool isUntouched (te::AudioTrack&);

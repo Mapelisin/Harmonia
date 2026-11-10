@@ -14,6 +14,7 @@
 #include "audio/PlaybackClock.h"
 #include "audio/PluginSafety.h"
 #include "audio/PluginScanner.h"
+#include "audio/Sampler.h"
 #include "audio/Sidechain.h"
 #include "audio/Transport.h"
 #include "core/AudioTempo.h"
@@ -273,6 +274,7 @@ namespace harmonia::app
                 if (options.useDevice)
                 {
                     checkDrumKit (*project, transport);
+                    checkSampler (*project, transport);
                     checkAudioRecording (*project, transport);
                 }
 
@@ -717,6 +719,72 @@ namespace harmonia::app
 
                 transport.stop();
                 pump (200, drumLevel, transport, report);
+                project.getEdit().deleteTrack (track);
+            }
+
+            /** A sampler track playing a sound file is heard while the song plays, and another
+                sound given to it while playing is heard too, with no dropouts. The track goes again
+                after. */
+            void checkSampler (core::Project& project, audio::Transport& transport)
+            {
+                const auto file = options.renderDirectory.getChildFile ("tone.wav");       // checkAudioClip wrote it
+                auto* track = project.addTrack ("Sampler");
+
+                if (track == nullptr || audio::getDeviceManager (session).getCurrentAudioDevice() == nullptr)
+                {
+                    report.check (track != nullptr, "Added a sampler track");
+                    return;
+                }
+
+                const auto error = audio::instruments::useSampler (*track, file);
+                auto* sampler = dynamic_cast<audio::sampler::Plugin*> (audio::instruments::get (*track));
+                report.check (error.isEmpty() && sampler != nullptr && sampler->getSample() != nullptr,
+                              "The sampler with a sound file on a new track" + (error.isEmpty() ? juce::String() : " (" + error + ")"));
+
+                if (sampler == nullptr)
+                {
+                    project.getEdit().deleteTrack (track);
+                    return;
+                }
+
+                // A note a beat: the root key, then a fifth above it.
+                auto* clip = project.addMidiClip (*track, 0.0, songBeats, "Sampler");
+                std::vector<core::Note> notes;
+
+                for (int beat = 0; beat < (int) songBeats; ++beat)
+                {
+                    core::Note n;
+                    n.pitch = beat % 2 == 0 ? 60 : 67;
+                    n.startBeat = beat;
+                    n.lengthBeats = 0.9;
+                    n.velocity = 110;
+                    notes.push_back (n);
+                }
+
+                core::NoteEditor (*clip).add (notes);
+
+                TrackLevel samplerLevel (*track);
+                auto* device = audio::getDeviceManager (session).getCurrentAudioDevice();
+                transport.setPositionSeconds (0.0);
+                transport.play();
+                pump (1500, samplerLevel, transport, report);
+                const auto peak = samplerLevel.takePeakDb();
+                report.check (transport.isPlaying() && peak > -30.0f,
+                              "The sampler track is heard while the song plays (peak " + juce::String (peak, 1) + " dBFS)");
+
+                const auto other = options.renderDirectory.getChildFile ("tone-2.wav");
+                writeTone (other, 1.0);
+                const auto xrunsBefore = device->getXRunCount();
+                const auto setError = audio::sampler::setFile (*sampler, other);
+                pump (1500, samplerLevel, transport, report);
+                const auto after = samplerLevel.takePeakDb();
+                const auto xruns = device->getXRunCount() - xrunsBefore;
+                report.check (setError.isEmpty() && transport.isPlaying() && after > -30.0f && (xrunsBefore < 0 || xruns == 0),
+                              "Gave the sampler another sound while playing: still heard (peak "
+                                  + juce::String (after, 1) + " dBFS), dropouts: " + juce::String (xruns));
+
+                transport.stop();
+                pump (200, samplerLevel, transport, report);
                 project.getEdit().deleteTrack (track);
             }
 

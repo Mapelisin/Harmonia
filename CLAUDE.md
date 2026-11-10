@@ -99,6 +99,11 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   `setSampleGainDb`…: undo, песня, пресеты). Звуковой части новый набор отдаёт `drum_kit::Plugin` сам, чуть
   позже изменения; нужно сразу (послушать, экспорт в тесте) — `Plugin::updateSamplesNow()`. Файлы читаются
   в память вне звукового потока; в звуковом потоке — ни чтения, ни освобождения памяти.
+- Сэмплер (`audio::sampler`, один звук нотами): звук и основная нота — только через `sampler::setFile` /
+  `setRoot` (undo, песня, пресеты); новый звук звуковой части отдаёт `sampler::Plugin` сам, чуть позже —
+  нужно сразу: `Plugin::updateSampleNow()`. Звук в памяти — `audio::SampleData` (общий с драм-машиной;
+  годится ли файл — `SampleData::check`). Дорожка-сэмплер — `ArrangementModel::addSamplerTrack`, окно —
+  `ui::SamplerPanel`, в piano roll — `PianoRollModel::getSampler / setSamplerSound / setSamplerRoot`.
 - Заморозка дорожки — только через `audio::freeze` (в аранжировке — `ArrangementModel::freezeTrack`). Файл
   заморозки — скрытый клип (`core::clips::isFreezeClip`): `core::clips::getClips` его не отдаёт, а
   `track.getClips()` отдаёт — где перебираешь клипы движка напрямую, проверяй. Строка замороженной дорожки

@@ -6,6 +6,7 @@
 
 #include "TestSession.h"
 #include "audio/DrumKit.h"
+#include "audio/Sampler.h"
 #include "audio/Limiter.h"
 #include "audio/Pump.h"
 #include "sandbox/Host.h"
@@ -109,6 +110,7 @@ int main (int argc, char** argv)
         harmonia::audio::limiter::registerType (session.getEngine());
         harmonia::audio::pump::registerType (session.getEngine());
         harmonia::audio::drum_kit::registerType (session.getEngine());
+        harmonia::audio::sampler::registerType (session.getEngine());
         harmonia::test::sharedSession = &session;
 
         doctest::Context context (argc, argv);

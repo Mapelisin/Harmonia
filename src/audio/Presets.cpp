@@ -1,5 +1,6 @@
 #include "audio/Presets.h"
 #include "audio/DrumKit.h"
+#include "audio/Sampler.h"
 #include "audio/Effects.h"
 
 namespace harmonia::audio::presets
@@ -174,7 +175,7 @@ namespace harmonia::audio::presets
         {
             const auto type = plugin.getPluginType();
 
-            if (type == te::FourOscPlugin::xmlTypeName || type == drum_kit::Plugin::xmlTypeName)
+            if (type == te::FourOscPlugin::xmlTypeName || type == drum_kit::Plugin::xmlTypeName || type == sampler::Plugin::xmlTypeName)
                 return true;
 
             for (const auto& effect : effects::getBuiltIn())

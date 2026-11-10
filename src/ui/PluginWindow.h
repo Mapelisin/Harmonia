@@ -6,7 +6,7 @@ namespace harmonia::ui
 {
     /** A top-level window hosting a plugin's own editor or, for plugins without one (the built-in
         synth and effects), Harmonia's knobs (ParameterPanel; for the drum machine DrumPadsPanel:
-        the knobs and its drums). */
+        the knobs and its drums; for the sampler SamplerPanel: the knobs and its sound). */
     class PluginWindow final : public juce::DocumentWindow
     {
     public:

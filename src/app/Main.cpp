@@ -2,6 +2,7 @@
 #include "app/SelfTest.h"
 #include "audio/DeviceSetup.h"
 #include "audio/DrumKit.h"
+#include "audio/Sampler.h"
 #include "audio/Limiter.h"
 #include "audio/Pump.h"
 #include "core/ProjectFiles.h"
@@ -37,6 +38,7 @@ namespace harmonia::app
             audio::limiter::registerType (session->getEngine());
             audio::pump::registerType (session->getEngine());
             audio::drum_kit::registerType (session->getEngine());
+            audio::sampler::registerType (session->getEngine());
             return session;
         }
     }

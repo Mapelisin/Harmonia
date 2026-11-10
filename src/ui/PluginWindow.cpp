@@ -4,6 +4,7 @@
 #include "sandbox/RemotePlugin.h"
 #include "ui/DrumPadsPanel.h"
 #include "ui/ParameterPanel.h"
+#include "ui/SamplerPanel.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui
@@ -27,6 +28,8 @@ namespace harmonia::ui
             // The drum machine: its knobs, and its drums to put samples on.
             if (dynamic_cast<audio::drum_kit::Plugin*> (&plugin) != nullptr)
                 knobs = std::make_unique<DrumPadsPanel> (plugin);
+            else if (dynamic_cast<audio::sampler::Plugin*> (&plugin) != nullptr)
+                knobs = std::make_unique<SamplerPanel> (plugin);        // its knobs, and its sound
             else
                 knobs = std::make_unique<ParameterPanel> (plugin);
 

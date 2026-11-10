@@ -13,9 +13,11 @@ namespace harmonia::ui
     {
         constexpr int builtInSynthId = 1;
         constexpr int drumKitId = 2;
+        constexpr int samplerId = 3;
         constexpr int firstPluginId = 100;
         const juce::String builtInSynthName = "4OSC (built-in)";
         const juce::String drumKitName = "Drums (built-in)";
+        const juce::String samplerName = "Sampler (built-in)";
     }
 
     InstrumentPanel::InstrumentPanel (core::Session& s, te::AudioTrack& t)
@@ -128,6 +130,7 @@ namespace harmonia::ui
         instrumentBox.clear (juce::dontSendNotification);
         instrumentBox.addItem (builtInSynthName, builtInSynthId);
         instrumentBox.addItem (drumKitName, drumKitId);
+        instrumentBox.addItem (samplerName, samplerId);
 
         if (! available.isEmpty())
             instrumentBox.addSeparator();
@@ -151,6 +154,8 @@ namespace harmonia::ui
             selectedId = builtInSynthId;
         else if (audio::instruments::playsDrumKit (track))
             selectedId = drumKitId;
+        else if (audio::instruments::playsSampler (track))
+            selectedId = samplerId;
         else if (auto* external = dynamic_cast<te::ExternalPlugin*> (current))
             for (int i = 0; i < available.size(); ++i)
                 if (external->desc.isDuplicateOf (available[i]))
@@ -241,6 +246,11 @@ namespace harmonia::ui
             name = drumKitName;
             error = audio::instruments::makeDrumTrack (track);
         }
+        else if (id == samplerId)
+        {
+            name = samplerName;
+            error = audio::instruments::useSampler (track);
+        }
         else if (id >= firstPluginId && id - firstPluginId < available.size())
         {
             const auto& description = available.getReference (id - firstPluginId);
@@ -253,9 +263,19 @@ namespace harmonia::ui
         }
 
         if (error.isNotEmpty())
+        {
             showMessage (error, true);
+        }
+        else if (id == samplerId)
+        {
+            // It plays nothing until it has a sound: its window, where the sound goes, at once.
+            showMessage ("Instrument: " + name + ". Drop a sound on its window, or on the piano roll's keys.", false);
+            audio::instruments::showEditor (track);
+        }
         else
+        {
             showMessage ("Instrument: " + name, false);
+        }
 
         refreshList();
     }

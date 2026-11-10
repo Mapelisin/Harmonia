@@ -2,6 +2,7 @@
 #include "audio/Export.h"
 #include "audio/Groups.h"
 #include "audio/Instruments.h"
+#include "audio/SampleData.h"
 #include "audio/Sends.h"
 #include "audio/Sidechain.h"
 #include "audio/Freeze.h"
@@ -494,15 +495,29 @@ namespace harmonia::ui::arrangement
     //==============================================================================
     te::AudioTrack* ArrangementModel::addTrack()
     {
-        return addInstrumentTrack (false);
+        return addInstrumentTrack ("Add track", "Track " + juce::String (project.getNumTracks() + 1),
+                                   [] (te::AudioTrack& track) { audio::instruments::useBuiltInSynth (track); });
     }
 
     te::AudioTrack* ArrangementModel::addDrumTrack()
     {
-        return addInstrumentTrack (true);
+        return addInstrumentTrack ("Add drum track", "Drums", [] (te::AudioTrack& track) { audio::instruments::makeDrumTrack (track); });
     }
 
-    te::AudioTrack* ArrangementModel::addInstrumentTrack (bool drums)
+    te::AudioTrack* ArrangementModel::addSamplerTrack (const juce::File& sound, juce::String& error)
+    {
+        // Before there is a track: can the sound be used at all?
+        error = sound != juce::File() ? audio::SampleData::check (project.getEdit().engine, sound) : juce::String();
+
+        if (error.isNotEmpty())
+            return nullptr;
+
+        return addInstrumentTrack ("Add sampler track", sound != juce::File() ? sound.getFileNameWithoutExtension() : juce::String ("Sampler"),
+                                   [&sound] (te::AudioTrack& track) { audio::instruments::useSampler (track, sound); });
+    }
+
+    te::AudioTrack* ArrangementModel::addInstrumentTrack (const juce::String& undoName, const juce::String& name,
+                                                          const std::function<void (te::AudioTrack&)>& giveInstrument)
     {
         auto start = 0.0, length = newTrackBars * getBeatsPerBar();
 
@@ -512,16 +527,13 @@ namespace harmonia::ui::arrangement
             length = clips::getEndBeat (*open) - start;
         }
 
-        project.beginGesture (drums ? "Add drum track" : "Add track");
-        auto* track = project.addTrack (drums ? juce::String ("Drums") : "Track " + juce::String (project.getNumTracks() + 1));
+        project.beginGesture (undoName);
+        auto* track = project.addTrack (name);
 
         if (track == nullptr)
             return nullptr;
 
-        if (drums)
-            audio::instruments::makeDrumTrack (*track);
-        else
-            audio::instruments::useBuiltInSynth (*track);
+        giveInstrument (*track);
         auto* clip = project.addMidiClip (*track, start, length, track->getName());
         setSelection ({});
         setCurrent (track, clip);

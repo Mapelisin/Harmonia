@@ -1,6 +1,7 @@
 #include "ui/MainComponent.h"
 #include "audio/DrumKit.h"
 #include "audio/Instruments.h"
+#include "audio/Sampler.h"
 #include "core/Drums.h"
 #include "core/Markers.h"
 #include "core/MidiFiles.h"
@@ -89,7 +90,11 @@ namespace harmonia::ui
         mixerTab.onClick = [this] { showLowerPanel (LowerPanel::mixer); };
         soundsTab.onClick = [this] { showLowerPanel (LowerPanel::sounds); };
         soundBrowser.onAddToSong = [this] (const juce::File& file) { addFilesAtPlayhead ({ file }); };
-        soundBrowser.onSoundMenu = [this] (juce::PopupMenu& menu, const juce::File& file) { addDrumSoundItems (menu, file); };
+        soundBrowser.onSoundMenu = [this] (juce::PopupMenu& menu, const juce::File& file)
+        {
+            addSamplerItems (menu, file);
+            addDrumSoundItems (menu, file);
+        };
 
         // A click on the audio clip editor's waveform moves the playhead (the play mode stays).
         audioEditor.onPositionChosen = [this] (double beat)
@@ -695,6 +700,65 @@ namespace harmonia::ui
         const auto drum = core::drums::getName (note);
         showMessage ((drum.isNotEmpty() ? drum : juce::String ("The key")) + " of " + track->getName() + " plays " + file.getFileNameWithoutExtension()
                      + " (Ctrl+Z: back)");
+    }
+
+    void MainComponent::addSamplerItems (juce::PopupMenu& menu, const juce::File& file)
+    {
+        juce::Component::SafePointer<MainComponent> safe (this);
+
+        menu.addItem ("New sampler track playing this sound (play it with notes)", [safe, file]
+        {
+            if (safe != nullptr)
+                safe->addSamplerTrack (file);
+        });
+
+        if (auto* track = arrangementModel.getCurrentTrack(); track != nullptr && audio::instruments::playsSampler (*track))
+        {
+            menu.addItem ("Play this sound in the sampler of " + track->getName(), [safe, file]
+            {
+                if (safe != nullptr)
+                    safe->useInSampler (file);
+            });
+        }
+    }
+
+    void MainComponent::addSamplerTrack (const juce::File& file)
+    {
+        noteInput.finishTake();
+        juce::String error;
+        auto* track = arrangementModel.addSamplerTrack (file, error);
+
+        if (track == nullptr)
+        {
+            showWarning (error.isNotEmpty() ? error : juce::String ("No more tracks fit into the song"));
+            return;
+        }
+
+        showMessage (track->getName() + ": a new track that plays this sound with notes (the piano roll, the keyboard). Ctrl+Z: back");
+    }
+
+    void MainComponent::useInSampler (const juce::File& file)
+    {
+        auto* track = arrangementModel.getCurrentTrack();
+        auto* instrument = track != nullptr && audio::instruments::playsSampler (*track) ? audio::instruments::get (*track) : nullptr;
+
+        if (instrument == nullptr)
+        {
+            showWarning ("The current track doesn't play the sampler");
+            return;
+        }
+
+        if (const auto error = audio::sampler::setFile (*instrument, file); error.isNotEmpty())
+        {
+            showWarning (error);
+            return;
+        }
+
+        if (auto* plugin = dynamic_cast<audio::sampler::Plugin*> (instrument))
+            plugin->updateSampleNow();
+
+        pianoRoll.repaint();
+        showMessage ("The sampler of " + track->getName() + " plays " + file.getFileNameWithoutExtension() + " (Ctrl+Z: back)");
     }
 
     void MainComponent::toggleAutomationWriting()

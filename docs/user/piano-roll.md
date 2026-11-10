@@ -135,6 +135,34 @@ kits follow this layout.
 To turn it on or off for any track: **right-click the keys on the left** → *Drum names (General MIDI)*, or
 the **Scale** menu → *Drum names on the keys*. It is remembered for the track and can be undone with Ctrl+Z.
 
+## The sampler: any sound as an instrument
+
+Any sound file can be an instrument: one note of a guitar, a piece of a voice, a bell. The keys play it higher
+and lower, the way a tape does when it runs faster and slower.
+
+- **The quickest way:** in the sound browser (F6) right-click a sound → **New sampler track playing this
+  sound**. A new track named after the sound appears, and its keys play it already. One action; Ctrl+Z takes
+  it back.
+- Or **+ Track → Sampler track**, or **Sampler (built-in)** in the instrument chooser: the sampler's window
+  opens. **Drag a sound** onto it (from the sound browser or the file explorer), or click **Choose a sound…**.
+  A file from the file explorer can also be dropped onto the piano roll's keys.
+- **Root key** is the key that plays the sound exactly as it is: C4 at first, with a dot on the piano roll's
+  keys. The keys above it play the sound higher and shorter, the keys below lower and longer. To change it,
+  drag the **Root key** number in the window (or turn the wheel over it), or right-click a key in the piano
+  roll → **This key plays the sound as it is**. If the recorded note is an A, make an A the root key, and
+  the keys are in tune with the rest of the song.
+- The knobs: **Volume**; **Tune** (±24 semitones); **Attack** (a note fades in); **Release** (how long a note
+  fades after its key is let go); **Mode**: *Hold the key* (the sound lasts while the key is down) or
+  *One shot* (a note plays the sound to its end whatever the key does: for hits and phrases).
+- Chords and several notes at once work; harder notes are louder; the pitch wheel bends by ±2 semitones, the
+  sustain pedal holds the notes.
+- The window shows the sound's picture, its length and format; the triangle plays the root key while you
+  hold it.
+- The sound is saved with the song and in the sampler's presets (**Presets** in its window). The file stays
+  where it is: if it is moved or deleted, the sampler is silent and its window says **Missing**. Of a long
+  file the first 30 seconds are played: this is an instrument, not an audio track.
+- Every change is one Ctrl+Z step.
+
 ## Tools with a window
 
 They open from the **Tools** menu or with keys. The notes change at once while you turn the knobs; **Space**

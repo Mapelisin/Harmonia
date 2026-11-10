@@ -1,5 +1,6 @@
 #include "audio/Instruments.h"
 #include "audio/DrumKit.h"
+#include "audio/Sampler.h"
 #include "audio/Effects.h"
 #include "core/Drums.h"
 #include "core/Tracks.h"
@@ -63,6 +64,34 @@ namespace harmonia::audio::instruments
     bool playsDrumKit (te::AudioTrack& track)
     {
         return dynamic_cast<drum_kit::Plugin*> (get (track)) != nullptr;
+    }
+
+    juce::String useSampler (te::AudioTrack& track, const juce::File& sound)
+    {
+        // Before anything changes: can the sound be used at all?
+        if (sound != juce::File())
+            if (const auto error = SampleData::check (track.edit.engine, sound); error.isNotEmpty())
+                return error;
+
+        if (const auto error = replaceWith (track, track.edit.getPluginCache().createNewPlugin (sampler::Plugin::xmlTypeName, {}));
+            error.isNotEmpty())
+            return error;
+
+        auto* instrument = dynamic_cast<sampler::Plugin*> (get (track));
+
+        if (instrument != nullptr && sound != juce::File())
+        {
+            // In the same undo step as the instrument: the caller's.
+            instrument->state.setProperty ("file", sound.getFullPathName(), &track.edit.getUndoManager());
+            instrument->updateSampleNow();
+        }
+
+        return {};
+    }
+
+    bool playsSampler (te::AudioTrack& track)
+    {
+        return dynamic_cast<sampler::Plugin*> (get (track)) != nullptr;
     }
 
     bool isUntouched (te::AudioTrack& track)

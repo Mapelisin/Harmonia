@@ -25,6 +25,8 @@ add_library(harmonia_ui STATIC
     ParameterMenu.cpp
     ParameterPanel.h
     ParameterPanel.cpp
+    SamplerPanel.h
+    SamplerPanel.cpp
     ChainMenu.h
     ChainMenu.cpp
     PresetMenu.h

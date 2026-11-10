@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/SampleData.h"
 #include "core/Session.h"
 
 /** Samples in the drum machine: a key of the kit plays a sound file (your own kick, clap...)
@@ -11,20 +12,7 @@
     The kit's Tune and Decay knobs work on samples too: Decay under 100% cuts them short. */
 namespace harmonia::audio::drum_kit
 {
-    /** A sound file in memory. Never changed once loaded: the sound part reads it while it plays. */
-    struct SampleData final : juce::ReferenceCountedObject
-    {
-        using Ptr = juce::ReferenceCountedObjectPtr<SampleData>;
-
-        juce::AudioBuffer<float> audio;     // one or two channels
-        double sampleRate = 44100.0;
-
-        /** At most this much of a file is loaded: a drum hit, not a song. */
-        static constexpr double maxSeconds = 30.0;
-
-        /** Reads the file (not on the audio thread). nullptr and the reason if it can't be read. */
-        static Ptr load (te::Engine&, const juce::File&, juce::String& error);
-    };
+    using audio::SampleData;
 
     /** What a key plays in place of the kit's own sound (nothing if `data` is null). */
     struct KeySample

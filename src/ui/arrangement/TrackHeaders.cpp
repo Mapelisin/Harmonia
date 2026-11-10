@@ -22,6 +22,14 @@ namespace harmonia::ui::arrangement
         juce::PopupMenu menu;
         menu.addItem ("Instrument track (MIDI, built-in synth)", [&model] { model.addTrack(); });
         menu.addItem ("Drum track (built-in drums)", [&model] { model.addDrumTrack(); });
+        menu.addItem ("Sampler track (a sound played with notes)", [&model]
+        {
+            // Its window at once: that is where the sound goes.
+            juce::String error;
+
+            if (auto* track = model.addSamplerTrack ({}, error))
+                audio::instruments::showEditor (*track);
+        });
         menu.addItem ("Audio track (sound files)", [&model] { model.addAudioTrack(); });
         return menu;
     }

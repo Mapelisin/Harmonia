@@ -1,6 +1,7 @@
 #include "ui/pianoroll/PianoRollModel.h"
 #include "audio/DrumKit.h"
 #include "audio/Instruments.h"
+#include "audio/Sampler.h"
 #include "core/Drums.h"
 #include "core/Clips.h"
 #include "core/Progressions.h"
@@ -249,6 +250,46 @@ namespace harmonia::ui::pianoroll
     {
         auto* drums = getDrumMachine();
         return drums != nullptr && audio::drum_kit::getSample (*drums, pitch).has_value();
+    }
+
+    te::Plugin* PianoRollModel::getSampler() const
+    {
+        auto* track = clip != nullptr ? dynamic_cast<te::AudioTrack*> (clip->getTrack()) : nullptr;
+        return track != nullptr && audio::instruments::playsSampler (*track) ? audio::instruments::get (*track) : nullptr;
+    }
+
+    juce::String PianoRollModel::setSamplerSound (const juce::File& file)
+    {
+        auto* instrument = getSampler();
+
+        if (instrument == nullptr)
+            return "This track doesn't play Harmonia's sampler";
+
+        if (const auto error = audio::sampler::setFile (*instrument, file); error.isNotEmpty())
+            return error;
+
+        // Heard with the next key, not a moment later.
+        if (auto* plugin = dynamic_cast<audio::sampler::Plugin*> (instrument))
+            plugin->updateSampleNow();
+
+        notifyChanged();
+        return {};
+    }
+
+    int PianoRollModel::getSamplerRoot() const
+    {
+        auto* instrument = getSampler();
+        return instrument != nullptr ? audio::sampler::getRoot (*instrument) : -1;
+    }
+
+    void PianoRollModel::setSamplerRoot (int pitch)
+    {
+        if (auto* instrument = getSampler())
+        {
+            beginGesture ("Root key");
+            audio::sampler::setRoot (*instrument, pitch);
+            notifyChanged();
+        }
     }
 
     double PianoRollModel::getBeatsPerBar() const

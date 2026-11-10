@@ -32,6 +32,10 @@ add_library(harmonia_audio STATIC
     Limiter.cpp
     Pump.h
     Pump.cpp
+    Sampler.h
+    Sampler.cpp
+    SampleData.h
+    SampleData.cpp
     DrumSamples.h
     DrumSamples.cpp
     DrumKit.h

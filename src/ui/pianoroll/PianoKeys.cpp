@@ -93,6 +93,14 @@ namespace harmonia::ui::pianoroll
             }
         }
 
+        // The sampler's root key (it plays the sound as it is) has a dot.
+        if (const auto root = model.getSamplerRoot(); root >= bottomPitch && root <= topPitch)
+        {
+            const auto size = juce::jlimit (3.0f, 8.0f, view.rowHeight - 3.0f);
+            g.setColour (theme::colour::accent);
+            g.fillEllipse (5.0f, view.pitchToY (root) + (view.rowHeight - size) * 0.5f, size, size);
+        }
+
         g.setColour (theme::colour::border);
         g.fillRect ((float) getWidth() - 1.0f, (float) area.getY(), 1.0f, (float) area.getHeight());
     }
@@ -131,13 +139,32 @@ namespace harmonia::ui::pianoroll
             });
         }
 
+        // A key of the sampler: the one that plays the sound as it is.
+        if (juce::isPositiveAndBelow (pitch, 128) && model.getSampler() != nullptr)
+        {
+            const auto key = juce::MidiMessage::getMidiNoteName (pitch, true, true, 4);
+            menu.addSeparator();
+            menu.addSectionHeader ("Sampler");
+            menu.addItem ("This key (" + key + ") plays the sound as it is", true, model.getSamplerRoot() == pitch, [this, pitch, key]
+            {
+                model.setSamplerRoot (pitch);
+
+                if (onMessage != nullptr)
+                    onMessage (key + " plays the sampler's sound as it is now: the keys above it higher, those below lower");
+
+                repaint();
+            });
+            menu.addItem ("Choose a sound file for the sampler...", [this, pitch] { chooseSample (pitch); });
+        }
+
         return menu;
     }
 
     void PianoKeys::chooseSample (int pitch)
     {
         auto& formats = model.getEdit().engine.getAudioFileFormatManager().readFormatManager;
-        chooser = std::make_unique<juce::FileChooser> ("A sound for this key", juce::File::getSpecialLocation (juce::File::userMusicDirectory),
+        chooser = std::make_unique<juce::FileChooser> (model.getSampler() != nullptr ? "A sound for the sampler" : "A sound for this key",
+                                                       juce::File::getSpecialLocation (juce::File::userMusicDirectory),
                                                        formats.getWildcardForAllFormats());
         chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                               [safe = juce::Component::SafePointer<PianoKeys> (this), pitch] (const juce::FileChooser& fc)
@@ -149,6 +176,20 @@ namespace harmonia::ui::pianoroll
 
     void PianoKeys::dropFile (const juce::File& file, float y)
     {
+        if (model.getSampler() != nullptr)
+        {
+            const auto error = model.setSamplerSound (file);
+
+            if (onMessage != nullptr)
+                onMessage (error.isNotEmpty() ? error
+                                              : "The sampler plays " + file.getFileNameWithoutExtension() + " now: "
+                                                  + juce::MidiMessage::getMidiNoteName (model.getSamplerRoot(), true, true, 4)
+                                                  + " as it is (right-click a key to make it that key)");
+
+            repaint();
+            return;
+        }
+
         const auto pitch = view.yToPitch (y);
         const auto error = model.setDrumSample (pitch, file);
 
@@ -164,14 +205,25 @@ namespace harmonia::ui::pianoroll
             repaint();
     }
 
-    // Sound files from the file explorer: only onto the drum machine's keys.
-    bool PianoKeys::isInterestedInFileDrag (const juce::StringArray& files)
+    bool PianoKeys::takesSounds() const
     {
-        return ! files.isEmpty() && model.getDrumMachine() != nullptr;
+        return model.getDrumMachine() != nullptr || model.getSampler() != nullptr;
     }
 
-    void PianoKeys::fileDragEnter (const juce::StringArray&, int, int y)        { setDropPitch (view.yToPitch ((float) y)); }
-    void PianoKeys::fileDragMove (const juce::StringArray&, int, int y)         { setDropPitch (view.yToPitch ((float) y)); }
+    int PianoKeys::getPitchForDrop (float y) const
+    {
+        // The sampler has one sound, whatever key it is dropped on: its root key lights up.
+        return model.getSampler() != nullptr ? model.getSamplerRoot() : view.yToPitch (y);
+    }
+
+    // Sound files from the file explorer: only onto the keys of the drum machine or the sampler.
+    bool PianoKeys::isInterestedInFileDrag (const juce::StringArray& files)
+    {
+        return ! files.isEmpty() && takesSounds();
+    }
+
+    void PianoKeys::fileDragEnter (const juce::StringArray&, int, int y)        { setDropPitch (getPitchForDrop ((float) y)); }
+    void PianoKeys::fileDragMove (const juce::StringArray&, int, int y)         { setDropPitch (getPitchForDrop ((float) y)); }
     void PianoKeys::fileDragExit (const juce::StringArray&)                     { setDropPitch (-1); }
 
     void PianoKeys::filesDropped (const juce::StringArray& files, int, int y)
@@ -185,11 +237,11 @@ namespace harmonia::ui::pianoroll
     // Sounds dragged from the sound browser.
     bool PianoKeys::isInterestedInDragSource (const SourceDetails& details)
     {
-        return ! file_drag::read (details.description).isEmpty() && model.getDrumMachine() != nullptr;
+        return ! file_drag::read (details.description).isEmpty() && takesSounds();
     }
 
-    void PianoKeys::itemDragEnter (const SourceDetails& details)                { setDropPitch (view.yToPitch ((float) details.localPosition.y)); }
-    void PianoKeys::itemDragMove (const SourceDetails& details)                 { setDropPitch (view.yToPitch ((float) details.localPosition.y)); }
+    void PianoKeys::itemDragEnter (const SourceDetails& details)                { setDropPitch (getPitchForDrop ((float) details.localPosition.y)); }
+    void PianoKeys::itemDragMove (const SourceDetails& details)                 { setDropPitch (getPitchForDrop ((float) details.localPosition.y)); }
     void PianoKeys::itemDragExit (const SourceDetails&)                         { setDropPitch (-1); }
 
     void PianoKeys::itemDropped (const SourceDetails& details)
