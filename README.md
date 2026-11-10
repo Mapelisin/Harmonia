@@ -57,12 +57,15 @@ expect bugs.
 **Arrangement**
 - Clips on tracks, linked copies (edit one and all of them change), looping clips, markers, colours.
 - Tempo changes along the song; inserting and deleting bars on all tracks at once.
+- Track folders: neighbouring tracks collapse into one row with mute and solo for all of them.
+- Freezing: a track with heavy plugins plays as audio, its plugins off, and unfreezes back.
 - MIDI file import and export; a sound browser with preview.
 
 **Audio**
 - Audio tracks: drag in WAV, MP3, FLAC, AIFF or OGG files; record from a sound card input, with a count-in
   and loop recording of takes.
 - Audio clip editor: fades, gain, reverse, normalize, stretching to the tempo and changing the pitch.
+- Overlapping audio clips crossfade by themselves; an audio clip can loop when made longer.
 
 **Mixer and effects**
 - Built-in effects: EQ, Compressor, Reverb, Delay, Chorus, Phaser, Filter, Pump, a limiter.
@@ -91,7 +94,7 @@ expect bugs.
 
 ## What comes next
 
-- Crossfades and loops for audio clips, track folders, freezing tracks.
+- Your own samples in the drum machine: drag a sound onto a drum to replace it.
 - Local AI models: stem separation, a mastering helper, finding sounds by description.
 - macOS (Apple Silicon).
 
