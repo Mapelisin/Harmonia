@@ -37,13 +37,15 @@ namespace
         return dynamic_cast<te::FourOscPlugin*> (instruments::get (track)) != nullptr;
     }
 
-    juce::ComboBox* findBox (juce::Component& parent)
+    /** The chooser's entry for one of Harmonia's own instruments. */
+    audio::plugin_catalog::Entry instrumentCalled (const juce::String& name)
     {
-        for (auto* child : parent.getChildren())
-            if (auto* box = dynamic_cast<juce::ComboBox*> (child))
-                return box;
+        for (const auto& entry : audio::plugin_catalog::getAll (test::session(), audio::plugin_catalog::Kind::instrument))
+            if (entry.name == name)
+                return entry;
 
-        return nullptr;
+        FAIL ("no instrument called " << name.toStdString());
+        return {};
     }
 
     void dispatch()
@@ -141,28 +143,22 @@ TEST_SUITE ("drum tracks")
         project->clearUndoHistory();
 
         InstrumentPanel panel (test::session(), *track);
-        auto* box = findBox (panel);
-        REQUIRE (box != nullptr);
-        CHECK (box->getText() == "4OSC (built-in)");
+        CHECK (panel.getInstrumentText() == "4OSC (built-in)");
 
-        int drumsId = 0;
-
-        for (int i = 0; i < box->getNumItems(); ++i)
-            if (box->getItemText (i) == "Drums (built-in)")
-                drumsId = box->getItemId (i);
-
-        REQUIRE (drumsId != 0);
-        box->setSelectedId (drumsId, juce::sendNotificationSync);
+        // As a choice in the chooser does.
+        panel.choose (instrumentCalled ("Drums"));
         CHECK (instruments::playsDrumKit (*track));
         CHECK (core::drums::showsNames (*track));
+        CHECK (panel.getInstrumentText() == "Drums (built-in)");
+        CHECK (panel.getMessage() == "Instrument: Drums (built-in)");
 
         project->undo();
         dispatch();
         CHECK (playsSynth (*track));
-        CHECK (box->getText() == "4OSC (built-in)");
+        CHECK (panel.getInstrumentText() == "4OSC (built-in)");
 
         project->redo();
         dispatch();
-        CHECK (box->getText() == "Drums (built-in)");
+        CHECK (panel.getInstrumentText() == "Drums (built-in)");
     }
 }

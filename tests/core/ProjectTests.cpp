@@ -250,4 +250,119 @@ TEST_SUITE ("core::Project")
         CHECK (line->getStartBeat().inBeats() == doctest::Approx (16.0));
         CHECK (line->getEndBeat().inBeats() == doctest::Approx (24.0));
     }
+
+    TEST_CASE ("what the engine does a moment after a change stays in that change's undo step")
+    {
+        // The engine puts a track's nodes in order a moment after a clip is added (an undoable
+        // change of its own), and starts a new undo step by itself 350 ms after any change. When
+        // the second came between a command and the first, Ctrl+Z took back the tidying only.
+        auto project = Project::createEmpty (harmonia::test::session());
+        auto& track = *project->getTracks().getFirst();
+        const auto run = [] (int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil (ms); };
+
+        // Whether the track's clips come before its plugins, as the engine keeps them.
+        const auto isTidy = [&track]
+        {
+            auto pluginSeen = false;
+
+            for (const auto& node : track.state)
+            {
+                if (node.hasType (te::IDs::PLUGIN))
+                    pluginSeen = true;
+                else if (te::Clip::isClipState (node) && pluginSeen)
+                    return false;
+            }
+
+            return true;
+        };
+
+        const auto settle = [&project, &run]
+        {
+            for (int i = 0; i < 2000 && project->isSettling(); ++i)
+                run (1);
+
+            REQUIRE_FALSE (project->isSettling());
+        };
+
+        settle();
+        project->clearUndoHistory();
+
+        project->beginGesture ("Add clip");
+        REQUIRE (project->addMidiClip (track, 0.0, 4.0, "Clip") != nullptr);
+
+        // The engine hasn't tidied yet, and until it has, its timer is held back...
+        CHECK_FALSE (isTidy());
+        CHECK (project->isSettling());
+
+        // ...however the window gets its messages: the hold is never let go before the tidying.
+        const auto waitForTidying = [&project, &run, &isTidy]
+        {
+            for (int i = 0; i < 3000 && project->isSettling(); ++i)
+            {
+                run (1);
+                REQUIRE ((project->isSettling() || isTidy()));
+            }
+
+            REQUIRE_FALSE (project->isSettling());
+        };
+
+        waitForTidying();
+        CHECK (isTidy());
+        CHECK (project->getUndoDescription() == "Add clip");
+        project->undo();
+        settle();
+        CHECK (track.getClips().isEmpty());
+        CHECK_FALSE (project->canUndo());
+
+        // A window that was busy for a long time (the clock says "quiet" long before the engine's
+        // message has run): the hold still waits for the tidying.
+        project->redo();
+        settle();
+        project->beginGesture ("Second clip");
+        REQUIRE (project->addMidiClip (track, 8.0, 4.0, "Second") != nullptr);
+        juce::Thread::sleep (150);
+        CHECK (project->isSettling());
+        waitForTidying();
+        CHECK (project->getUndoDescription() == "Second clip");
+
+        // Once things are quiet the engine starts a new step by itself again: a change made
+        // without beginning a gesture is its own Ctrl+Z.
+        run (500);
+        track.setName ("Renamed");
+        settle();
+        project->undo();
+        CHECK (track.getName() != "Renamed");
+        CHECK (track.getClips().size() == 2);
+
+        // What isn't in a track (where the song was last changed, a setting of the song) needs
+        // no waiting...
+        settle();
+        project->getEdit().state.setProperty ("someSetting", 1, nullptr);
+        CHECK_FALSE (project->isSettling());
+
+        // ...and tracks that never stop changing (a line of automation being written while the
+        // song plays) don't hold the timer for ever.
+        const auto started = juce::Time::getMillisecondCounter();
+
+        while (project->isSettling() || juce::Time::getMillisecondCounter() - started < 100)
+        {
+            track.state.setProperty ("busy", (int) (juce::Time::getMillisecondCounter() - started), nullptr);
+            run (5);
+            REQUIRE (juce::Time::getMillisecondCounter() - started < 4000);
+
+            if (! project->isSettling())
+                break;
+        }
+
+        const auto heldFor = juce::Time::getMillisecondCounter() - started;
+        CHECK (heldFor > 1000);
+
+        // Let go, it stays so long enough for the engine's timer to have its turn.
+        while (juce::Time::getMillisecondCounter() - started < heldFor + 400)
+        {
+            track.state.setProperty ("busy", (int) (juce::Time::getMillisecondCounter() - started), nullptr);
+            run (5);
+            REQUIRE_FALSE (project->isSettling());
+        }
+    }
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/PluginCatalog.h"
 #include "audio/PluginSafety.h"
 #include "audio/PluginScanner.h"
 
@@ -19,15 +20,26 @@ namespace harmonia::ui
         void paint (juce::Graphics&) override;
         void resized() override;
 
+        /** What the track plays, as the button says it: "Sampler (built-in)", "Surge XT  (Surge
+            Synth Team)". */
+        juce::String getInstrumentText() const          { return instrumentButton.getButtonText(); }
+
+        /** The button that opens the chooser (search, favourites, used lately). */
+        juce::TextButton& getInstrumentButton() noexcept    { return instrumentButton; }
+
+        /** What a choice in the chooser does: the track plays this instrument (one undo step). */
+        void choose (const audio::plugin_catalog::Entry&);
+
+        /** What the panel last said. */
+        juce::String getMessage() const                 { return messageLabel.getText(); }
+
     private:
         core::Session& session;
         te::AudioTrack& track;
         audio::PluginScanner scanner { session };
 
-        juce::Array<juce::PluginDescription> available;
-
         juce::Label titleLabel;
-        juce::ComboBox instrumentBox;
+        juce::TextButton instrumentButton;
         juce::TextButton editorButton { "Show editor" };
         juce::TextButton presetsButton { "Presets" };
         juce::TextButton scanButton { "Scan plugins" };
@@ -41,7 +53,7 @@ namespace harmonia::ui
         void showCurrent();
         void editorClicked();
         void showPresets();
-        void instrumentChosen();
+        void showChooser();
         void startScan();
         void showMessage (const juce::String&, bool isProblem);
 

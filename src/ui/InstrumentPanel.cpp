@@ -3,22 +3,14 @@
 #include "audio/Instruments.h"
 #include "audio/Presets.h"
 #include "core/Tracks.h"
+#include "ui/PluginChooser.h"
 #include "ui/PresetMenu.h"
 #include "ui/Theme.h"
 #include "ui/settings/SettingsPanel.h"
 
 namespace harmonia::ui
 {
-    namespace
-    {
-        constexpr int builtInSynthId = 1;
-        constexpr int drumKitId = 2;
-        constexpr int samplerId = 3;
-        constexpr int firstPluginId = 100;
-        const juce::String builtInSynthName = "4OSC (built-in)";
-        const juce::String drumKitName = "Drums (built-in)";
-        const juce::String samplerName = "Sampler (built-in)";
-    }
+    namespace catalog = audio::plugin_catalog;
 
     InstrumentPanel::InstrumentPanel (core::Session& s, te::AudioTrack& t)
         : session (s), track (t),
@@ -43,7 +35,9 @@ namespace harmonia::ui
         messageLabel.setFont (juce::FontOptions (theme::size::smallFontSize));
 
         // Keyboard focus stays with the piano roll, so its shortcuts and Space keep working.
-        instrumentBox.setWantsKeyboardFocus (false);
+        instrumentButton.setWantsKeyboardFocus (false);
+        instrumentButton.setTooltip ("The track's instrument. Click to choose another: type a few letters of its name, "
+                                     "keep the ones you use as favourites.");
         editorButton.setWantsKeyboardFocus (false);
         presetsButton.setWantsKeyboardFocus (false);
         presetsButton.setTooltip ("Save the instrument's settings as a preset, or load one");
@@ -51,13 +45,13 @@ namespace harmonia::ui
         foldersButton.setWantsKeyboardFocus (false);
         foldersButton.setTooltip ("Settings > Plugins: the folders the scan looks in (add your own, such as E:\\VST)");
 
-        instrumentBox.onChange = [this] { instrumentChosen(); };
+        instrumentButton.onClick = [this] { showChooser(); };
         editorButton.onClick = [this] { editorClicked(); };
         presetsButton.onClick = [this] { showPresets(); };
         scanButton.onClick = [this] { startScan(); };
         foldersButton.onClick = [this] { SettingsPanel::show (session, SettingsPanel::Tab::plugins); };
 
-        for (auto* c : std::initializer_list<juce::Component*> { &titleLabel, &instrumentBox, &editorButton, &presetsButton,
+        for (auto* c : std::initializer_list<juce::Component*> { &titleLabel, &instrumentButton, &editorButton, &presetsButton,
                                                                  &scanButton, &foldersButton, &messageLabel })
             addAndMakeVisible (c);
 
@@ -66,7 +60,7 @@ namespace harmonia::ui
         {
             titleLabel.setText ("Audio track", juce::dontSendNotification);
 
-            for (auto* c : std::initializer_list<juce::Component*> { &instrumentBox, &editorButton, &presetsButton, &scanButton, &foldersButton })
+            for (auto* c : std::initializer_list<juce::Component*> { &instrumentButton, &editorButton, &presetsButton, &scanButton, &foldersButton })
                 c->setVisible (false);
 
             showMessage ("Plays sound files: drag WAV, MP3, FLAC... from Explorer onto its row, or File > Import audio.", false);
@@ -104,13 +98,13 @@ namespace harmonia::ui
 
         titleLabel.setBounds (row.removeFromLeft (90));
 
-        if (! instrumentBox.isVisible())
+        if (! instrumentButton.isVisible())
         {
             messageLabel.setBounds (row);
             return;
         }
 
-        instrumentBox.setBounds (row.removeFromLeft (300));
+        instrumentButton.setBounds (row.removeFromLeft (300));
         row.removeFromLeft (theme::size::padding);
         editorButton.setBounds (row.removeFromLeft (110));
         row.removeFromLeft (theme::size::padding);
@@ -125,22 +119,9 @@ namespace harmonia::ui
 
     void InstrumentPanel::refreshList()
     {
-        available = audio::instruments::getAvailable (session);
-
-        instrumentBox.clear (juce::dontSendNotification);
-        instrumentBox.addItem (builtInSynthName, builtInSynthId);
-        instrumentBox.addItem (drumKitName, drumKitId);
-        instrumentBox.addItem (samplerName, samplerId);
-
-        if (! available.isEmpty())
-            instrumentBox.addSeparator();
-
-        for (int i = 0; i < available.size(); ++i)
-            instrumentBox.addItem (available[i].name + "  (" + available[i].manufacturerName + ")", firstPluginId + i);
-
         showCurrent();
 
-        if (available.isEmpty())
+        if (audio::instruments::getAvailable (session).isEmpty())
             showMessage ("No plugins found yet: \"Scan plugins\" looks for VST3 instruments and effects"
                          " (yours elsewhere? add their folder in \"Folders...\").", false);
     }
@@ -148,20 +129,12 @@ namespace harmonia::ui
     void InstrumentPanel::showCurrent()
     {
         auto* current = audio::instruments::get (track);
-        int selectedId = 0;
 
-        if (dynamic_cast<te::FourOscPlugin*> (current) != nullptr)
-            selectedId = builtInSynthId;
-        else if (audio::instruments::playsDrumKit (track))
-            selectedId = drumKitId;
-        else if (audio::instruments::playsSampler (track))
-            selectedId = samplerId;
-        else if (auto* external = dynamic_cast<te::ExternalPlugin*> (current))
-            for (int i = 0; i < available.size(); ++i)
-                if (external->desc.isDuplicateOf (available[i]))
-                    selectedId = firstPluginId + i;
-
-        instrumentBox.setSelectedId (selectedId, juce::dontSendNotification);
+        // As the chooser lists it; a plugin the scan no longer finds: by its own name.
+        const auto entry = current != nullptr ? catalog::find (session, *current) : std::nullopt;
+        instrumentButton.setButtonText (entry.has_value() ? entry->getLabel()
+                                        : current != nullptr ? current->getName()
+                                                             : juce::String ("Choose an instrument..."));
         editorButton.setEnabled (current != nullptr);
         presetsButton.setEnabled (current != nullptr && audio::presets::canHavePresets (*current));
 
@@ -223,61 +196,45 @@ namespace harmonia::ui
     void InstrumentPanel::handleAsyncUpdate()
     {
         // Another instrument came (an undo, a drum pattern...): the list shows it.
-        if (instrumentBox.isVisible())
+        if (instrumentButton.isVisible())
             showCurrent();
     }
 
-    void InstrumentPanel::instrumentChosen()
+    void InstrumentPanel::showChooser()
     {
-        const auto id = instrumentBox.getSelectedId();
-        juce::String error;
-        juce::String name;
+        PluginChooser::show (session, catalog::Kind::instrument, instrumentButton,
+                             [safe = juce::Component::SafePointer<InstrumentPanel> (this)] (const catalog::Entry& entry)
+        {
+            if (safe != nullptr)
+                safe->choose (entry);
+        });
+    }
 
+    void InstrumentPanel::choose (const catalog::Entry& entry)
+    {
         // A separate undo step, not merged into the last note edit.
         track.edit.getUndoManager().beginNewTransaction ("Change instrument");
-
-        if (id == builtInSynthId)
-        {
-            name = builtInSynthName;
-            error = audio::instruments::useBuiltInSynth (track);
-        }
-        else if (id == drumKitId)
-        {
-            name = drumKitName;
-            error = audio::instruments::makeDrumTrack (track);
-        }
-        else if (id == samplerId)
-        {
-            name = samplerName;
-            error = audio::instruments::useSampler (track);
-        }
-        else if (id >= firstPluginId && id - firstPluginId < available.size())
-        {
-            const auto& description = available.getReference (id - firstPluginId);
-            name = description.name;
-            error = audio::instruments::useExternal (track, description);
-        }
-        else
-        {
-            return;
-        }
+        const auto error = catalog::useInstrument (session, track, entry);
 
         if (error.isNotEmpty())
         {
+            // Nothing changed, so there is nothing to undo either (trying a plugin leaves traces
+            // in the step, none of them in the song).
+            track.edit.getUndoManager().undoCurrentTransactionOnly();
             showMessage (error, true);
         }
-        else if (id == samplerId)
+        else if (audio::instruments::playsSampler (track))
         {
             // It plays nothing until it has a sound: its window, where the sound goes, at once.
-            showMessage ("Instrument: " + name + ". Drop a sound on its window, or on the piano roll's keys.", false);
+            showMessage ("Instrument: " + entry.getLabel() + ". Drop a sound on its window, or on the piano roll's keys.", false);
             audio::instruments::showEditor (track);
         }
         else
         {
-            showMessage ("Instrument: " + name, false);
+            showMessage ("Instrument: " + entry.getLabel(), false);
         }
 
-        refreshList();
+        showCurrent();
     }
 
     void InstrumentPanel::startScan()
@@ -301,11 +258,12 @@ namespace harmonia::ui
         {
             scanButton.setButtonText ("Scan plugins");
             refreshList();
+            const auto instrumentsFound = audio::instruments::getAvailable (session).size();
             const auto effectsFound = audio::effects::getExternal (session).size();
-            auto text = "Scan finished: " + juce::String (available.size()) + " instrument(s), "
+            auto text = "Scan finished: " + juce::String (instrumentsFound) + " instrument(s), "
                           + juce::String (effectsFound) + " effect(s) found";
 
-            if (available.isEmpty())
+            if (instrumentsFound == 0)
                 text << ". Plugins in a folder of your own: add it in \"Folders...\"";
 
             showMessage (text, false);

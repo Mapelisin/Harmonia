@@ -38,6 +38,126 @@ namespace harmonia::core
         }
     }
 
+    //==============================================================================
+    /** Keeps what the engine does a moment after a change in that change's undo step.
+
+        The engine starts a new undo step by itself 350 ms after any change. It also finishes some
+        changes later, from a message: a clip added or moved has its track's nodes put in order
+        then, with undo. When the timer's moment fell between the two (a command that reads a file
+        before it adds its clip leaves room for that), the tidying became a step of its own, and
+        the first Ctrl+Z seemed to do nothing.
+
+        So from any change to a track (its clips, its plugins) until the tracks have been quiet
+        for a moment, and the messages posted meanwhile have run, the engine's timer is held back.
+        Never for long: something that keeps changing the tracks (a line of automation being
+        written while the song plays) must not keep every later change in one undo step. */
+    class Project::StepKeeper final : private juce::ValueTree::Listener,
+                                      private juce::Timer,
+                                      private juce::AsyncUpdater
+    {
+    public:
+        explicit StepKeeper (te::Edit& e)
+            : edit (e), state (e.state)
+        {
+            state.addListener (this);
+        }
+
+        ~StepKeeper() override
+        {
+            state.removeListener (this);
+            stopTimer();
+            cancelPendingUpdate();
+            hold.reset();
+        }
+
+        bool isHolding() const noexcept     { return hold != nullptr; }
+
+    private:
+        static constexpr int quietMs = 40;
+        static constexpr int longestHoldMs = 1500;
+        static constexpr int restMs = 500;          // after the longest hold: the engine's timer (350 ms) gets its turn
+
+        te::Edit& edit;
+        juce::ValueTree state;
+        std::unique_ptr<te::Edit::UndoTransactionInhibitor> hold;
+        juce::uint32 lastChange = 0, heldSince = 0, restUntil = 0;
+        bool resting = false;
+        juce::uint64 changes = 0, changesAtTimer = 0;
+
+        /** What the engine finishes later is inside tracks; the song's other nodes (where the
+            cursor is, when it was last changed...) are written all the time and need no waiting. */
+        static bool isInsideTrack (juce::ValueTree node)
+        {
+            for (; node.isValid(); node = node.getParent())
+                if (te::TrackList::isTrack (node))
+                    return true;
+
+            return false;
+        }
+
+        void changed (const juce::ValueTree& where)
+        {
+            if (! isInsideTrack (where))
+                return;
+
+            ++changes;
+            lastChange = juce::Time::getMillisecondCounter();
+
+            if (resting && lastChange - restUntil < 0x80000000u)       // the rest is over
+                resting = false;
+
+            if (hold == nullptr && ! resting)
+            {
+                hold = std::make_unique<te::Edit::UndoTransactionInhibitor> (edit);
+                heldSince = lastChange;
+                startTimer (quietMs);
+            }
+        }
+
+        void timerCallback() override
+        {
+            const auto now = juce::Time::getMillisecondCounter();
+
+            if (now - heldSince > (juce::uint32) longestHoldMs)
+            {
+                stopTimer();
+                cancelPendingUpdate();
+                hold.reset();
+                resting = true;
+                restUntil = now + (juce::uint32) restMs;
+                return;
+            }
+
+            if (now - lastChange < (juce::uint32) quietMs)
+                return;
+
+            // Quiet by the clock; but the window may have been busy all that time, with the
+            // engine's messages still waiting: a message posted now runs after them.
+            stopTimer();
+            changesAtTimer = changes;
+            triggerAsyncUpdate();
+        }
+
+        void handleAsyncUpdate() override
+        {
+            if (hold == nullptr)
+                return;
+
+            if (changes == changesAtTimer)
+                hold.reset();
+            else
+                startTimer (quietMs);       // those messages changed the tracks: wait again
+        }
+
+        void valueTreePropertyChanged (juce::ValueTree& tree, const juce::Identifier&) override     { changed (tree); }
+        void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree& child) override                { changed (child); }
+        void valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueTree& child, int) override  { changed (te::TrackList::isTrack (child) ? child : parent); }
+        void valueTreeChildOrderChanged (juce::ValueTree& parent, int, int) override                { changed (parent); }
+
+        JUCE_DECLARE_NON_COPYABLE (StepKeeper)
+    };
+
+    //==============================================================================
     Project::Project (std::unique_ptr<te::Edit> e)
         : edit (std::move (e))
     {
@@ -56,6 +176,7 @@ namespace harmonia::core
                     audio_clips::prepareForPlayback (*audioClip);
 
         edit->getUndoManager().addChangeListener (this);
+        stepKeeper = std::make_unique<StepKeeper> (*edit);
 
         // A new or freshly opened project starts with an empty undo history.
         clearUndoHistory();
@@ -63,7 +184,13 @@ namespace harmonia::core
 
     Project::~Project()
     {
+        stepKeeper.reset();
         edit->getUndoManager().removeChangeListener (this);
+    }
+
+    bool Project::isSettling() const
+    {
+        return stepKeeper->isHolding();
     }
 
     void Project::changeListenerCallback (juce::ChangeBroadcaster*)

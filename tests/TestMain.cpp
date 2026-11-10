@@ -82,6 +82,9 @@ int main (int argc, char** argv)
             return harmonia::test::runPluginHost (std::move (*hostOptions));
     }
 
+    // Whatever is printed is out at once: when a test hangs, the log says which ran before it.
+    std::cout.setf (std::ios::unitbuf);
+
     // The engine needs JUCE's message manager; it must outlive every engine object.
     juce::ScopedJuceInitialiser_GUI juceInitialiser;
 

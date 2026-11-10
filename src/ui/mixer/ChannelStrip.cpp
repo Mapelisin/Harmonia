@@ -7,6 +7,7 @@
 #include "core/Tracks.h"
 #include "ui/ChainMenu.h"
 #include "ui/ParameterMenu.h"
+#include "ui/PluginChooser.h"
 #include "ui/PresetMenu.h"
 #include "ui/Theme.h"
 #include "ui/arrangement/TrackHeaders.h"
@@ -759,9 +760,18 @@ namespace harmonia::ui::mixer
             return;
         }
 
+        // What was used lately is offered first the next time.
+        if (const auto entry = audio::plugin_catalog::find (session, *plugin))
+            audio::plugin_catalog::noteUsed (session, *entry);
+
         refresh();
         tell (type.name + " added to " + name.getText(), false);
         effects::showEditor (*plugin);
+    }
+
+    void ChannelStrip::addEffect (const audio::plugin_catalog::Entry& entry)
+    {
+        addEffect (audio::plugin_catalog::toEffectType (entry));
     }
 
     void ChannelStrip::showParameterMenu (te::AutomatableParameter* parameter, juce::Component& target)
@@ -778,42 +788,81 @@ namespace harmonia::ui::mixer
 
     void ChannelStrip::showAddMenu()
     {
+        makeAddMenu().showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&addButton));
+    }
+
+    juce::PopupMenu ChannelStrip::makeAddMenu()
+    {
+        namespace catalog = audio::plugin_catalog;
         juce::Component::SafePointer<ChannelStrip> safe (this);
-        const auto add = [safe] (effects::EffectType type)
+        const auto add = [safe] (catalog::Entry entry)
         {
-            return [safe, type]
+            return [safe, entry]
             {
                 if (safe != nullptr)
-                    safe->addEffect (type);
+                    safe->addEffect (entry);
             };
         };
 
         juce::PopupMenu menu;
+        menu.addItem ("Find an effect... (type its name)", [safe]
+        {
+            if (safe == nullptr)
+                return;
+
+            PluginChooser::show (safe->session, catalog::Kind::effect, safe->addButton, [safe] (const catalog::Entry& entry)
+            {
+                if (safe != nullptr)
+                    safe->addEffect (entry);
+            });
+        });
+
+        // The favourites, then what was used lately (and isn't a favourite): a click away.
+        const auto favourites = catalog::getFavourites (session, catalog::Kind::effect);
+
+        if (! favourites.isEmpty())
+        {
+            menu.addSectionHeader ("Favourites");
+
+            for (const auto& entry : favourites)
+                menu.addItem (entry.getLabel(), add (entry));
+        }
+
+        juce::Array<catalog::Entry> recent;
+
+        for (const auto& entry : catalog::getRecent (session, catalog::Kind::effect))
+            if (! favourites.contains (entry))
+                recent.add (entry);
+
+        if (! recent.isEmpty())
+        {
+            menu.addSectionHeader ("Used lately");
+
+            for (const auto& entry : recent)
+                menu.addItem (entry.getLabel(), add (entry));
+        }
+
         menu.addSectionHeader ("Built-in");
+        juce::PopupMenu plugins;
 
-        for (const auto& type : effects::getBuiltIn())
-            menu.addItem (type.name, add (type));
+        for (const auto& entry : catalog::getAll (session, catalog::Kind::effect))
+        {
+            if (entry.isBuiltIn())
+                menu.addItem (entry.name, add (entry));
+            else
+                plugins.addItem (entry.getLabel(), add (entry));
+        }
 
-        const auto external = effects::getExternal (session);
         menu.addSeparator();
 
-        if (external.isEmpty())
-        {
+        if (plugins.getNumItems() == 0)
             menu.addItem ("Plugins: none found yet (Scan plugins)", false, false, nullptr);
-        }
         else
-        {
-            juce::PopupMenu plugins;
-
-            for (const auto& type : external)
-                plugins.addItem (type.name + "  (" + type.description.manufacturerName + ")", add (type));
-
             menu.addSubMenu ("Plugins", plugins);
-        }
 
         menu.addSeparator();
         menu.addSubMenu ("Chains", makeChainMenu());
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&addButton));
+        return menu;
     }
 
     juce::PopupMenu ChannelStrip::makeChainMenu()

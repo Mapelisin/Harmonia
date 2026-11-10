@@ -17,7 +17,7 @@ From top to bottom:
 | What | How |
 |---|---|
 | Effects (slots) | The sound goes from top to bottom: from the instrument through the effects to the fader |
-| **+** | Add an effect: a built-in one or a plugin (VST3) from "Plugins". The effect window opens right away |
+| **+** | Add an effect: a built-in one or a plugin (VST3) from "Plugins"; **Find an effect...** searches by name; your favourites and the effects used lately are at the top. The effect window opens right away |
 | Click an effect | Open its window (for built-in ones, Harmonia's sliders) |
 | Drag an effect with the mouse | Move it up / down, or onto another track, group, return track or the master, together with its settings. A blue line shows where it will land. With **Ctrl**, a copy |
 | **+** → **Chains** | Save all the effects of the strip as a chain (**Save these effects as a chain...**), add a saved one (**Add ...**) or put it in place of the current effects (**Replace the effects with**). Chains are kept in `Documents\Harmonia\Chains` and work in any song |

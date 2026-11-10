@@ -33,15 +33,6 @@ namespace
         return std::nullopt;
     }
 
-    juce::ComboBox* findBox (juce::Component& parent)
-    {
-        for (auto* child : parent.getChildren())
-            if (auto* box = dynamic_cast<juce::ComboBox*> (child))
-                return box;
-
-        return nullptr;
-    }
-
     /** A song with a sampler track ("Sampler", a clip) and a synth track, and sound files. */
     struct SamplerFixture
     {
@@ -186,21 +177,19 @@ TEST_SUITE ("ui: the sampler")
 
         // The list of instruments: shows it, and gives it to another track.
         ui::InstrumentPanel own (test::session(), *f.samplerTrack);
-        REQUIRE (findBox (own) != nullptr);
-        CHECK (findBox (own)->getText() == "Sampler (built-in)");
+        CHECK (own.getInstrumentText() == "Sampler (built-in)");
 
         ui::InstrumentPanel other (test::session(), *f.synthTrack);
-        auto* box = findBox (other);
-        REQUIRE (box != nullptr);
-        int samplerId = 0;
+        std::optional<audio::plugin_catalog::Entry> samplerEntry;
 
-        for (int i = 0; i < box->getNumItems(); ++i)
-            if (box->getItemText (i) == "Sampler (built-in)")
-                samplerId = box->getItemId (i);
+        for (const auto& entry : audio::plugin_catalog::getAll (test::session(), audio::plugin_catalog::Kind::instrument))
+            if (entry.name == "Sampler")
+                samplerEntry = entry;
 
-        REQUIRE (samplerId != 0);
-        box->setSelectedId (samplerId, juce::sendNotificationSync);
+        REQUIRE (samplerEntry.has_value());
+        other.choose (*samplerEntry);
         CHECK (instruments::playsSampler (*f.synthTrack));
+        CHECK (other.getInstrumentText() == "Sampler (built-in)");
         CHECK (f.project->getUndoDescription() == "Change instrument");
         f.project->undo();
         dispatch();
@@ -331,6 +320,8 @@ TEST_SUITE ("ui: the sampler")
         // The piano roll is on the new track's clip: its keys play the sound.
         CHECK (main->getPianoRollModel().getSampler() == instruments::get (*track));
 
+        // One step to take back, and it is this one.
+        CHECK (f.project->getUndoDescription() == "Add sampler track");
         f.project->undo();
         dispatch();
         CHECK (f.project->getNumTracks() == tracksBefore);

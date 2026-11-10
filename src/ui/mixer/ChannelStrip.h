@@ -3,6 +3,7 @@
 #include "audio/AutomationWriter.h"
 #include "audio/EffectChains.h"
 #include "audio/Effects.h"
+#include "audio/PluginCatalog.h"
 #include "ui/ParameterMenu.h"
 #include "ui/arrangement/ArrangementModel.h"
 #include "ui/mixer/LevelMeter.h"
@@ -40,6 +41,13 @@ namespace harmonia::ui::mixer
 
         /** Adds an effect after the others and opens its window; problems go to onMessage. */
         void addEffect (const audio::effects::EffectType&);
+
+        /** As a choice in the plugin chooser or the "+" menu does: adds it, and it counts as used. */
+        void addEffect (const audio::plugin_catalog::Entry&);
+
+        /** The "+" menu: the search, the favourites, the effects used lately, Harmonia's own, all
+            the plugins, the chains. */
+        juce::PopupMenu makeAddMenu();
 
         int getNumSlots() const noexcept                { return slots.size(); }
 

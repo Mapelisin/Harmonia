@@ -33,6 +33,8 @@ add_library(harmonia_audio STATIC
     Pump.h
     Pump.cpp
     Sampler.h
+    PluginCatalog.h
+    PluginCatalog.cpp
     Sampler.cpp
     SampleData.h
     SampleData.cpp

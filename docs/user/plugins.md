@@ -14,12 +14,34 @@ The **Instrument** row above the piano roll:
 |---|---|
 | **Scan plugins** | Looks for plugins and adds them to the lists of instruments and effects. Every file is checked in a separate program: a plugin that crashes during the check is simply skipped |
 | **Folders...** | Opens **File → Settings → Plugins**: where to look. The standard VST3 folder (`C:\Program Files\Common Files\VST3`) is always searched. **Add a folder...** adds your own, for example `E:\VST`: the scan also looks into all folders inside it and starts by itself. **Remove**: select your folder in the list and take it out of the search (its plugins stay in the list until the next scan) |
-| The instrument list | The built-in instruments (4OSC, Drums) and the instrument plugins found |
+| The instrument's name | Click it to choose another instrument: the plugin chooser opens (see below) |
 | **Show editor** | The window of the instrument |
 | **Presets** | Presets of the instrument: save its sound, load a saved one (see "Presets" below) |
 
 If the scan found nothing but there are plugins on the computer, they are most likely in a folder of their own:
 add it with **Folders...**. The effects found are in the mixer: **+** → **Plugins**.
+
+## Choosing a plugin: two letters and Enter
+
+Click the instrument's name in the **Instrument** row (or, for an effect, **+** on a mixer strip →
+**Find an effect...**). A small window opens with the cursor already in the search box:
+
+| What | How |
+|---|---|
+| Find by name | Type a few letters: `vi` leaves Vital, `xt` leaves Surge XT. Capital letters don't matter |
+| Find by maker | Type the maker's name: `arturia`, `fabfilter` |
+| Choose | **Enter** takes the top one (it is highlighted); **↑ / ↓** move; or click a row |
+| Favourite | Click the **star** on the left of a row. Favourites are always on top, under **Favourites** |
+| Used lately | The last eight you chose are next, under **Used lately** |
+| Close without choosing | **Esc**, or click outside the window |
+
+- Without a search the list is: your favourites, the ones used lately, then everything else: Harmonia's own
+  first (4OSC, Drums, Sampler; EQ, Compressor, Reverb…), then your plugins by name.
+- Favourites and "used lately" are yours, not a song's: they are the same in every song and are remembered
+  between runs.
+- In the mixer the **+** menu itself shows your favourite effects and the ones used lately at the top: one
+  click, no search needed.
+- A plugin that fails to load says why, and the track keeps the instrument it had.
 
 ## Presets: your sound in any song
 

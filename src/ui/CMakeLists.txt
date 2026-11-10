@@ -23,6 +23,8 @@ add_library(harmonia_ui STATIC
     DrumPadsPanel.cpp
     ParameterMenu.h
     ParameterMenu.cpp
+    PluginChooser.h
+    PluginChooser.cpp
     ParameterPanel.h
     ParameterPanel.cpp
     SamplerPanel.h

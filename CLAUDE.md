@@ -82,7 +82,9 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   переносит значения в параметры плагинов, `Project` их синхронизирует.
 - Клипы — `te::Clip` (MIDI или аудио) через `core::clips`; `getMidiClips` — только где нужны ноты. Вид дорожки —
   `core::tracks`: аудиоклипы только на аудиодорожки. В тестах после правки клипов — `dispatch()` перед undo:
-  Tracktion сортирует клипы дорожки асинхронно и с undo, иначе этот шаг съест redo.
+  Tracktion сортирует клипы дорожки асинхронно и с undo, иначе этот шаг съест redo. В программе этот «хвост»
+  остаётся в шаге своей команды: `core::Project` придерживает таймер движка «новый шаг undo через 350 мс»,
+  пока песня не успокоится (`Project::isSettling`; в тесте дождаться — крутить `dispatch`, пока оно true).
 - Запись звука: готовность/вход — только через `audio::AudioInputs`; запись — `audio::Transport` (`recordsAudio`).
   Тесты записи и живого звука — `test::AudioRig` (`tests/TestAudioRig.h`: свой `core::Session` с
   `HostedAudioDeviceInterface`, тест сам гонит звук и меряет выход), общий тестовый движок без устройств не трогать.
@@ -104,6 +106,10 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   нужно сразу: `Plugin::updateSampleNow()`. Звук в памяти — `audio::SampleData` (общий с драм-машиной;
   годится ли файл — `SampleData::check`). Дорожка-сэмплер — `ArrangementModel::addSamplerTrack`, окно —
   `ui::SamplerPanel`, в piano roll — `PianoRollModel::getSampler / setSamplerSound / setSamplerRoot`.
+- Что можно выбрать дорожке (инструменты и эффекты, свои и найденные сканом) — `audio::plugin_catalog`:
+  поиск, избранное и недавние (хранятся в настройках программы, не в песне). Окно выбора — `ui::PluginChooser`
+  (`show`), инструмент по выбору — `InstrumentPanel::choose`, эффект — `ChannelStrip::addEffect (Entry)`.
+  В тестах «найденные» плагины и чистое избранное — `test::ScannedPlugins` (`tests/TestScannedPlugins.h`).
 - Заморозка дорожки — только через `audio::freeze` (в аранжировке — `ArrangementModel::freezeTrack`). Файл
   заморозки — скрытый клип (`core::clips::isFreezeClip`): `core::clips::getClips` его не отдаёт, а
   `track.getClips()` отдаёт — где перебираешь клипы движка напрямую, проверяй. Строка замороженной дорожки

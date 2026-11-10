@@ -40,6 +40,12 @@ namespace harmonia::core
         /** Something changed since the project was created, opened or saved. */
         bool hasUnsavedChanges() const;
 
+        /** The engine is still finishing the last change to a track (it tidies a track's nodes
+            a moment after a clip is added or moved, which is an undoable change of its own): until
+            it has, no new undo step starts by itself, so that the change stays one Ctrl+Z. Never
+            for longer than a second or two. */
+        bool isSettling() const;
+
         /** Goes up with every change (an undo or redo counts too): for noticing new changes. */
         juce::uint64 getChangeCount() const;
 
@@ -120,6 +126,9 @@ namespace harmonia::core
         te::AudioTrack* addBusTrack (const juce::String& name, tracks::Kind);
 
         std::unique_ptr<te::Edit> edit;
+
+        class StepKeeper;
+        std::unique_ptr<StepKeeper> stepKeeper;
 
         // Every undoable change counts (Tracktion's own flag only starts listening a moment after
         // the edit is created). Tracktion's flag is taken in too: it also catches settings changed
