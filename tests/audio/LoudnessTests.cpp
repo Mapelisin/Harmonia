@@ -161,7 +161,7 @@ TEST_SUITE ("audio::loudness")
         const auto after = loudness::measureSong (project->getEdit(), error);
         REQUIRE (after.has_value());
         CHECK (after->lufs - before->lufs == doctest::Approx (-6.0).epsilon (0.05));
-        CHECK (after->peakDb < before->peakDb - 4.5f);     // the highest sample shifts a little from render to render (the synth's phases)
+        CHECK (after->peakDb < before->peakDb - 3.0f);     // the highest sample shifts from render to render (the synth's phases start anywhere): by 1.5 dB and more
 
         // The fader goes up to +6 dB: only what fits is added.
         const auto fader = project->getEdit().getMasterVolumePlugin()->getVolumeDb();
