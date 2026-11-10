@@ -84,6 +84,15 @@ TEST_SUITE ("ui: samples in the drum machine")
 
         panel.dropFile (kick, f.myKick);
         CHECK (panel.getPadSound (kickPad) == "My kick");
+
+        // Set HARMONIA_SNAPSHOT_DIR to look at it without opening a window.
+        if (const auto dir = juce::SystemStats::getEnvironmentVariable ("HARMONIA_SNAPSHOT_DIR", {}); dir.isNotEmpty())
+        {
+            juce::FileOutputStream out (juce::File (dir).getChildFile ("drum-pads.png"));
+            out.setPosition (0);
+            out.truncate();
+            juce::PNGImageFormat().writeImageToStream (panel.createComponentSnapshot (panel.getLocalBounds()), out);
+        }
         CHECK (panel.getMessage() == "Kick plays My kick");
         CHECK (drum_kit::getSample (*f.drums, kick)->file == f.myKick);
         CHECK (panel.getVolumeSlider (kickPad)->isEnabled());

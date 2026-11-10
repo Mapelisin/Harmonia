@@ -25,6 +25,7 @@
 #include "ui/browser/SoundBrowser.h"
 #include "ui/mixer/Mixer.h"
 #include "ui/pianoroll/PianoRoll.h"
+#include "ui/stepseq/StepSequencer.h"
 
 namespace harmonia::ui
 {
@@ -83,6 +84,12 @@ namespace harmonia::ui
         arrangement::Arrangement& getArrangement() noexcept             { return arrangement; }
         pianoroll::PianoRoll& getPianoRoll() noexcept                   { return pianoRoll; }
         audioeditor::AudioEditor& getAudioEditor() noexcept             { return audioEditor; }
+        stepseq::StepSequencer& getStepSequencer() noexcept             { return stepSequencer; }
+
+        /** The step sequencer in place of the piano roll (the same clip, as drums and steps), or
+            the piano roll back (Alt+T, the Steps and Piano roll buttons, the View menu). */
+        void setStepsShown (bool);
+        bool areStepsShown() const noexcept                             { return stepsShown; }
         NoteInput& getNoteInput() noexcept                              { return noteInput; }
         audio::Transport& getTransport() noexcept                       { return transport; }
         TransportBar& getTransportBar() noexcept                        { return transportBar; }
@@ -216,6 +223,8 @@ namespace harmonia::ui
         juce::StretchableLayoutResizerBar splitter { &splitLayout, 1, false };
         pianoroll::PianoRoll pianoRoll { pianoRollModel, transport };
         audioeditor::AudioEditor audioEditor { arrangementModel, transport };
+        stepseq::StepSequencer stepSequencer { pianoRollModel, transport };
+        bool stepsShown = false;
         mixer::Mixer mixer { session, arrangementModel };
         automation::AutomationPanel automationPanel { arrangementModel, arrangement.getView(), transport };
         browser::SoundBrowser soundBrowser { session, filePreview };

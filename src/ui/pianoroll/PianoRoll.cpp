@@ -110,6 +110,15 @@ namespace harmonia::ui::pianoroll
         ghostsButton.onClick = [this] { model.setGhostsVisible (ghostsButton.getToggleState()); };
         addAndMakeVisible (ghostsButton);
 
+        stepsButton.setWantsKeyboardFocus (false);
+        stepsButton.setTooltip ("The step sequencer: the same notes as a grid of drums and steps, a click puts a hit (Alt+T)");
+        stepsButton.onClick = [this]
+        {
+            if (onShowSteps != nullptr)
+                onShowSteps();
+        };
+        addAndMakeVisible (stepsButton);
+
         infoLabel.setColour (juce::Label::textColourId, theme::colour::textSecondary);
         infoLabel.setJustificationType (juce::Justification::centredRight);
         addAndMakeVisible (infoLabel);
@@ -191,6 +200,8 @@ namespace harmonia::ui::pianoroll
         chordButton.setBounds (toolbar.removeFromLeft (140));
         toolbar.removeFromLeft (theme::size::padding);
         ghostsButton.setBounds (toolbar.removeFromLeft (110));
+        stepsButton.setBounds (toolbar.removeFromLeft (56));
+        toolbar.removeFromLeft (8);
         infoLabel.setBounds (toolbar);
 
         auto bottom = area.removeFromBottom (scrollBarSize);

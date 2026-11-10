@@ -148,11 +148,8 @@ namespace harmonia::ui
         {
             preset_menu::make (plugin, [safe = juce::Component::SafePointer<ParameterPanel> (this)] (const juce::String& text, bool isProblem)
             {
-                if (safe == nullptr)
-                    return;
-
-                safe->message.setColour (juce::Label::textColourId, isProblem ? theme::colour::warning : theme::colour::textSecondary);
-                safe->message.setText (text, juce::dontSendNotification);
+                if (safe != nullptr)
+                    safe->tell (text, isProblem);
             }).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&presetsButton));
         };
         addAndMakeVisible (presetsButton);
@@ -210,6 +207,12 @@ namespace harmonia::ui
 
         for (int i = 0; i < rows.size(); ++i)
             rows[i]->setBounds (0, margin + i * rowHeight, width, rowHeight);
+    }
+
+    void ParameterPanel::tell (const juce::String& text, bool isProblem)
+    {
+        message.setColour (juce::Label::textColourId, isProblem ? theme::colour::warning : theme::colour::textSecondary);
+        message.setText (text, juce::dontSendNotification);
     }
 
     juce::String ParameterPanel::getBadge (int row) const

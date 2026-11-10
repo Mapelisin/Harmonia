@@ -47,7 +47,8 @@ namespace harmonia::ui
         /** Plays the key (as a click on its triangle does). */
         void audition (int note);
 
-        juce::String getMessage() const             { return message.getText(); }
+        /** What the window last said (in the bar at the top, next to Presets). */
+        juce::String getMessage() const             { return knobs.getMessage().getText(); }
 
         /** Re-reads the drums (the window does it a few times a second: undo, presets). */
         void refresh();
@@ -61,7 +62,7 @@ namespace harmonia::ui
 
         te::Plugin& drums;
         ParameterPanel knobs;
-        juce::Label header, message;
+        juce::Label header, volumeCaption { {}, "Volume" }, tuneCaption { {}, "Tuning" };
         juce::Viewport viewport;
         juce::Component content;
         juce::OwnedArray<Pad> pads;

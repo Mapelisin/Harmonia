@@ -76,7 +76,8 @@ expect bugs.
 **Plugins**
 - VST3 instruments and effects. Every plugin runs in a process of its own: if it crashes or hangs, the song
   keeps playing and the plugin can be restarted.
-- A built-in synth and a built-in drum machine.
+- A built-in synth and a built-in drum machine: any drum can play a sample of yours (drag a sound onto it).
+- A step sequencer for drums: the clip as a grid of drums and steps.
 
 **Helpers** (they work by the rules of music theory and by exact measurements, without neural networks)
 - Generators: chord progressions, drum grooves, a bass line and a melody for the chords, a song from a loop.
@@ -94,7 +95,7 @@ expect bugs.
 
 ## What comes next
 
-- Your own samples in the drum machine: drag a sound onto a drum to replace it.
+- A sampler (any sound as an instrument), a plugin chooser with search and favourites, backups of a song.
 - Local AI models: stem separation, a mastering helper, finding sounds by description.
 - macOS (Apple Silicon).
 

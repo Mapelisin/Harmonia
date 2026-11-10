@@ -63,6 +63,7 @@ add_executable(harmonia_tests
     ui/MidiLearnUiTests.cpp
     ui/TakeUiTests.cpp
     ui/DrumPadsTests.cpp
+    ui/StepSequencerTests.cpp
     ui/TrackFolderUiTests.cpp
     ui/AudioLoopUiTests.cpp
     ui/PluginWindowTests.cpp

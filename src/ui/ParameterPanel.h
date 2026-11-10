@@ -32,6 +32,9 @@ namespace harmonia::ui
         juce::TextButton& getPresetsButton() noexcept   { return presetsButton; }
         const juce::Label& getMessage() const noexcept  { return message; }
 
+        /** Says something in the bar, next to the Presets button (a problem in the warning colour). */
+        void tell (const juce::String& text, bool isProblem);
+
         static constexpr int rowHeight = 26, barHeight = 34;
 
     private:

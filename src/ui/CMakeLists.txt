@@ -81,6 +81,10 @@ add_library(harmonia_ui STATIC
     pianoroll/ToolPreview.cpp
     pianoroll/PianoRoll.h
     pianoroll/PianoRoll.cpp
+    stepseq/StepSequencerModel.h
+    stepseq/StepSequencerModel.cpp
+    stepseq/StepSequencer.h
+    stepseq/StepSequencer.cpp
     arrangement/ArrangementView.h
     arrangement/ArrangementModel.h
     arrangement/ArrangementModel.cpp

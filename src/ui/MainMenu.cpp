@@ -166,6 +166,9 @@ namespace harmonia::ui
         menu.addItem (makeItem ("Show the whole song", "Z", true, on (main, [] (MainComponent& m) { m.getArrangement().zoomToFit(); })));
         menu.addItem (makeItem ("Show the whole clip in the piano roll", "Z", main.getPianoRollModel().getClip() != nullptr,
                                 on (main, [] (MainComponent& m) { m.getPianoRoll().zoomToFit(); })));
+        menu.addItem (makeItem ("Step sequencer (drums and steps)", "Alt+T", ! main.editsAudio(),
+                                on (main, [] (MainComponent& m) { m.setStepsShown (! (m.areStepsShown() && m.getLowerPanel() == MainComponent::LowerPanel::pianoRoll)); }),
+                                main.areStepsShown() && shown == Panel::pianoRoll && ! main.editsAudio()));
         menu.addItem (makeItem ("Ghost notes of the other clips", "Alt+V", true, on (main, [] (MainComponent& m)
         {
             auto& model = m.getPianoRollModel();

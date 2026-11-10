@@ -62,6 +62,8 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Piano roll: всё поведение — в `ui/pianoroll/PianoRollModel` (команды, выделение) и `GridGestures` (мышь),
   их тесты гоняют синтетические события без окна. Компоненты только рисуют и передают ввод. Время в piano roll —
   доли от начала песни; в клипе ноты хранятся от начала его содержимого (`PianoRollModel` переводит).
+- Пошаговый секвенсор (на месте piano roll, Alt+T): поведение — `ui/stepseq/StepSequencerModel`, своих данных
+  нет, ноты меняет только через `PianoRollModel`. Показан ли он — `MainComponent::areStepsShown`.
 - Проверка интерфейса без окна: тесты «the main window paints…» рисуют главное окно в картинку; с переменной
   `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png`, `main-arrangement.png`, `main-mixer.png`,
   `main-automation.png`, `main-audio.png` и `main-audio-recording.png`

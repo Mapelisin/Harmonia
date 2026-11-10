@@ -101,6 +101,31 @@ It is put in automatically when:
   plugin keeps its own sound;
 - a drum part (channel 10) comes from a MIDI file: it goes onto a track with the drum machine.
 
+## Drums: the step sequencer
+
+A beat is quicker to put in as a grid than as notes. **Steps** in the piano roll's toolbar (or **Alt+T**,
+or View → Step sequencer) shows the open clip as a grid: drums down, steps across.
+
+| What | How |
+|---|---|
+| Click an empty cell | A hit there; you hear it |
+| Click a hit | Takes it away |
+| Drag | The same along the way: a row of hits, or a row of them gone |
+| Right button (also dragged) | Only takes hits away |
+| Alt + wheel over a hit | Harder / softer (the cell is brighter / dimmer) |
+| Click a drum's name | Plays it; right button: **Clear this row** |
+| **Step** | How long a step is: 1/8, 1/16 (as it starts), 1/32, or triplets |
+| **Clear** | Takes every hit of the clip away |
+| **Piano roll** (or Alt+T) | Back to the notes |
+
+- These are the same notes as in the piano roll, shown another way: what you put in here is there, and the
+  other way round. A note off the grid shows in the step it starts in.
+- The rows are the kit's main drums, plus every key the clip has notes on, plus the keys that have samples of
+  yours. The names are those on the piano roll's keys.
+- The grid is as long as the clip: make the clip longer in the arrangement for more bars. While the song
+  plays, the column being played is lit.
+- Every click is one Ctrl+Z step, a whole drag too.
+
 ## Drums: names on the keys
 
 If a track is called "Drums", "Beat", "Perc"…, the keys on the left and the notes show **drum names** by

@@ -217,10 +217,14 @@ namespace harmonia::ui
         header.setColour (juce::Label::textColourId, theme::colour::textSecondary);
         addAndMakeVisible (header);
 
-        message.setFont (juce::FontOptions (theme::size::smallFontSize));
-        message.setColour (juce::Label::textColourId, theme::colour::textSecondary);
-        message.setJustificationType (juce::Justification::centredRight);
-        addAndMakeVisible (message);
+        // Over the sliders of the rows.
+        for (auto* caption : { &volumeCaption, &tuneCaption })
+        {
+            caption->setFont (juce::FontOptions (theme::size::smallFontSize));
+            caption->setColour (juce::Label::textColourId, theme::colour::textSecondary);
+            caption->setJustificationType (juce::Justification::centred);
+            addAndMakeVisible (caption);
+        }
 
         viewport.setViewedComponent (&content, false);
         viewport.setScrollBarsShown (true, false);
@@ -370,8 +374,7 @@ namespace harmonia::ui
 
     void DrumPadsPanel::tell (const juce::String& text, bool isProblem)
     {
-        message.setColour (juce::Label::textColourId, isProblem ? theme::colour::warning : theme::colour::textSecondary);
-        message.setText (text, juce::dontSendNotification);
+        knobs.tell (text, isProblem);
     }
 
     void DrumPadsPanel::paint (juce::Graphics& g)
@@ -386,13 +389,18 @@ namespace harmonia::ui
         auto area = getLocalBounds();
         knobs.setBounds (area.removeFromTop (std::min (knobs.getIdealHeight(), getHeight() / 2)));
 
-        auto top = area.removeFromTop (headerHeight).reduced (margin, 0);
-        header.setBounds (top.removeFromLeft (top.getWidth() / 2));
-        message.setBounds (top);
-
+        auto top = area.removeFromTop (headerHeight);
         viewport.setBounds (area);
         const auto rowsHeight = pads.size() * rowHeight;
         const auto width = getWidth() - (rowsHeight > area.getHeight() ? viewport.getScrollBarThickness() : 0);
+
+        // The captions sit over the rows' sliders (as Pad::resized lays them out).
+        top = top.withWidth (width).reduced (margin, 0);
+        top.removeFromRight (buttonSize + 6);
+        tuneCaption.setBounds (top.removeFromRight (tuneWidth));
+        top.removeFromRight (4);
+        volumeCaption.setBounds (top.removeFromRight (volumeWidth));
+        header.setBounds (top);
         content.setSize (width, rowsHeight);
 
         for (int i = 0; i < pads.size(); ++i)

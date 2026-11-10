@@ -108,7 +108,8 @@ namespace harmonia::ui
                 { "F / Shift+F", "Lower panel: next / previous note value, then pitch bend, mod wheel, pedal" },
                 { "PgUp / PgDn", "Zoom in / out" },
                 { "Z", "Zoom to fit: the selected notes, or the whole clip" },
-                { "Alt+V", "Show / hide the other tracks' notes" } } },
+                { "Alt+V", "Show / hide the other tracks' notes" },
+                { "Alt+T", "Step sequencer: the clip as drums and steps (click: a hit; right button: take away; Alt+wheel: harder / softer)" } } },
 
             { "Piano roll: tools with a window", {
                 { "Alt+S", "Strum: chord notes one after another" },

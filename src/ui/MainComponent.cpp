@@ -142,6 +142,9 @@ namespace harmonia::ui
             addAndMakeVisible (c);
 
         addChildComponent (audioEditor);
+        addChildComponent (stepSequencer);
+        pianoRoll.onShowSteps = [this] { setStepsShown (true); };
+        stepSequencer.onShowNotes = [this] { setStepsShown (false); };
         addChildComponent (mixer);
         addChildComponent (automationPanel);
         addChildComponent (soundBrowser);
@@ -298,12 +301,25 @@ namespace harmonia::ui
         const auto pianoRollHadFocus = pianoRoll.hasKeyboardFocus (true);
 
         pianoRollTab.setButtonText (getEditorName());
-        pianoRoll.setVisible (lowerPanel == LowerPanel::pianoRoll && ! audio);
+        pianoRoll.setVisible (lowerPanel == LowerPanel::pianoRoll && ! audio && ! stepsShown);
+        stepSequencer.setVisible (lowerPanel == LowerPanel::pianoRoll && ! audio && stepsShown);
         audioEditor.setVisible (lowerPanel == LowerPanel::pianoRoll && audio);
+
+        if (stepSequencer.isVisible())
+            stepSequencer.refresh();
 
         // Keys keep working when the piano roll goes.
         if (pianoRollHadFocus && ! pianoRoll.isVisible() && isShowing())
             grabKeyboardFocus();
+    }
+
+    void MainComponent::setStepsShown (bool shouldShow)
+    {
+        if (stepsShown == shouldShow && lowerPanel == LowerPanel::pianoRoll)
+            return;
+
+        stepsShown = shouldShow;
+        showLowerPanel (LowerPanel::pianoRoll);
     }
 
     bool MainComponent::editsAudio() const
@@ -410,6 +426,7 @@ namespace harmonia::ui
         juce::Component* parts[] = { &arrangement, &splitter, &pianoRoll };
         splitLayout.layOutComponents (parts, 3, area.getX(), area.getY(), area.getWidth(), area.getHeight(), true, true);
         audioEditor.setBounds (pianoRoll.getBounds());
+        stepSequencer.setBounds (pianoRoll.getBounds());
         mixer.setBounds (pianoRoll.getBounds());
         automationPanel.setBounds (pianoRoll.getBounds());
         soundBrowser.setBounds (pianoRoll.getBounds());
@@ -499,6 +516,13 @@ namespace harmonia::ui
         if (code == juce::KeyPress::homeKey && ! mods.isAnyModifierKeyDown())
         {
             goToStart();
+            return true;
+        }
+
+        // Alt+T: the step sequencer and the piano roll, in turn.
+        if (mods.isAltDown() && ! mods.isCommandDown() && ! mods.isShiftDown() && letter == 'T' && ! editsAudio())
+        {
+            setStepsShown (! (stepsShown && lowerPanel == LowerPanel::pianoRoll));
             return true;
         }
 

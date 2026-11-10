@@ -57,6 +57,10 @@ namespace harmonia::ui::pianoroll
         /** Something to tell the user (why a tool didn't open...). */
         std::function<void (const juce::String&)> onMessage;
 
+        /** The Steps button was clicked: the step sequencer should take the piano roll's place. */
+        std::function<void()> onShowSteps;
+        juce::TextButton& getStepsButton() noexcept         { return stepsButton; }
+
         /** Off while the computer keyboard plays notes: letters, digits and punctuation are left
             to it (keyPressed returns false for them). */
         void setLetterShortcutsEnabled (bool shouldBeEnabled) noexcept   { letterShortcutsEnabled = shouldBeEnabled; }
@@ -76,6 +80,7 @@ namespace harmonia::ui::pianoroll
         static constexpr int firstControllerId = 101;     // laneBox: the controllers after the note values
         juce::TextButton toolsButton { "Tools" }, scaleButton, chordButton;
         juce::ToggleButton ghostsButton { "Ghost notes" };
+        juce::TextButton stepsButton { "Steps" };
         juce::Label snapLabel, infoLabel;
         juce::ScrollBar horizontalScroll { false }, verticalScroll { true };
 
