@@ -82,8 +82,9 @@ namespace harmonia::audio::presets
                 if (const auto name = settings.getPropertyName (i); ! isSetting (name))
                     settings.removeProperty (name, nullptr);
 
+            // And the drum machine's own samples.
             for (int i = settings.getNumChildren(); --i >= 0;)
-                if (! settings.getChild (i).hasType (te::IDs::MODMATRIX))
+                if (! settings.getChild (i).hasType (te::IDs::MODMATRIX) && ! settings.getChild (i).hasType (drum_kit::getSamplesTag()))
                     settings.removeChild (i, nullptr);
 
             return settings;

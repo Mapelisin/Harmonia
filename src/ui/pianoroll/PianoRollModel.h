@@ -114,8 +114,22 @@ namespace harmonia::ui::pianoroll
         /** Takes that step back again, if it is still the last one. */
         void undoMakeDrumTrack();
 
-        /** The drum a key plays when drum names are shown (else, or for other keys, empty). */
+        /** The drum a key plays when drum names are shown (else, or for other keys, empty): on
+            Harmonia's drum machine, the name of the key's sample if it has one. */
         juce::String getDrumName (int pitch) const;
+
+        /** Harmonia's drum machine, if the open clip's track plays it (else nullptr). */
+        te::Plugin* getDrumMachine() const;
+
+        /** The key of the drum machine plays this sound file from now on (one undo step), and is
+            played once. Returns an empty string, or why it can't (no drum machine, not a sound). */
+        juce::String setDrumSample (int pitch, const juce::File&);
+
+        /** The key plays the kit's own sound again (one undo step). */
+        void clearDrumSample (int pitch);
+
+        /** Whether the key of the drum machine plays a sample. */
+        bool hasDrumSample (int pitch) const;
 
         //==============================================================================
         // Notes for drawing and hit-testing (rebuilt lazily after changes)

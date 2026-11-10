@@ -281,30 +281,42 @@ namespace harmonia::ui::browser
 
         void showMenu (int row)
         {
-            const auto entry = owner.entries[(size_t) row];
-            juce::Component::SafePointer<SoundBrowser> safe (&owner);
-            juce::PopupMenu menu;
-
-            if (entry.kind == Entry::Kind::folder)
-            {
-                menu.addItem ("Open", [safe, entry] { if (safe != nullptr) safe->setFolder (entry.file); });
-                menu.addItem ("Add to places", [safe, entry] { if (safe != nullptr) safe->addPlace (entry.file); });
-            }
-            else
-            {
-                menu.addItem ("Listen", [safe, entry] { if (safe != nullptr) safe->preview.play (entry.file); });
-
-                menu.addItem ("Add to the song (at the playhead)", [safe, entry]
-                {
-                    if (safe != nullptr && safe->onAddToSong != nullptr)
-                        safe->onAddToSong (entry.file);
-                });
-            }
-
-            menu.addItem ("Show in Explorer", [entry] { entry.file.revealToUser(); });
-            menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMousePosition());
+            owner.createMenu (row).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMousePosition());
         }
     };
+
+    juce::PopupMenu SoundBrowser::createMenu (int row)
+    {
+        juce::PopupMenu menu;
+
+        if (! juce::isPositiveAndBelow (row, (int) entries.size()))
+            return menu;
+
+        const auto entry = entries[(size_t) row];
+        juce::Component::SafePointer<SoundBrowser> safe (this);
+
+        if (entry.kind == Entry::Kind::folder)
+        {
+            menu.addItem ("Open", [safe, entry] { if (safe != nullptr) safe->setFolder (entry.file); });
+            menu.addItem ("Add to places", [safe, entry] { if (safe != nullptr) safe->addPlace (entry.file); });
+        }
+        else
+        {
+            menu.addItem ("Listen", [safe, entry] { if (safe != nullptr) safe->preview.play (entry.file); });
+
+            menu.addItem ("Add to the song (at the playhead)", [safe, entry]
+            {
+                if (safe != nullptr && safe->onAddToSong != nullptr)
+                    safe->onAddToSong (entry.file);
+            });
+
+            if (entry.kind == Entry::Kind::sound && onSoundMenu != nullptr)
+                onSoundMenu (menu, entry.file);
+        }
+
+        menu.addItem ("Show in Explorer", [entry] { entry.file.revealToUser(); });
+        return menu;
+    }
 
     //==============================================================================
     class SoundBrowser::PlacesList final : public juce::ListBox,

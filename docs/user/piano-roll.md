@@ -80,6 +80,21 @@ as on real drums.
 The knobs (the instrument window button): **Kit** is the set: *Punchy* (tight, bright), *808* (a long deep
 kick), *Lo-fi* (dark, soft); **Tune** is higher/lower by ±12 semitones; **Decay** is a shorter/longer sound.
 
+**Your own samples.** Any drum can play a sound file of yours instead of its own sound: your kick, your clap.
+- Open the drum machine's window (the instrument window button). Below the knobs is the list of drums.
+  **Drag a sound** onto a drum, from the sound browser (F6) or from the file explorer, and it plays that
+  sound at once. Or click the drum's sound (it says **Built-in**) and choose a file.
+- In the same row: the sample's own **volume** and **tuning** (double-click: back to zero), **x** puts the
+  kit's own sound back, the triangle plays the drum.
+- Without the window: drop a file from the file explorer straight onto a key in the piano roll (the row
+  lights up), or right-click a sound in the sound browser → **Use as a drum sound of Drums** → the drum.
+  Right-click a key → **Back to the kit's own sound**.
+- The key then shows the sample's name. **Tune** and **Decay** of the kit work on samples too (Decay under
+  100% cuts them short). The samples are saved with the song and in the drum machine's presets (**Presets**
+  in the same window: "my kit" for any song). The files stay where they are: if one is moved or deleted,
+  its drum plays the kit's own sound again and the window says **Missing**.
+- Every change is one Ctrl+Z step.
+
 It is put in automatically when:
 - **Alt+D** (Drum pattern) is opened on a new track with no notes and the built-in synth: the track becomes
   a drum track ("Track 2" is renamed to "Drums"); Cancel puts everything back. A track with notes or with a

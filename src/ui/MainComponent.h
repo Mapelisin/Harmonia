@@ -132,6 +132,13 @@ namespace harmonia::ui
 
         void toggleMetronome();
 
+        /** For a sound's menu in the sound browser: while the current track plays Harmonia's drum
+            machine, "Use as a drum sound" with its drums (the one chosen plays the file). */
+        void addDrumSoundItems (juce::PopupMenu&, const juce::File&);
+
+        /** The file becomes the sound of that key of the current track's drum machine. */
+        void useAsDrumSound (const juce::File&, int note);
+
         /** Writing automation on / off (Ctrl+Shift+A, the Write button). */
         void toggleAutomationWriting();
         audio::automation::Writer& getAutomationWriter() noexcept       { return automationWriter; }

@@ -73,6 +73,12 @@ namespace harmonia::ui::browser
         /** A sound or MIDI file to put into the song (double-click or Enter). */
         std::function<void (const juce::File&)> onAddToSong;
 
+        /** More items for a sound's right-click menu (what else the window can do with it). */
+        std::function<void (juce::PopupMenu&, const juce::File&)> onSoundMenu;
+
+        /** The right-click menu of a row (for tests). */
+        juce::PopupMenu createMenu (int index);
+
         /** Rows of the file list (for tests: what is shown). */
         juce::ListBox& getList() noexcept;
 

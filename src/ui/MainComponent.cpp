@@ -1,4 +1,7 @@
 #include "ui/MainComponent.h"
+#include "audio/DrumKit.h"
+#include "audio/Instruments.h"
+#include "core/Drums.h"
 #include "core/Markers.h"
 #include "core/MidiFiles.h"
 #include "core/Tracks.h"
@@ -86,6 +89,7 @@ namespace harmonia::ui
         mixerTab.onClick = [this] { showLowerPanel (LowerPanel::mixer); };
         soundsTab.onClick = [this] { showLowerPanel (LowerPanel::sounds); };
         soundBrowser.onAddToSong = [this] (const juce::File& file) { addFilesAtPlayhead ({ file }); };
+        soundBrowser.onSoundMenu = [this] (juce::PopupMenu& menu, const juce::File& file) { addDrumSoundItems (menu, file); };
 
         // A click on the audio clip editor's waveform moves the playhead (the play mode stays).
         audioEditor.onPositionChosen = [this] (double beat)
@@ -606,6 +610,67 @@ namespace harmonia::ui
         auto& edit = project.getEdit();
         edit.clickTrackEnabled = ! edit.clickTrackEnabled.get();
         transportBar.refresh();
+    }
+
+    void MainComponent::addDrumSoundItems (juce::PopupMenu& menu, const juce::File& file)
+    {
+        auto* track = arrangementModel.getCurrentTrack();
+
+        if (track == nullptr || ! audio::instruments::playsDrumKit (*track))
+            return;
+
+        auto* drums = audio::instruments::get (*track);
+        juce::PopupMenu keys;
+        juce::Component::SafePointer<MainComponent> safe (this);
+
+        // The drums of the kit, and whatever other keys have samples.
+        for (int note = 0; note < 128; ++note)
+        {
+            const auto name = core::drums::getName (note);
+            const auto sampled = audio::drum_kit::getSample (*drums, note).has_value();
+
+            if (name.isEmpty() && ! sampled)
+                continue;
+
+            const auto key = juce::MidiMessage::getMidiNoteName (note, true, true, 4);
+            keys.addItem ((name.isNotEmpty() ? name : "Key") + " (" + key + ")", true, sampled, [safe, file, note]
+            {
+                if (safe != nullptr)
+                    safe->useAsDrumSound (file, note);
+            });
+        }
+
+        menu.addSubMenu ("Use as a drum sound of " + track->getName(), keys);
+    }
+
+    void MainComponent::useAsDrumSound (const juce::File& file, int note)
+    {
+        auto* track = arrangementModel.getCurrentTrack();
+        auto* drums = track != nullptr && audio::instruments::playsDrumKit (*track) ? audio::instruments::get (*track) : nullptr;
+
+        if (drums == nullptr)
+        {
+            showWarning ("The current track doesn't play the drum machine");
+            return;
+        }
+
+        if (const auto error = audio::drum_kit::setSample (*drums, note, file); error.isNotEmpty())
+        {
+            showWarning (error);
+            return;
+        }
+
+        if (auto* machine = dynamic_cast<audio::drum_kit::Plugin*> (drums))
+            machine->updateSamplesNow();
+
+        // Heard at once.
+        notePreview.noteOn (note, 100);
+        notePreview.noteOff (note);
+        pianoRoll.repaint();
+
+        const auto drum = core::drums::getName (note);
+        showMessage ((drum.isNotEmpty() ? drum : juce::String ("The key")) + " of " + track->getName() + " plays " + file.getFileNameWithoutExtension()
+                     + " (Ctrl+Z: back)");
     }
 
     void MainComponent::toggleAutomationWriting()

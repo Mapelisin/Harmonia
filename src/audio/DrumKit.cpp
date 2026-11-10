@@ -483,7 +483,15 @@ namespace harmonia::audio::drum_kit
     struct Processor::Voices
     {
         std::array<Voice, (size_t) maxVoices> voices;
+        std::array<SampleVoice, (size_t) maxVoices> sampleVoices;
         juce::uint32 hits = 0;
+
+        // `playing` is the audio thread's. A new bank waits in `waiting` until beginBlock swaps
+        // them; the old one then waits there for setSamples (or the end) to let it go, so nothing
+        // is freed on the audio thread.
+        SampleBank::Ptr playing, waiting;
+        bool isNew = false;
+        juce::SpinLock lock;
     };
 
     Processor::Processor()
@@ -499,9 +507,40 @@ namespace harmonia::audio::drum_kit
         reset();
     }
 
+    void Processor::setSamples (SampleBank::Ptr bank)
+    {
+        SampleBank::Ptr old;
+
+        {
+            const juce::SpinLock::ScopedLockType scopedLock (voices->lock);
+            old = std::move (voices->waiting);
+            voices->waiting = std::move (bank);
+            voices->isNew = true;
+        }
+    }
+
+    void Processor::beginBlock()
+    {
+        const juce::SpinLock::ScopedTryLockType scopedLock (voices->lock);
+
+        if (! scopedLock.isLocked() || ! voices->isNew)
+            return;
+
+        std::swap (voices->playing, voices->waiting);
+        voices->isNew = false;
+
+        // What a hit is playing may go with the old bank.
+        for (auto& voice : voices->sampleVoices)
+            if (voice.active && (voices->playing == nullptr || voices->playing->keys[(size_t) voice.note].data.get() != voice.data))
+                voice.active = false;
+    }
+
     void Processor::reset()
     {
         for (auto& voice : voices->voices)
+            voice.active = false;
+
+        for (auto& voice : voices->sampleVoices)
             voice.active = false;
 
         voices->hits = 0;       // every render of the song sounds the same
@@ -512,13 +551,20 @@ namespace harmonia::audio::drum_kit
         for (auto& voice : voices->voices)
             if (voice.active)
                 voice.stop();
+
+        for (auto& voice : voices->sampleVoices)
+            if (voice.active)
+                voice.stop (sampleRate);
     }
 
     void Processor::noteOn (int note, float velocity, Kit kit, float tune, float decay)
     {
         const auto sound = getSound (note);
+        const auto* bank = voices->playing.get();
+        const auto* sample = bank != nullptr && note >= 0 && note < 128 && bank->keys[(size_t) note].data != nullptr
+                               ? &bank->keys[(size_t) note] : nullptr;
 
-        if (sound == Sound::none || velocity <= 0.0f)
+        if ((sound == Sound::none && sample == nullptr) || velocity <= 0.0f)
             return;
 
         // The same drum hit again stops it ringing; a closed (or pedal) hat stops the open one.
@@ -527,6 +573,31 @@ namespace harmonia::audio::drum_kit
         for (auto& voice : voices->voices)
             if (voice.active && (voice.note == note || (chokes && getSound (voice.note) == Sound::openHat)))
                 voice.stop();
+
+        for (auto& voice : voices->sampleVoices)
+            if (voice.active && (voice.note == note || (chokes && getSound (voice.note) == Sound::openHat)))
+                voice.stop (sampleRate);
+
+        // The key's own sample, if it has one.
+        if (sample != nullptr)
+        {
+            SampleVoice* free = nullptr;
+
+            for (auto& voice : voices->sampleVoices)
+            {
+                if (! voice.active)
+                {
+                    free = &voice;
+                    break;
+                }
+
+                if (free == nullptr || voice.age > free->age)
+                    free = &voice;
+            }
+
+            free->start (note, *sample, velocity, tune + sample->tune, decay, sampleRate);
+            return;
+        }
 
         // A free voice, else the oldest one.
         Voice* chosen = nullptr;
@@ -558,12 +629,102 @@ namespace harmonia::audio::drum_kit
                 right[i] += sample * voice.right;
             }
         }
+
+        for (auto& voice : voices->sampleVoices)
+            voice.render (left, right, numSamples);
     }
 
     int Processor::getNumPlaying() const
     {
-        return (int) std::count_if (voices->voices.begin(), voices->voices.end(), [] (const Voice& v) { return v.active; });
+        return (int) std::count_if (voices->voices.begin(), voices->voices.end(), [] (const Voice& v) { return v.active; })
+             + (int) std::count_if (voices->sampleVoices.begin(), voices->sampleVoices.end(), [] (const SampleVoice& v) { return v.active; });
     }
+
+    //==============================================================================
+    /** Keeps the sound part's samples as the song says: reads the files when the keys' samples
+        change (message thread; a moment after the change, or at once when asked). */
+    class Plugin::SampleLoader final : private juce::ValueTree::Listener,
+                                       private juce::AsyncUpdater
+    {
+    public:
+        SampleLoader (Plugin& p, Processor& pr)
+            : plugin (p), processor (pr)
+        {
+            plugin.state.addListener (this);
+            load();
+        }
+
+        ~SampleLoader() override
+        {
+            cancelPendingUpdate();
+            plugin.state.removeListener (this);
+        }
+
+        void updateNow()
+        {
+            cancelPendingUpdate();
+            load();
+        }
+
+    private:
+        Plugin& plugin;
+        Processor& processor;
+        std::map<juce::String, SampleData::Ptr> loaded;     // by path: a file is read once
+
+        void load()
+        {
+            SampleBank::Ptr bank (new SampleBank());
+            std::map<juce::String, SampleData::Ptr> used;
+
+            for (const auto note : getSampledKeys (plugin))
+            {
+                const auto info = getSample (plugin, note);
+                const auto path = info->file.getFullPathName();
+                auto data = loaded.count (path) != 0 ? loaded[path] : SampleData::Ptr();
+
+                // A file that can't be read (or has gone): the key keeps the kit's own sound.
+                if (juce::String error; data == nullptr)
+                    data = SampleData::load (plugin.edit.engine, info->file, error);
+
+                if (data == nullptr)
+                    continue;
+
+                bank->keys[(size_t) note] = { data, juce::Decibels::decibelsToGain (info->gainDb), info->tune };
+                used[path] = data;
+            }
+
+            loaded = std::move (used);
+            processor.setSamples (bank);
+        }
+
+        bool isAboutSamples (const juce::ValueTree& tree) const
+        {
+            return tree.hasType (getSamplesTag()) || tree.getParent().hasType (getSamplesTag());
+        }
+
+        void valueTreePropertyChanged (juce::ValueTree& tree, const juce::Identifier&) override
+        {
+            if (isAboutSamples (tree))
+                triggerAsyncUpdate();
+        }
+
+        void valueTreeChildAdded (juce::ValueTree& parent, juce::ValueTree& child) override
+        {
+            if (parent.hasType (getSamplesTag()) || child.hasType (getSamplesTag()))
+                triggerAsyncUpdate();
+        }
+
+        void valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueTree& child, int) override
+        {
+            if (parent.hasType (getSamplesTag()) || child.hasType (getSamplesTag()))
+                triggerAsyncUpdate();
+        }
+
+        void handleAsyncUpdate() override
+        {
+            load();
+        }
+    };
 
     //==============================================================================
     const char* Plugin::xmlTypeName = "harmoniaDrums";
@@ -601,11 +762,14 @@ namespace harmonia::audio::drum_kit
         kit->attachToCurrentValue (kitValue);
         tune->attachToCurrentValue (tuneValue);
         decay->attachToCurrentValue (decayValue);
+
+        sampleLoader = std::make_unique<SampleLoader> (*this, processor);
     }
 
     Plugin::~Plugin()
     {
         notifyListenersOfDeletion();
+        sampleLoader.reset();
 
         kit->detachFromCurrentValue();
         tune->detachFromCurrentValue();
@@ -618,6 +782,22 @@ namespace harmonia::audio::drum_kit
 
         for (auto* parameter : getAutomatableParameters())
             parameter->updateFromAttachedValue();
+
+        // The keys' samples are settings too (a preset has them; the first settings have none).
+        if (v != state)
+        {
+            auto* undoManager = getUndoManager();
+            const auto samples = v.getChildWithName (getSamplesTag());
+            state.removeChild (state.getChildWithName (getSamplesTag()), undoManager);
+
+            if (samples.isValid())
+                state.appendChild (samples.createCopy(), undoManager);
+        }
+    }
+
+    void Plugin::updateSamplesNow()
+    {
+        sampleLoader->updateNow();
     }
 
     Kit Plugin::getKit() const
@@ -679,6 +859,8 @@ namespace harmonia::audio::drum_kit
                     left[at + i] = 0.5f * (left[at + i] + other[i]);
             }
         };
+
+        processor.beginBlock();
 
         const auto kitNow = getKit();
         const auto tuneNow = tune->getCurrentValue();

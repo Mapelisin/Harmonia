@@ -123,6 +123,11 @@ namespace harmonia::ui::pianoroll
 
         grid.onViewChanged = [this] { viewChanged(); };
         keys.onViewChanged = [this] { viewChanged(); };
+        keys.onMessage = [this] (const juce::String& text)
+        {
+            if (onMessage != nullptr)
+                onMessage (text);
+        };
         grid.getGestures().onNoteDoubleClicked = [this] (te::MidiNote& note)
         {
             const auto v = model.read (note);

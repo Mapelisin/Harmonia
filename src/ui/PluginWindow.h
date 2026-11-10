@@ -5,7 +5,8 @@
 namespace harmonia::ui
 {
     /** A top-level window hosting a plugin's own editor or, for plugins without one (the built-in
-        synth and effects), Harmonia's knobs (ParameterPanel). */
+        synth and effects), Harmonia's knobs (ParameterPanel; for the drum machine DrumPadsPanel:
+        the knobs and its drums). */
     class PluginWindow final : public juce::DocumentWindow
     {
     public:
@@ -14,6 +15,7 @@ namespace harmonia::ui
 
         bool hasEditor() const noexcept     { return editor != nullptr; }
         bool showsKnobs() const noexcept    { return knobs != nullptr; }
+        juce::Component* getKnobs() noexcept    { return knobs.get(); }
 
     private:
         te::Plugin& plugin;

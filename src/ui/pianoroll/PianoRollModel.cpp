@@ -1,4 +1,5 @@
 #include "ui/pianoroll/PianoRollModel.h"
+#include "audio/DrumKit.h"
 #include "audio/Instruments.h"
 #include "core/Drums.h"
 #include "core/Clips.h"
@@ -196,7 +197,58 @@ namespace harmonia::ui::pianoroll
 
     juce::String PianoRollModel::getDrumName (int pitch) const
     {
-        return areDrumNamesShown() ? core::drums::getName (pitch) : juce::String();
+        if (! areDrumNamesShown())
+            return {};
+
+        if (auto* drums = getDrumMachine())
+            return audio::drum_kit::getKeyName (*drums, pitch);
+
+        return core::drums::getName (pitch);
+    }
+
+    te::Plugin* PianoRollModel::getDrumMachine() const
+    {
+        auto* track = clip != nullptr ? dynamic_cast<te::AudioTrack*> (clip->getTrack()) : nullptr;
+        return track != nullptr && audio::instruments::playsDrumKit (*track) ? audio::instruments::get (*track) : nullptr;
+    }
+
+    juce::String PianoRollModel::setDrumSample (int pitch, const juce::File& file)
+    {
+        auto* drums = getDrumMachine();
+
+        if (drums == nullptr)
+            return "Samples go on the keys of Harmonia's drum machine (Drums): this track plays another instrument";
+
+        if (const auto error = audio::drum_kit::setSample (*drums, pitch, file); error.isNotEmpty())
+            return error;
+
+        // Heard at once.
+        if (auto* machine = dynamic_cast<audio::drum_kit::Plugin*> (drums))
+            machine->updateSamplesNow();
+
+        auditionStart (pitch, 100);
+        auditionStop();
+        notifyChanged();
+        return {};
+    }
+
+    void PianoRollModel::clearDrumSample (int pitch)
+    {
+        if (auto* drums = getDrumMachine())
+        {
+            audio::drum_kit::clearSample (*drums, pitch);
+
+            if (auto* machine = dynamic_cast<audio::drum_kit::Plugin*> (drums))
+                machine->updateSamplesNow();
+
+            notifyChanged();
+        }
+    }
+
+    bool PianoRollModel::hasDrumSample (int pitch) const
+    {
+        auto* drums = getDrumMachine();
+        return drums != nullptr && audio::drum_kit::getSample (*drums, pitch).has_value();
     }
 
     double PianoRollModel::getBeatsPerBar() const

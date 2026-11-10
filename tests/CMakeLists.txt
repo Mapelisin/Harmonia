@@ -46,6 +46,7 @@ add_executable(harmonia_tests
     audio/LimiterTests.cpp
     audio/PumpTests.cpp
     audio/DrumKitTests.cpp
+    audio/DrumSampleTests.cpp
     audio/MixCheckTests.cpp
     audio/AudioTempoTests.cpp
     audio/PluginSafetyTests.cpp
@@ -61,6 +62,7 @@ add_executable(harmonia_tests
     ui/MixerTests.cpp
     ui/MidiLearnUiTests.cpp
     ui/TakeUiTests.cpp
+    ui/DrumPadsTests.cpp
     ui/TrackFolderUiTests.cpp
     ui/AudioLoopUiTests.cpp
     ui/PluginWindowTests.cpp

@@ -1,10 +1,12 @@
 #pragma once
 
+#include "audio/DrumSamples.h"
 #include "core/Session.h"
 
 /** Harmonia's drum machine: an instrument for the General MIDI drum keys (kick on C1, snare on
     D1, hats on F#1 and A#1...) that makes its drum sounds itself, out of falling tones, noise and
-    metallic clangs. A drum part sounds like drums with no plugin and no samples. */
+    metallic clangs. A drum part sounds like drums with no plugin and no samples. Any key can play
+    a sound file of yours instead (audio/DrumSamples.h). */
 namespace harmonia::audio::drum_kit
 {
     /** How the kit sounds. */
@@ -48,7 +50,15 @@ namespace harmonia::audio::drum_kit
         /** Silence, at once. */
         void reset();
 
-        /** A hit. `velocity` 0..1; `tune` in semitones; `decay` scales how long it rings (1: as made). */
+        /** The keys' samples from now on (not on the audio thread): taken at the next beginBlock.
+            A hit playing a sample that is no longer its key's stops there. */
+        void setSamples (SampleBank::Ptr);
+
+        /** Before the hits and the rendering of a block (audio thread): takes new samples. */
+        void beginBlock();
+
+        /** A hit. `velocity` 0..1; `tune` in semitones; `decay` scales how long it rings (1: as made).
+            A key with a sample plays that (and any key can have one), else the kit's own sound. */
         void noteOn (int note, float velocity, Kit, float tune, float decay);
 
         /** Everything ringing fades out within a few milliseconds. */
@@ -105,8 +115,15 @@ namespace harmonia::audio::drum_kit
         /** The kit set now. */
         Kit getKit() const;
 
+        /** Reads the keys' samples from the song again, right now (it happens by itself a moment
+            after they change). */
+        void updateSamplesNow();
+
     private:
+        class SampleLoader;
+
         Processor processor;
+        std::unique_ptr<SampleLoader> sampleLoader;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Plugin)
     };

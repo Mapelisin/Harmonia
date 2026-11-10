@@ -2,6 +2,7 @@
 #include "audio/Effects.h"
 #include "audio/PluginSafety.h"
 #include "sandbox/RemotePlugin.h"
+#include "ui/DrumPadsPanel.h"
 #include "ui/ParameterPanel.h"
 #include "ui/Theme.h"
 
@@ -23,7 +24,12 @@ namespace harmonia::ui
         }
         else
         {
-            knobs = std::make_unique<ParameterPanel> (plugin);
+            // The drum machine: its knobs, and its drums to put samples on.
+            if (dynamic_cast<audio::drum_kit::Plugin*> (&plugin) != nullptr)
+                knobs = std::make_unique<DrumPadsPanel> (plugin);
+            else
+                knobs = std::make_unique<ParameterPanel> (plugin);
+
             setContentNonOwned (knobs.get(), true);
             setResizable (true, false);
             setResizeLimits (360, 120, 1200, 1600);

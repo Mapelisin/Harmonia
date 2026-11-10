@@ -93,6 +93,10 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   начинает вызывающий). Мышь панели — `ui/automation/AutomationGestures` (тесты без окна).
 - Посылы и возвратные дорожки — только через `audio::sends`. `Project::getTracks` — дорожки песни (без
   возвратных и групп, `core::tracks::isBus`), `getReturnTracks` — возвратные, `getGroupTracks` — группы.
+- Сэмплы на клавишах драм-машины — только через функции `audio/DrumSamples.h` (`setSample`, `clearSample`,
+  `setSampleGainDb`…: undo, песня, пресеты). Звуковой части новый набор отдаёт `drum_kit::Plugin` сам, чуть
+  позже изменения; нужно сразу (послушать, экспорт в тесте) — `Plugin::updateSamplesNow()`. Файлы читаются
+  в память вне звукового потока; в звуковом потоке — ни чтения, ни освобождения памяти.
 - Заморозка дорожки — только через `audio::freeze` (в аранжировке — `ArrangementModel::freezeTrack`). Файл
   заморозки — скрытый клип (`core::clips::isFreezeClip`): `core::clips::getClips` его не отдаёт, а
   `track.getClips()` отдаёт — где перебираешь клипы движка напрямую, проверяй. Строка замороженной дорожки

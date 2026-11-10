@@ -127,6 +127,7 @@ namespace harmonia::ui
                 { "Up / Down", "The next / previous sound, and listen to it" },
                 { "Double-click, Enter", "Put it into the song: on the current track, at the playhead" },
                 { "Drag onto a track", "Put it there (Ctrl+click or Shift+click first: several)" },
+                { "Drag onto a drum (the drum machine's window)", "That drum plays the sound; or right button > Use as a drum sound" },
                 { "Click a folder / Backspace", "Open it / the folder above" },
                 { "+ Folder", "Add a folder with your sounds to the places (right button: remove)" },
                 { "Esc", "Stop listening" } } },
