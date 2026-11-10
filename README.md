@@ -13,6 +13,7 @@ A program for writing, recording and mixing music. It works offline and has no s
 [![CI](https://github.com/Mapelisin/Harmonia/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Mapelisin/Harmonia/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011-4f9fe0)
 ![Language](https://img.shields.io/badge/C%2B%2B-20-4f9fe0)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-4f9fe0)](LICENSE)
 ![Status](https://img.shields.io/badge/status-in%20development-e0a24f)
 
 [**Download**](https://github.com/Mapelisin/Harmonia/releases/latest) · [Installation](docs/user/install.md) · [Cheat sheets](#cheat-sheets) · [Features](#what-it-can-do-already) · [Plans](#what-comes-next) · [Building](#building-from-source)
@@ -164,6 +165,8 @@ An overview of the architecture (in Russian): [docs/architecture/overview.md](do
 
 ## License
 
-There is no license file yet. **AGPLv3** is planned (JUCE and Tracktion Engine require it); the decision will be
-confirmed after the licenses are checked. Until then the code is open for reading, but no rights to use it are
-granted.
+Harmonia is free software under the **GNU Affero General Public License v3.0** ([LICENSE](LICENSE)): you may use,
+study, change and share it, and anything you build on it and share must stay under the same license, with its
+source code. Copyright © 2026 Mapelisin.
+
+JUCE (AGPLv3) and Tracktion Engine (GPLv3) are used under their open-source licenses.

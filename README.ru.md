@@ -13,6 +13,7 @@
 [![CI](https://github.com/Mapelisin/Harmonia/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Mapelisin/Harmonia/actions/workflows/ci.yml)
 ![Платформа](https://img.shields.io/badge/Windows-10%20%2F%2011-4f9fe0)
 ![Язык](https://img.shields.io/badge/C%2B%2B-20-4f9fe0)
+[![Лицензия](https://img.shields.io/badge/лицензия-AGPL--3.0-4f9fe0)](LICENSE)
 ![Статус](https://img.shields.io/badge/статус-в%20разработке-e0a24f)
 
 [**Скачать**](https://github.com/Mapelisin/Harmonia/releases/latest) · [Установка](docs/user/install.ru.md) · [Шпаргалки](#шпаргалки) · [Что умеет](#что-уже-умеет) · [Планы](#что-дальше) · [Сборка](#сборка-из-исходников)
@@ -159,5 +160,8 @@ tools\build.cmd windows-release
 
 ## Лицензия
 
-Файла лицензии пока нет. Планируется **AGPLv3** (её требуют JUCE и Tracktion Engine); решение будет подтверждено
-после проверки лицензий. До этого код открыт для чтения, но права на его использование не переданы.
+Harmonia — свободная программа под лицензией **GNU Affero General Public License v3.0** ([LICENSE](LICENSE)):
+её можно использовать, изучать, менять и распространять, а всё, что сделано на её основе и распространяется
+дальше, должно остаться под той же лицензией и с исходным кодом. Copyright © 2026 Mapelisin.
+
+JUCE (AGPLv3) и Tracktion Engine (GPLv3) используются по их открытым лицензиям.
