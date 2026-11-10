@@ -1,14 +1,18 @@
 #include "audio/DrumSamples.h"
 #include "audio/DrumKit.h"
 #include "core/Drums.h"
+#include "core/SongFiles.h"
 
 namespace harmonia::audio::drum_kit
 {
     namespace
     {
         const juce::Identifier samplesTag ("SAMPLES");
-        const juce::Identifier sampleTag ("SAMPLE");
-        const juce::Identifier noteId ("note"), fileId ("file"), gainId ("gain"), tuneId ("tune");
+        const juce::Identifier noteId ("note"), gainId ("gain"), tuneId ("tune");
+
+        // What core::song_files knows the samples by (collecting the song's files, finding missing ones).
+        const juce::Identifier& sampleTag = core::song_files::ids::drumSample;
+        const juce::Identifier& fileId = core::song_files::ids::file;
 
         constexpr double stopSeconds = 0.004;       // how fast a stopped hit goes
         constexpr float silent = 1.0e-4f;
@@ -100,7 +104,7 @@ namespace harmonia::audio::drum_kit
             return std::nullopt;
 
         SampleInfo info;
-        info.file = juce::File (node[fileId].toString());
+        info.file = core::song_files::resolve (drums.edit, node[fileId].toString());    // may be a path from the song's file
         info.gainDb = (float) node.getProperty (gainId, 0.0f);
         info.tune = (float) node.getProperty (tuneId, 0.0f);
         info.missing = ! info.file.existsAsFile();

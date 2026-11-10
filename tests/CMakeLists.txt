@@ -12,6 +12,7 @@ add_executable(harmonia_tests
     core/TempoChangeTests.cpp
     core/TrackFolderTests.cpp
     core/ProjectFilesTests.cpp
+    core/BackupsTests.cpp
     core/NoteTests.cpp
     core/NoteEditorTests.cpp
     core/ClipLinksTests.cpp
@@ -49,6 +50,7 @@ add_executable(harmonia_tests
     audio/DrumSampleTests.cpp
     audio/SamplerTests.cpp
     audio/PluginCatalogTests.cpp
+    audio/SongFilesTests.cpp
     audio/MixCheckTests.cpp
     audio/AudioTempoTests.cpp
     audio/PluginSafetyTests.cpp
@@ -67,6 +69,7 @@ add_executable(harmonia_tests
     ui/DrumPadsTests.cpp
     ui/SamplerPanelTests.cpp
     ui/PluginChooserTests.cpp
+    ui/SongFilesMenuTests.cpp
     ui/StepSequencerTests.cpp
     ui/TrackFolderUiTests.cpp
     ui/AudioLoopUiTests.cpp

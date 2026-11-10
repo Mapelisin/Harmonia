@@ -57,7 +57,25 @@ namespace harmonia::ui
         /** New / Open / Save / Export, provided by the window (none: those shortcuts do nothing). */
         void setFileCommands (FileCommands*);
 
+        /** File > Collect all files into the song's folder: the sounds the song uses from elsewhere
+            are copied next to it and used from there (core::song_files::collect). Says what was
+            done; one undo step. */
+        void collectFiles();
+
+        /** File > Find missing files: says which sounds aren't where the song has them, and asks
+            for a folder to look for them in. */
+        void findMissingFiles();
+
+        /** Looks for the missing sounds in a folder and the folders inside it, and says how many
+            were found. One undo step. */
+        void lookForMissingFilesIn (const juce::File& folder);
+
+        /** The missing sounds as the question lists them: a line each, with where it was and
+            what uses it. */
+        juce::String describeMissingFiles() const;
+
         pianoroll::PianoRollModel& getPianoRollModel() noexcept         { return pianoRollModel; }
+        StatusBar& getStatusBar() noexcept                              { return statusBar; }
         arrangement::ArrangementModel& getArrangementModel() noexcept   { return arrangementModel; }
 
         /** File -> Check loudness: renders the song, measures it the way streaming services do and

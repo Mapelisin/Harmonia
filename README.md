@@ -88,6 +88,8 @@ expect bugs.
 **Files and reliability**
 - Export to WAV, FLAC and MP3; stems per track.
 - Autosave and recovery after a crash; undo and redo (Ctrl+Z / Ctrl+Y).
+- Earlier versions of a song kept at every save; all of a song's sounds collected into its folder, to move it
+  to another computer; missing files found again.
 - An installer for Windows.
 
 <div align="center">
@@ -97,7 +99,7 @@ expect bugs.
 
 ## What comes next
 
-- Backups of a song, collecting all its files into one folder.
+- Loops of any tempo locked to the grid by one button (the tempo measured from the sound itself).
 - Local AI models: stem separation, a mastering helper, finding sounds by description.
 - macOS (Apple Silicon).
 

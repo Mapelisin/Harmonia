@@ -32,6 +32,10 @@ add_library(harmonia_core STATIC
     MidiFiles.cpp
     Autosave.h
     Autosave.cpp
+    Backups.h
+    Backups.cpp
+    SongFiles.h
+    SongFiles.cpp
     ProjectFiles.h
     ProjectFiles.cpp
     NoteOps.h

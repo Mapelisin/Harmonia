@@ -1,10 +1,14 @@
 #include "audio/Sampler.h"
+#include "core/SongFiles.h"
 
 namespace harmonia::audio::sampler
 {
     namespace
     {
-        const juce::Identifier fileId ("file"), rootId ("root");
+        const juce::Identifier rootId ("root");
+
+        // What core::song_files knows the sound by (collecting the song's files, finding missing ones).
+        const juce::Identifier& fileId = core::song_files::ids::file;
 
         constexpr float silent = 1.0e-4f;                   // -80 dB: the note is over
         constexpr double minReleaseSeconds = 0.003;         // never a click when a key is let go
@@ -307,7 +311,7 @@ namespace harmonia::audio::sampler
     };
 
     //==============================================================================
-    const char* Plugin::xmlTypeName = "harmoniaSampler";
+    const char* Plugin::xmlTypeName = core::song_files::ids::samplerType;
 
     Plugin::Plugin (te::PluginCreationInfo info)
         : te::Plugin (info)
@@ -500,8 +504,7 @@ namespace harmonia::audio::sampler
     //==============================================================================
     juce::File getFile (const te::Plugin& sampler)
     {
-        const auto path = sampler.state[fileId].toString();
-        return path.isNotEmpty() ? juce::File (path) : juce::File();
+        return core::song_files::resolve (sampler.edit, sampler.state[fileId].toString());     // may be a path from the song's file
     }
 
     bool isFileMissing (const te::Plugin& sampler)

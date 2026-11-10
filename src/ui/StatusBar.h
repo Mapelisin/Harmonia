@@ -23,8 +23,13 @@ namespace harmonia::ui
         /** Which MIDI keyboards are connected, e.g. "MIDI: KeyLab 61". */
         void setMidiText (const juce::String&);
 
-        /** A short note that something worked (e.g. "Saved"); disappears after a few seconds. */
+        /** A short note that something worked (e.g. "Saved"); disappears after a few seconds.
+            While it is there it is shown instead of a warning; the warning is back after it. */
         void setMessage (const juce::String&);
+
+        /** What the bar says now. */
+        const juce::String& getWarning() const noexcept     { return warningText; }
+        const juce::String& getMessage() const noexcept     { return messageText; }
 
     private:
         core::Session& session;

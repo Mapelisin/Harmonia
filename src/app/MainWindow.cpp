@@ -1,7 +1,9 @@
 #include "app/MainWindow.h"
 #include "audio/Export.h"
 #include "audio/Instruments.h"
+#include "core/Backups.h"
 #include "core/Clips.h"
+#include "core/SongFiles.h"
 #include "ui/ExportOptions.h"
 #include "ui/MainComponent.h"
 #include "ui/RenderingPolicy.h"
@@ -217,9 +219,51 @@ namespace harmonia::app
         recent.add (fileToOpen);
 
         if (auto* content = getMainComponent())
-            content->showMessage ("Opened " + fileToOpen.getFullPathName());
+        {
+            // Sounds that aren't where the song has them: said at once, not when they don't play.
+            const auto missing = (int) core::song_files::getMissing (project->getEdit()).size();
+
+            if (missing > 0)
+                content->showWarning ("Opened " + fileToOpen.getFileName() + ": " + juce::String (missing)
+                                        + (missing == 1 ? " sound file of it is" : " sound files of it are")
+                                        + " missing (File > Find missing files)");
+            else
+                content->showMessage ("Opened " + fileToOpen.getFullPathName());
+        }
 
         return true;
+    }
+
+    void MainWindow::openEarlierVersion (const juce::File& versionFile)
+    {
+        askToSaveChanges ([this, versionFile]
+        {
+            for (const auto& version : core::backups::list (file))
+            {
+                if (version.file != versionFile)
+                    continue;
+
+                juce::String error;
+                auto earlier = core::backups::open (session, version, file, error);
+
+                if (earlier == nullptr)
+                {
+                    showError ("Cannot open the earlier version", error);
+                    return;
+                }
+
+                const auto songFile = file;
+                setProject (std::move (earlier), songFile);
+
+                if (auto* content = getMainComponent())
+                    content->showMessage ("The song as it was on " + version.getLabel()
+                                            + ". Ctrl+S makes it the song again (what the song is now is kept as an earlier version)");
+
+                return;
+            }
+
+            showError ("Cannot open the earlier version", "It isn't there any more: " + versionFile.getFullPathName());
+        });
     }
 
     void MainWindow::offerToRestore (std::function<void()> otherwise)
@@ -327,7 +371,10 @@ namespace harmonia::app
 
     bool MainWindow::writeTo (const juce::File& target)
     {
-        if (const auto error = project->save (target); error.isNotEmpty())
+        // What the file had goes to the song's earlier versions first.
+        juce::String versionProblem;
+
+        if (const auto error = core::backups::save (*project, target, versionProblem); error.isNotEmpty())
         {
             showError ("Cannot save the project", error);
             return false;
@@ -337,7 +384,12 @@ namespace harmonia::app
         updateTitle();
 
         if (auto* content = getMainComponent())
-            content->showMessage ("Saved " + target.getFullPathName());
+        {
+            if (versionProblem.isNotEmpty())
+                content->showWarning ("Saved " + target.getFullPathName() + ", but the earlier version couldn't be kept: " + versionProblem);
+            else
+                content->showMessage ("Saved " + target.getFullPathName());
+        }
 
         return true;
     }

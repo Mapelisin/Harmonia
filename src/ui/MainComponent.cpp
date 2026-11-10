@@ -2,6 +2,8 @@
 #include "audio/DrumKit.h"
 #include "audio/Instruments.h"
 #include "audio/Sampler.h"
+#include "core/Backups.h"
+#include "core/SongFiles.h"
 #include "core/Drums.h"
 #include "core/Markers.h"
 #include "core/MidiFiles.h"
@@ -702,6 +704,110 @@ namespace harmonia::ui
                      + " (Ctrl+Z: back)");
     }
 
+    void MainComponent::collectFiles()
+    {
+        const auto projectFile = fileCommands != nullptr ? fileCommands->getProjectFile() : juce::File();
+
+        if (projectFile == juce::File())
+        {
+            showWarning ("Save the song first (Ctrl+S): its sound files are collected next to it");
+            return;
+        }
+
+        noteInput.finishTake();
+        const auto result = core::song_files::collect (project, projectFile);
+        repaint();
+
+        auto text = result.describe();
+
+        if (result.changed > 0)
+            text << ". Save the song (Ctrl+S) to keep it so; Ctrl+Z takes it back";
+
+        if (result.problems.isEmpty() && result.missing == 0)
+            showMessage (text);
+        else
+            showWarning (text);
+    }
+
+    juce::String MainComponent::describeMissingFiles() const
+    {
+        constexpr int maxListed = 12;
+        const auto missing = core::song_files::getMissing (project.getEdit());
+        juce::StringArray lines;
+
+        for (const auto& sound : missing)
+        {
+            if (lines.size() == maxListed)
+            {
+                lines.add ("...and " + juce::String ((int) missing.size() - maxListed) + " more");
+                break;
+            }
+
+            lines.add (sound.file.getFileName() + "  (was in " + sound.file.getParentDirectory().getFullPathName()
+                         + "; used by " + sound.usedBy.joinIntoString (", ") + ")");
+        }
+
+        return lines.joinIntoString ("\n");
+    }
+
+    void MainComponent::findMissingFiles()
+    {
+        const auto count = (int) core::song_files::getMissing (project.getEdit()).size();
+
+        if (count == 0)
+        {
+            showMessage ("No sound file of the song is missing");
+            return;
+        }
+
+        juce::Component::SafePointer<MainComponent> safe (this);
+
+        juce::AlertWindow::showAsync (juce::MessageBoxOptions()
+                                          .withIconType (juce::MessageBoxIconType::WarningIcon)
+                                          .withTitle (count == 1 ? juce::String ("A sound file is missing")
+                                                                 : juce::String (count) + " sound files are missing")
+                                          .withMessage (describeMissingFiles()
+                                                          + "\n\nIf they were moved, choose the folder they are in now: Harmonia looks "
+                                                            "for them by name there and in the folders inside it.")
+                                          .withButton ("Look in a folder...", 1)
+                                          .withButton ("Cancel", 0)
+                                          .withAssociatedComponent (this),
+                                      [safe] (int result)
+        {
+            if (safe == nullptr || result != 1)
+                return;
+
+            safe->importChooser = std::make_unique<juce::FileChooser> ("The folder the missing sounds are in",
+                                                                     juce::File::getSpecialLocation (juce::File::userMusicDirectory));
+            safe->importChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                                            [safe] (const juce::FileChooser& chooser)
+            {
+                if (safe != nullptr && chooser.getResult() != juce::File())
+                    safe->lookForMissingFilesIn (chooser.getResult());
+            });
+        });
+    }
+
+    void MainComponent::lookForMissingFilesIn (const juce::File& folder)
+    {
+        noteInput.finishTake();
+        const auto result = core::song_files::findIn (project, folder);
+        repaint();
+
+        if (result.found == 0)
+            showWarning (result.stillMissing == 0 ? juce::String ("No sound file of the song is missing")
+                                                  : "None of the missing files is in " + folder.getFullPathName());
+        else if (result.stillMissing > 0)
+            showWarning ("Found " + juce::String (result.found) + " of " + juce::String (result.found + result.stillMissing)
+                           + " missing files; " + juce::String (result.stillMissing) + " still missing (File > Find missing files). Ctrl+Z: back");
+        else
+        {
+            showWarning ({});       // the one about missing files is dealt with
+            showMessage ("Found " + juce::String (result.found == 1 ? "the missing file" : "all " + juce::String (result.found) + " missing files")
+                           + ". Save the song (Ctrl+S) to keep it so; Ctrl+Z takes it back");
+        }
+    }
+
     void MainComponent::addSamplerItems (juce::PopupMenu& menu, const juce::File& file)
     {
         juce::Component::SafePointer<MainComponent> safe (this);
@@ -840,6 +946,35 @@ namespace harmonia::ui
         menu.addSeparator();
         menu.addItem ("Save  (Ctrl+S)", hasCommands, false, run (&FileCommands::saveProject));
         menu.addItem ("Save as...  (Ctrl+Shift+S)", hasCommands, false, run (&FileCommands::saveProjectAs));
+
+        // What the song was before each of the last saves.
+        juce::PopupMenu versionsMenu;
+        const auto projectFile = hasCommands ? fileCommands->getProjectFile() : juce::File();
+        const auto versions = core::backups::list (projectFile);
+
+        for (const auto& version : versions)
+        {
+            versionsMenu.addItem (version.getLabel(), [safe, versionFile = version.file]
+            {
+                if (safe != nullptr && safe->fileCommands != nullptr)
+                    safe->fileCommands->openEarlierVersion (versionFile);
+            });
+        }
+
+        if (! versions.empty())
+        {
+            versionsMenu.addSeparator();
+            versionsMenu.addItem ("Show their folder", [projectFile] { core::backups::getFolder (projectFile).revealToUser(); });
+        }
+
+        menu.addSubMenu ("Earlier versions (kept at each save)", versionsMenu, ! versions.empty());
+        menu.addSeparator();
+        menu.addItem ("Collect all files into the song's folder", [safe] { if (safe != nullptr) safe->collectFiles(); });
+
+        const auto numMissing = (int) core::song_files::getMissing (project.getEdit()).size();
+        menu.addItem (numMissing > 0 ? "Find missing files (" + juce::String (numMissing) + ")..."
+                                     : juce::String ("Find missing files (none are missing)"),
+                      numMissing > 0, false, [safe] { if (safe != nullptr) safe->findMissingFiles(); });
         menu.addSeparator();
         menu.addItem ("Import audio or MIDI...", [safe] { if (safe != nullptr) safe->chooseFilesToImport(); });
         menu.addItem ("Export song (WAV, FLAC, MP3)...  (Ctrl+R)", hasCommands, false, run (&FileCommands::exportSong));

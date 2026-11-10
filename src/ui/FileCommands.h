@@ -23,6 +23,13 @@ namespace harmonia::ui
         /** The project's file name without extension, or "Untitled". */
         virtual juce::String getProjectName() const = 0;
 
+        /** Where the open song is saved (none: it never was). */
+        virtual juce::File getProjectFile() const                       { return {}; }
+
+        /** Opens an earlier version of the open song (one of core::backups::list) in its place,
+            unsaved. */
+        virtual void openEarlierVersion (const juce::File&)             {}
+
         /** Projects opened or saved lately, newest first (File → Open recent). */
         virtual juce::Array<juce::File> getRecentProjects() const      { return {}; }
         virtual void openRecentProject (const juce::File&)              {}

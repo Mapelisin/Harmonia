@@ -50,6 +50,8 @@ namespace harmonia::app
         void exportStems() override;
         void exportLoopWav() override;
         juce::String getProjectName() const override;
+        juce::File getProjectFile() const override                      { return file; }
+        void openEarlierVersion (const juce::File&) override;
         juce::Array<juce::File> getRecentProjects() const override;
         void openRecentProject (const juce::File&) override;
         void clearRecentProjects() override;

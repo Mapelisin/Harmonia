@@ -3,6 +3,7 @@
 #include "audio/Sampler.h"
 #include "audio/Effects.h"
 #include "core/Drums.h"
+#include "core/SongFiles.h"
 #include "core/Tracks.h"
 
 namespace harmonia::audio::instruments
@@ -82,7 +83,7 @@ namespace harmonia::audio::instruments
         if (instrument != nullptr && sound != juce::File())
         {
             // In the same undo step as the instrument: the caller's.
-            instrument->state.setProperty ("file", sound.getFullPathName(), &track.edit.getUndoManager());
+            instrument->state.setProperty (core::song_files::ids::file, sound.getFullPathName(), &track.edit.getUndoManager());
             instrument->updateSampleNow();
         }
 

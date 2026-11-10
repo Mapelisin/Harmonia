@@ -426,6 +426,9 @@ The **File** menu (it also has **Settings...** for the sound card, MIDI keyboard
 | Ctrl+N | New project |
 | Ctrl+O | Open (`.harmonia`) |
 | Ctrl+S / Ctrl+Shift+S | Save / Save as |
+| — | Earlier versions: the song as it was before each of the last saves (see below) |
+| — | Collect all files into the song's folder: copy the sounds the song uses next to it (see below) |
+| — | Find missing files...: sounds that were moved or deleted (see below) |
 | Ctrl+R | Export the song (the whole song + 2 seconds for the tail), as in FL: first choose the format (see below), then where to save. It sounds as it does in playback: muted (M) tracks are left out; with solo (S), only the soloed ones are included |
 | Ctrl+, | Settings: sound card and buffer, MIDI keyboards, plugin folders |
 | — | Import audio or MIDI...: add audio or MIDI files (see "Audio clips", "MIDI files") |
@@ -466,6 +469,27 @@ name includes the bars: "Song - bars 5-8.wav". The menu item shows which bars wi
 out, on the next start it offers **Restore** (bring the work back) or **Don't restore**. Save the restored
 work with the usual **Ctrl+S**: it is written to your file. If you declined by mistake, the last copy is at
 `%APPDATA%\Harmonia\Autosave\Discarded work.harmonia`; you can open it with **Ctrl+O**.
+
+**Earlier versions.** Every time you save, what the file had before goes into the folder
+"<song name> Backups" next to it, named by the time it was saved; the last 20 are kept. **File → Earlier
+versions** lists them, the latest first. Click one, and the song opens as it was then, with an asterisk in
+the title. Nothing is overwritten yet: **Ctrl+S** makes it the song again (and what the song was until now
+becomes an earlier version too); to leave everything as it was, just open the song again without saving.
+**Show their folder** opens the folder: the versions are ordinary `.harmonia` files.
+
+**Collect all files into the song's folder** (File menu). A song remembers where its sounds are, not the
+sounds themselves. This command copies every sound the song uses from elsewhere (audio clips and their
+takes, your samples in the drum machine, the sampler's sound) into "<song name> Audio" next to the song, and
+the song uses the copies from then on. The originals stay where they are. Then save (Ctrl+S): the
+`.harmonia` file and the "<song name> Audio" folder next to it are now the whole song, and can be moved to
+another disk or computer together. Save the song at least once first: before that it has no folder. One
+Ctrl+Z takes it back (the copies stay on the disk). Plugins are not copied: the other computer needs them
+installed.
+
+**Find missing files** (File menu). If sounds were moved or deleted, Harmonia says so when the song opens,
+and this menu item shows how many are missing. It lists them (where each was and what uses it) and asks for
+a folder: it looks there, and in the folders inside it, for files with the same names, and the song uses the
+ones it finds. One Ctrl+Z takes it back.
 
 **Sound files and the project folder.** Sounds that are in the project folder (or deeper) are remembered
 relative to it: the whole folder can be moved or copied to another disk or computer. The others are

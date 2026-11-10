@@ -18,9 +18,11 @@ namespace harmonia::core
         /** Loads a project file. Returns nullptr and fills `error` on failure. */
         static std::unique_ptr<Project> load (Session&, const juce::File&, juce::String& error);
 
-        /** Opens a copy written by saveCopy() as the project at `original` (its own file; none if
-            it was never saved): Ctrl+S saves there and recordings go next to it. It counts as
-            having unsaved changes. For restoring work after a crash (see core::Autosave). */
+        /** Opens a copy of the project (one written by saveCopy(), or an earlier version of the
+            project file) as the project at `original` (its own file; none if it was never saved):
+            Ctrl+S saves there, recordings go next to it, and the sounds the copy names by a path
+            from the project file are found from there. It counts as having unsaved changes. For
+            restoring work after a crash (core::Autosave) and earlier versions (core::backups). */
         static std::unique_ptr<Project> loadRecovered (Session&, const juce::File& copy, const juce::File& original,
                                                        juce::String& error);
 
@@ -29,7 +31,8 @@ namespace harmonia::core
         /** Writes the project to `file`. Returns an error message, empty on success.
             On success the project counts as saved (no unsaved changes), and `file` is where it
             lives from then on. Sound files in the project file's folder (or below) are stored
-            relative to it, so the folder can be moved or copied whole; others by their full path.
+            relative to it, so the folder can be moved or copied whole; others by their full path
+            (audio clips, takes, the drum machine's samples and the sampler's sound alike).
             A half-written file never replaces the old one. */
         juce::String save (const juce::File& file);
 
@@ -142,6 +145,10 @@ namespace harmonia::core
         void syncPluginParameters();
         void makeSoundPathsAbsolute();
         juce::String write (const juce::File&, const juce::File& relativeTo);
+
+        /** Loads `file` as the project at `asFile`: sounds it names by a path from the project
+            file are looked for from there. */
+        static std::unique_ptr<Project> open (Session&, const juce::File& file, const juce::File& asFile, juce::String& error);
 
         JUCE_DECLARE_NON_COPYABLE (Project)
     };

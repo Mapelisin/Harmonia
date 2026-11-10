@@ -49,15 +49,16 @@ namespace harmonia::ui
         g.drawText (rendererText, area.removeFromRight (160), juce::Justification::centredRight, true);
         g.drawText (midiText, area.removeFromRight (260), juce::Justification::centredRight, true);
 
-        if (warningText.isNotEmpty())
-        {
-            g.setColour (theme::colour::warning);
-            g.drawText (warningText, area.removeFromRight (area.getWidth() / 2), juce::Justification::centredRight, true);
-        }
-        else if (messageText.isNotEmpty())
+        // What just happened comes first; a warning that still stands is back when the message goes.
+        if (messageText.isNotEmpty())
         {
             g.setColour (theme::colour::textPrimary);
             g.drawText (messageText, area.removeFromRight (area.getWidth() / 2), juce::Justification::centredRight, true);
+        }
+        else if (warningText.isNotEmpty())
+        {
+            g.setColour (theme::colour::warning);
+            g.drawText (warningText, area.removeFromRight (area.getWidth() / 2), juce::Justification::centredRight, true);
         }
 
         g.setColour (deviceOpen ? theme::colour::textSecondary : theme::colour::warning);

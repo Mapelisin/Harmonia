@@ -1,6 +1,7 @@
 #include "core/Project.h"
 #include "core/AudioClips.h"
 #include "core/PluginState.h"
+#include "core/SongFiles.h"
 #include "core/Tempo.h"
 #include "core/Tracks.h"
 
@@ -10,17 +11,6 @@ namespace harmonia::core
     {
         const juce::Identifier formatVersionId ("hFormatVersion");
         const juce::Identifier editTag ("EDIT");
-
-        /** Calls `fn` for every node referring to a sound file: audio clips and their recorded takes. */
-        void forEachSoundReference (juce::ValueTree tree, const std::function<void (juce::ValueTree&)>& fn)
-        {
-            if ((tree.hasType (te::IDs::AUDIOCLIP) || tree.hasType (te::IDs::TAKE))
-                    && tree[te::IDs::source].toString().isNotEmpty())
-                fn (tree);
-
-            for (auto child : tree)
-                forEachSoundReference (child, fn);
-        }
 
         /** The node in `copy` at the place `node` has in `root`. */
         juce::ValueTree findCopyOf (const juce::ValueTree& node, const juce::ValueTree& root, const juce::ValueTree& copy)
@@ -216,6 +206,11 @@ namespace harmonia::core
 
     std::unique_ptr<Project> Project::load (Session& session, const juce::File& file, juce::String& error)
     {
+        return open (session, file, file, error);
+    }
+
+    std::unique_ptr<Project> Project::open (Session& session, const juce::File& file, const juce::File& asFile, juce::String& error)
+    {
         if (! file.existsAsFile())
         {
             error = "Project file not found: " + file.getFullPathName();
@@ -239,7 +234,16 @@ namespace harmonia::core
             return {};
         }
 
-        auto edit = te::loadEditFromFile (session.getEngine(), file);
+        // As te::loadEditFromFile does, but the project's file is `asFile` from the start: its
+        // clips look for their sounds while they are being made.
+        std::unique_ptr<te::Edit> edit;
+
+        if (const auto state = te::loadEditFromFile (session.getEngine(), file, te::ProjectItemID()); state.isValid())
+        {
+            edit = te::Edit::createEdit ({ session.getEngine(), state, te::ProjectItemID::createNewID (te::ProjectID()),
+                                           te::Edit::forEditing, nullptr, te::Edit::getDefaultNumUndoLevels(),
+                                           [asFile] { return asFile; }, {} });
+        }
 
         if (edit == nullptr)
         {
@@ -254,14 +258,13 @@ namespace harmonia::core
     std::unique_ptr<Project> Project::loadRecovered (Session& session, const juce::File& copy, const juce::File& original,
                                                      juce::String& error)
     {
-        auto project = load (session, copy, error);
+        // A copy for restoring names its sounds by full path; an earlier version of the project
+        // file, by paths from the project file: both are found with the project at `original`.
+        auto project = open (session, copy, original, error);
 
-        if (project == nullptr)
-            return {};
+        if (project != nullptr)
+            project->changedSinceSave = true;
 
-        // The copy names its sounds by full path: they are found wherever it was opened from.
-        project->edit->editFileRetriever = [original] { return original; };
-        project->changedSinceSave = true;
         return project;
     }
 
@@ -269,15 +272,15 @@ namespace harmonia::core
     {
         // Tracktion stores a sound relative to the project file when it's near it, found from where
         // the project file is now. Before the project moves to another file, give each its full path.
-        forEachSoundReference (edit->state, [this] (juce::ValueTree& node)
+        song_files::forEachReference (edit->state, [this] (juce::ValueTree& node, const juce::Identifier& property)
         {
-            const auto source = node[te::IDs::source].toString();
+            const auto path = node[property].toString();
 
-            if (juce::File::isAbsolutePath (source))
+            if (juce::File::isAbsolutePath (path))
                 return;
 
-            if (const auto sound = te::SourceFileReference::findFileFromString (*edit, source); sound != juce::File())
-                node.setProperty (te::IDs::source, sound.getFullPathName(), nullptr);
+            if (const auto sound = song_files::resolve (*edit, path); sound != juce::File())
+                node.setProperty (property, sound.getFullPathName(), nullptr);
         });
     }
 
@@ -300,16 +303,16 @@ namespace harmonia::core
 
         const auto folder = relativeTo != juce::File() ? relativeTo.getParentDirectory() : juce::File();
 
-        forEachSoundReference (state, [this, &folder] (juce::ValueTree& node)
+        song_files::forEachReference (state, [this, &folder] (juce::ValueTree& node, const juce::Identifier& property)
         {
-            const auto sound = te::SourceFileReference::findFileFromString (*edit, node[te::IDs::source].toString());
+            const auto sound = song_files::resolve (*edit, node[property].toString());
 
             if (sound == juce::File())
                 return;
 
             const auto inFolder = folder != juce::File() && sound.isAChildOf (folder);
-            node.setProperty (te::IDs::source, inFolder ? sound.getRelativePathFrom (folder).replaceCharacter ('\\', '/')
-                                                        : sound.getFullPathName(), nullptr);
+            node.setProperty (property, inFolder ? sound.getRelativePathFrom (folder).replaceCharacter ('\\', '/')
+                                                 : sound.getFullPathName(), nullptr);
         });
 
         const auto xml = state.createXml();
