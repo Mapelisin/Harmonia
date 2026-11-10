@@ -497,12 +497,165 @@ TEST_SUITE ("arrangement: a piece of time")
         REQUIRE (deleteItem.has_value());
         CHECK (deleteItem->isEnabled);
 
+        // Ctrl+J: one clip of what the row has in the piece; said. In the Edit menu too.
+        model.setTimeSelection (0.0, 12.0, 0, 0);
+        CHECK (press ('j', ctrl));
+        dispatch();
+        CHECK (f.spans (*f.keys) == "0-12, 12-16, 20-24, 24-28");
+        CHECK (said.startsWith ("One clip made of 2 clips. Sound was written to a new file"));
+        model.setTimeSelection (40.0, 44.0, 0, 0);
+        CHECK (press ('j', ctrl));
+        CHECK (said.startsWith ("Nothing to consolidate: the selected time is empty"));
+
+        auto hasConsolidate = false;
+        const auto editMenu = main->getMainMenu().getMenuForIndex (1, "Edit");
+
+        for (juce::PopupMenu::MenuItemIterator it (editMenu, false); it.next();)
+            hasConsolidate = hasConsolidate || (it.getItem().text == "Consolidate into one clip" && it.getItem().isEnabled);
+
+        CHECK (hasConsolidate);
+
         // Esc lets the piece go; without one the keys act on clips as before.
         CHECK (press (juce::KeyPress::escapeKey));
         CHECK_FALSE (model.getTimeSelection().has_value());
         CHECK_FALSE (press ('l', ctrl));
 
         main.reset();
+    }
+
+    TEST_CASE ("Ctrl+J makes one clip of the selected time on each row, or of the selected clips; one undo step")
+    {
+        TimeFixture f;
+
+        // Beats 2..10 of all three rows: the chords from 2, the bass line up to 10, the riff from 2.
+        f.model.setTimeSelection (2.0, 10.0, 0, 2);
+        auto done = f.model.consolidate();
+        dispatch();
+        CHECK (done.problem.isEmpty());
+        CHECK (done.rows == 3);
+        CHECK (done.clipsBefore == 3);
+        CHECK (f.spans (*f.keys) == "0-2, 2-10, 10-16");
+        CHECK (f.spans (*f.bass) == "2-10, 10-12");
+        CHECK (f.spans (*f.guitar) == "0-2, 2-10");
+        CHECK (f.piece() == "2-10 rows 0-2");
+        CHECK (f.project->getUndoDescription() == "Consolidate");
+
+        // The notes play as they did.
+        CHECK (f.notesOf (*f.keys).startsWith ("60@0 61@1 62@2 63@3"));
+        CHECK (f.notesOf (*f.keys).endsWith ("74@14 75@15"));
+
+        // The riff's one clip is of a new file, as long as the selected time.
+        auto* riff = dynamic_cast<te::WaveAudioClip*> (clips::getClips (*f.guitar).getLast());
+        REQUIRE (riff != nullptr);
+        CHECK (riff->getOriginalFile() != f.temp.getFile ("Riff.wav"));
+        CHECK (riff->getOriginalFile().existsAsFile());
+
+        f.project->undo();
+        dispatch();
+        CHECK (f.spans (*f.keys) == "0-16");
+        CHECK (f.spans (*f.bass) == "4-12");
+        CHECK (f.spans (*f.guitar) == "0-8");
+        CHECK_FALSE (f.project->canUndo());
+
+        // A selected time with nothing in it: nothing is done, and no undo step made.
+        f.model.setTimeSelection (20.0, 24.0, 0, 2);
+        done = f.model.consolidate();
+        CHECK (done.rows == 0);
+        CHECK (done.problem.isEmpty());
+        CHECK_FALSE (f.project->canUndo());
+
+        // Without a selected time: the selected clips, on each track from its first to its last.
+        f.model.deselectAll();
+        auto* second = f.project->addMidiClip (*f.bass, 14.0, 2.0, "Fill");
+        REQUIRE (second != nullptr);
+        dispatch();
+        f.project->clearUndoHistory();
+
+        // (The bass line was taken out and brought back by the undo above: the clip there now
+        // needn't be the object the fixture made.)
+        const auto bassClips = clips::getClips (*f.bass);
+        REQUIRE (bassClips.size() == 2);
+        f.model.setSelection ({ bassClips[0], bassClips[1] });
+        done = f.model.consolidate();
+        dispatch();
+        CHECK (done.rows == 1);
+        CHECK (done.clipsBefore == 2);
+        CHECK (f.spans (*f.bass) == "4-16");
+        REQUIRE (f.model.getSelectedClips().size() == 1);
+        CHECK (clips::getStartBeat (*f.model.getSelectedClips().getFirst()) == doctest::Approx (4.0));
+        f.project->undo();
+        dispatch();
+        CHECK (f.spans (*f.bass) == "4-12, 14-16");
+    }
+
+    TEST_CASE ("a piece of time takes its rows' automation along: moved, copied, repeated, cut and pasted; deleted, the line stays")
+    {
+        TimeFixture f;
+        auto& edit = f.project->getEdit();
+        auto& volume = *f.keys->getVolumePlugin()->volParam;
+        auto& curve = volume.getCurve();
+        const auto at = [&edit] (double beat) { return edit.tempoSequence.toTime (te::BeatPosition::fromBeats (beat)); };
+        const auto valueAt = [&] (double beat) { return curve.getValueAt (at (beat), 0.0f); };
+
+        // The keys get quieter over beats 4..8 and stay quiet.
+        curve.addPoint (at (4.0), 0.8f, 0.0f, &edit.getUndoManager());
+        curve.addPoint (at (8.0), 0.4f, 0.0f, &edit.getUndoManager());
+        dispatch();
+        f.project->clearUndoHistory();
+        CHECK (valueAt (6.0) == doctest::Approx (0.6f));
+
+        // Moved four beats later within its row: the fade is over beats 8..12 now.
+        f.model.setTimeSelection (4.0, 8.0, 0, 0);
+        CHECK (f.model.moveTime (4.0, 0, false).isEmpty());
+        dispatch();
+        CHECK (valueAt (10.0) == doctest::Approx (0.6f).epsilon (0.001));
+        CHECK (valueAt (8.5) == doctest::Approx (0.75f).epsilon (0.001));
+        CHECK (valueAt (20.0) == doctest::Approx (0.4f).epsilon (0.001));
+        CHECK (valueAt (2.0) == doctest::Approx (0.8f).epsilon (0.001));
+        f.project->undo();
+        dispatch();
+        CHECK (valueAt (6.0) == doctest::Approx (0.6f));
+        CHECK (curve.getNumPoints() == 2);
+
+        // Onto another row: the clips go, the line stays (the other row has its own knobs).
+        f.model.setTimeSelection (4.0, 8.0, 0, 0);
+        CHECK (f.model.moveTime (0.0, 1, false).isEmpty());
+        dispatch();
+        CHECK (valueAt (6.0) == doctest::Approx (0.6f));
+        CHECK (f.bass->getVolumePlugin()->volParam->getCurve().getNumPoints() == 0);
+        f.project->undo();
+        dispatch();
+
+        // Repeated (Ctrl+B): the fade again over beats 8..12, then back to where the line was.
+        f.model.setTimeSelection (4.0, 8.0, 0, 0);
+        CHECK (f.model.duplicateTime() > 0);
+        dispatch();
+        CHECK (valueAt (6.0) == doctest::Approx (0.6f).epsilon (0.001));
+        CHECK (valueAt (10.0) == doctest::Approx (0.6f).epsilon (0.001));
+        CHECK (valueAt (14.0) == doctest::Approx (0.4f).epsilon (0.001));
+        f.project->undo();
+        dispatch();
+
+        // Cut and pasted at beat 12: the fade is there, and where it was the line runs straight.
+        f.model.setTimeSelection (4.0, 8.0, 0, 0);
+        CHECK (f.model.cutTime() > 0);
+        dispatch();
+        CHECK (f.model.paste (12.0, 0) > 0);
+        dispatch();
+        CHECK (valueAt (14.0) == doctest::Approx (0.6f).epsilon (0.001));
+        CHECK (valueAt (6.0) == doctest::Approx (0.6f).epsilon (0.001));       // straight from 0.8 to 0.4
+        CHECK (valueAt (11.0) == doctest::Approx (0.4f).epsilon (0.001));
+        f.project->undo();
+        f.project->undo();
+        dispatch();
+        CHECK (curve.getNumPoints() == 2);
+
+        // Deleted: the clips go, the line is as it was.
+        f.model.setTimeSelection (4.0, 8.0, 0, 0);
+        CHECK (f.model.deleteTime() > 0);
+        dispatch();
+        CHECK (curve.getNumPoints() == 2);
+        CHECK (valueAt (6.0) == doctest::Approx (0.6f));
     }
 
     TEST_CASE ("frozen tracks and folded folders are left alone; rows that go away take the piece with them")

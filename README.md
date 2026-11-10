@@ -59,7 +59,8 @@ expect bugs.
 - Clips on tracks, linked copies (edit one and all of them change), looping clips, markers, colours.
 - Tempo changes along the song; inserting and deleting bars on all tracks at once.
 - Editing by time, as in Ableton: drag across the rows to select a piece of time, whatever the clips'
-  borders, then delete, cut, copy, paste, repeat or drag it.
+  borders, then delete, cut, copy, paste, repeat, drag or consolidate it (Ctrl+J); its automation goes
+  with it.
 - Track folders: neighbouring tracks collapse into one row with mute and solo for all of them.
 - Freezing: a track with heavy plugins plays as audio, its plugins off, and unfreezes back.
 - MIDI file import and export; a sound browser with preview.

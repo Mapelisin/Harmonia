@@ -1,6 +1,7 @@
 #include <doctest.h>
 
 #include "TestAudioFiles.h"
+#include "audio/Consolidate.h"
 #include "audio/Export.h"
 #include "core/AudioTempo.h"
 #include "core/Clips.h"
@@ -674,6 +675,54 @@ TEST_SUITE ("audio: clips follow the song tempo")
         // A clip at its own speed has no beats to move.
         audio_tempo::setFollowsTempo (*clip, std::nullopt);
         CHECK_FALSE (audio_tempo::moveBeat (*clip, 10.0, 3.0));
+    }
+
+    TEST_CASE ("clips following the tempo made one clip: it follows too, its beats where the song's were")
+    {
+        // Two four-beat loops at 100 BPM, one after the other in a song at 120.
+        AudioSong song;
+        const auto file = writeClickLoop (song.temp.getFile ("Clicks 100 BPM.wav"), 100.0, 4);
+        auto* first = song.add (file, 0.0);
+        auto* second = song.add (file, 4.0);
+        audio_tempo::setFollowsTempo (*first, 100.0);
+        audio_tempo::setFollowsTempo (*second, 100.0);
+        song.project->getEdit().dispatchPendingUpdatesSynchronously();
+        CHECK (core::clips::getEndBeat (*second) == doctest::Approx (8.0));
+
+        juce::String problem;
+        const auto piece = audio::consolidate::prepare (*song.track, 0.0, 8.0, problem);
+        REQUIRE_MESSAGE (piece.has_value(), problem.toStdString());
+        CHECK (piece->followsTempo);
+        song.project->beginGesture ("Consolidate");
+        auto* joined = dynamic_cast<te::WaveAudioClip*> (audio::consolidate::apply (*song.project, *piece));
+        REQUIRE (joined != nullptr);
+        song.project->getEdit().dispatchPendingUpdatesSynchronously();
+        CHECK (core::clips::getClips (*song.track).size() == 1);
+        CHECK (core::clips::getStartBeat (*joined) == doctest::Approx (0.0));
+        CHECK (core::clips::getEndBeat (*joined) == doctest::Approx (8.0).epsilon (0.001));
+
+        // The new file is at the song's tempo, and the clip knows: 120 BPM.
+        CHECK (audio_tempo::followsTempo (*joined));
+        CHECK (audio_tempo::getLoopBpm (*joined).value_or (0.0) == doctest::Approx (120.0).epsilon (0.001));
+
+        double sampleRate = 0.0;
+        auto rendered = song.render (sampleRate);
+        checkClicks (findClicks (rendered, sampleRate), 8, 0.5);
+
+        // The song slower: the hits are still on its beats.
+        song.project->setTempoBpm (90.0);
+        CHECK (core::clips::getEndBeat (*joined) == doctest::Approx (8.0).epsilon (0.001));
+        rendered = song.render (sampleRate);
+        const auto clicks = findClicks (rendered, sampleRate);
+        REQUIRE (clicks.size() == 8);
+
+        for (size_t i = 0; i < clicks.size(); ++i)
+        {
+            CAPTURE (i);
+            CHECK (std::abs (clicks[i] - (double) i * 60.0 / 90.0) < 0.005);     // stretched twice by now
+        }
+
+        joined->getOriginalFile().deleteFile();
     }
 
     TEST_CASE ("a loop stays on the beats through a change of the song's tempo")

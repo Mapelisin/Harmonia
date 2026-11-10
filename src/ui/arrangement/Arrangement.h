@@ -43,6 +43,10 @@ namespace harmonia::ui::arrangement
         void pasteAtPlayhead();
         void splitAtPlayhead();
 
+        /** Ctrl+J: one clip of the selected time (or of the selected clips) on each row; says what
+            was done, or why nothing was. */
+        void consolidate();
+
         /** The view scrolled or zoomed (what lines up with it repaints). */
         std::function<void()> onViewChanged;
 

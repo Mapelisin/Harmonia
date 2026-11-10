@@ -46,4 +46,10 @@ namespace harmonia::audio
         With `beforeFader`, without its volume and pan (and whatever line moves them).
         Blocks until done. Changes nothing in the project. */
     juce::String renderTrack (te::AudioTrack&, const juce::File&, te::TimeRange, bool beforeFader = false);
+
+    /** Renders `range` of what the clips of an audio track play, as they sound together (each
+        with its gain, fades, stretching and pitch, crossfaded where they overlap) and nothing
+        more: none of the track's effects, volume or pan. To a 24-bit WAV, for making one clip of
+        several (audio::consolidate). Blocks until done. Changes nothing in the project. */
+    juce::String renderClips (te::AudioTrack&, const juce::File&, te::TimeRange);
 }

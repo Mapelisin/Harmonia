@@ -92,9 +92,19 @@ one clip and end in the middle of another, notes and sound alike. (A clip itself
 | **Ctrl+B** | Repeat the piece right after itself; the selection moves onto the copy, so pressing again repeats it further |
 | **Ctrl+E** | Split the clips at both edges of the piece |
 | **Ctrl+L** | The piece becomes the loop region (Song mode plays it round) |
+| **Ctrl+J** | **Consolidate**: what each row has in the piece becomes one clip, from one edge of the piece to the other |
 | Drag the piece | Move what is in it to another place or other rows, in place of what is there. **Ctrl**: a copy. A frame shows where it will land |
 | A click, or **Esc** | Let the piece go |
 
+- **Consolidating (Ctrl+J).** Notes become one clip with everything the clips played (a clip that repeated
+  has its repeats written out as notes). Sound is written to a new file next to the song's recordings, as the
+  clips sounded together: their gain, fades, stretching and crossfades are in it; the track's effects,
+  volume and pan are not (they go on working on the new clip, so the song sounds the same). If one of the
+  clips followed the tempo, so does the new one. With no time selected, Ctrl+J joins the selected clips.
+- **Automation goes with the piece.** When a piece is moved, copied, repeated (Ctrl+B) or cut and pasted on
+  its own rows, the rows' automation lines (volume, pan, effect knobs) over that time go with it; where the
+  piece was taken from, a line runs straight from edge to edge. **Del** leaves the lines alone. Onto other
+  rows only the clips go: another track has its own knobs.
 - Notes land only on instrument tracks, sound only on audio tracks: a piece dropped where it can't go stays
   where it was, and the status bar says why.
 - A part moved or copied out of a linked clip is a clip of its own (not linked).

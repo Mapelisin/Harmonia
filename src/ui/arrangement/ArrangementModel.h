@@ -211,6 +211,19 @@ namespace harmonia::ui::arrangement
         /** Ctrl+L: the loop region becomes the piece (and the song plays it round). */
         bool loopTime();
 
+        /** What `consolidate` did: how many rows got one clip, of how many clips; or why not. */
+        struct Consolidated
+        {
+            int rows = 0, clipsBefore = 0;
+            juce::String problem;
+        };
+
+        /** Ctrl+J: what each row has in the selected time becomes one clip, from one edge of the
+            time to the other (audio::consolidate: notes joined; sound rendered to a new file as
+            the clips sound, the track's effects not in it). Without a selected time: the selected
+            clips, on each track from its first to its last. One undo step. */
+        Consolidated consolidate();
+
         //==============================================================================
         // Snap (FL's playlist snap; "Line" follows the zoom)
 

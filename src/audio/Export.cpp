@@ -115,6 +115,13 @@ namespace harmonia::audio
                     set (fader->state, te::IDs::enabled, false);
             }
 
+            /** Its clips alone: none of its plugins (effects, sends, volume and pan). */
+            void bypassPlugins (te::AudioTrack& track)
+            {
+                for (auto* plugin : track.pluginList)
+                    set (plugin->state, te::IDs::enabled, false);
+            }
+
             /** Silent, though still feeding the effects that listen to it: Tracktion keeps a
                 muted track playing for them, without its sends to the return tracks. */
             void keepAsSource (te::AudioTrack& track)
@@ -261,6 +268,18 @@ namespace harmonia::audio
 
         const auto sources = keepSources (temporary, { &track }, tracks);
         return render (track.edit, file, tracks, range, false, sources);
+    }
+
+    juce::String renderClips (te::AudioTrack& track, const juce::File& file, te::TimeRange range)
+    {
+        TemporaryState temporary (track.edit);
+        temporary.hear (track);
+        temporary.playToMaster (track);
+        temporary.bypassPlugins (track);
+
+        juce::Array<te::Track*> tracks;
+        tracks.add (&track);
+        return render (track.edit, file, tracks, range, false);
     }
 
     juce::String exportSong (te::Edit& edit, const juce::File& file, const ExportFormat& format, std::optional<te::TimeRange> part)

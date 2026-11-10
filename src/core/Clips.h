@@ -111,6 +111,12 @@ namespace harmonia::core::clips
         inside the clip. */
     te::Clip* split (te::Clip&, double beat);
 
+    /** Cuts the clips of the track that cross `fromBeat` or `toBeat` in two there, and returns what
+        the track then has between the two beats, in time order: for taking a stretch of time out,
+        or making one clip of it. A clip reaching less than `smallestBeats` into the stretch isn't
+        in it (and isn't cut). Into the current undo step. */
+    juce::Array<te::Clip*> isolate (te::AudioTrack&, double fromBeat, double toBeat, double smallestBeats = 1.0 / 64.0);
+
     /** Can a clip like this (MIDI or audio, see te::ClipCopy::getState) go on this track? MIDI clips
         go on instrument tracks, audio clips on audio tracks, nothing on return tracks. */
     bool canTake (const te::AudioTrack&, const te::ClipCopy&);

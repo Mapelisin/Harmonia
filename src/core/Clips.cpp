@@ -305,6 +305,35 @@ namespace harmonia::core::clips
         return second;
     }
 
+    juce::Array<te::Clip*> isolate (te::AudioTrack& track, double fromBeat, double toBeat, double smallestBeats)
+    {
+        juce::Array<te::Clip*> between;
+
+        for (auto* clip : getClips (track))
+        {
+            const auto start = getStartBeat (*clip), end = getEndBeat (*clip);
+
+            if (std::min (end, toBeat) - std::max (start, fromBeat) < smallestBeats)
+                continue;
+
+            // The part from `fromBeat` on; then of that, the part up to `toBeat`.
+            auto* inside = clip;
+
+            if (start < fromBeat - smallestBeats)
+                inside = split (*clip, fromBeat);
+
+            if (inside == nullptr)
+                continue;
+
+            if (getEndBeat (*inside) > toBeat + smallestBeats)
+                split (*inside, toBeat);
+
+            between.add (inside);
+        }
+
+        return between;
+    }
+
     bool canTake (const te::AudioTrack& track, const te::ClipCopy& copy)
     {
         const auto& state = copy.getState();

@@ -17,6 +17,8 @@ add_library(harmonia_audio STATIC
     Effects.cpp
     Export.h
     Export.cpp
+    Consolidate.h
+    Consolidate.cpp
     ExportFormat.h
     ExportFormat.cpp
     Mp3Encoder.h

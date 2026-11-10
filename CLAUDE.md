@@ -76,6 +76,11 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   есть, команды правки (Del, Ctrl+X/C/V/B/E/L, перенос мышью) работают с ним: `deleteTime`, `copyTime`,
   `moveTime`… Новая команда над клипами в аранжировке должна решить, что она делает с куском времени. В тестах
   клип тащить за имя (`onName`), не за тело.
+- Кусок времени в коде: команды и буфер обмена аранжировки — `ArrangementClipboard.cpp` (методы
+  `ArrangementModel`); вырезать кусок из дорожки — `core::clips::isolate`; склейка (Ctrl+J) —
+  `audio::consolidate` (звук — `audio::renderClips`: клипы без эффектов дорожки); автоматизация, которая едет
+  с куском на своей дорожке, — `core::automation_pieces` (линии целиком — `core::automation_curves`).
+  Команда, которая переносит кусок времени, берёт с собой и автоматизацию (решение 49).
 - Аранжировка: поведение — в `ui/arrangement/ArrangementModel` и `ArrangementGestures` (тесты без окна).
   Открытый клип и текущая дорожка живут в `ArrangementModel`; `MainComponent` переносит их в piano roll.
   Перед сменой клипа piano roll — `NoteInput::finishTake()`.

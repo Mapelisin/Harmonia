@@ -180,6 +180,7 @@ namespace harmonia::ui::arrangement
                 case 'X': if (! mods.isShiftDown()) { cutSelected(); return true; } return false;
                 case 'V': if (! mods.isShiftDown()) { pasteAtPlayhead(); return true; } return false;
                 case 'E': if (! mods.isShiftDown()) { splitAtPlayhead(); return true; } return false;
+                case 'J': if (! mods.isShiftDown()) { consolidate(); return true; } return false;
                 default:  return false;
             }
         }
@@ -356,6 +357,22 @@ namespace harmonia::ui::arrangement
         if (model.splitAt (getPlayheadBeat()) == 0)
             tell ("Nothing to split: put the playhead over a clip of the current track (click the ruler), "
                   "or select the clips to split", true);
+    }
+
+    void Arrangement::consolidate()
+    {
+        const auto time = model.getTimeSelection().has_value();
+        const auto done = model.consolidate();
+
+        if (done.problem.isNotEmpty())
+            tell (done.problem, true);
+        else if (done.rows == 0)
+            tell (time ? "Nothing to consolidate: the selected time is empty"
+                       : "Nothing to consolidate: select the clips to make one of, or a piece of time (drag in a track's row)", true);
+        else
+            tell ("One clip made of " + juce::String (done.clipsBefore) + (done.clipsBefore == 1 ? " clip" : " clips")
+                      + (done.rows > 1 ? " on each of " + juce::String (done.rows) + " rows" : juce::String())
+                      + ". Sound was written to a new file as it sounded, without the track's effects", false);
     }
 
     //==============================================================================

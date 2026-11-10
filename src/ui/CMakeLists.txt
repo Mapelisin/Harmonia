@@ -92,6 +92,7 @@ add_library(harmonia_ui STATIC
     arrangement/ArrangementView.h
     arrangement/ArrangementModel.h
     arrangement/ArrangementModel.cpp
+    arrangement/ArrangementClipboard.cpp
     arrangement/ArrangementGestures.h
     arrangement/ArrangementGestures.cpp
     arrangement/ClipArea.h

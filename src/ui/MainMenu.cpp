@@ -90,6 +90,8 @@ namespace harmonia::ui
                                     on (main, [] (MainComponent& m) { m.getArrangementModel().duplicateSelected (false); })));
             menu.addItem (makeItem ("Split at the playhead", "Ctrl+E", true,
                                     on (main, [] (MainComponent& m) { m.getArrangement().splitAtPlayhead(); })));
+            menu.addItem (makeItem ("Consolidate into one clip", "Ctrl+J", selected,
+                                    on (main, [] (MainComponent& m) { m.getArrangement().consolidate(); })));
             menu.addItem (makeItem ("Delete", "Del", selected, on (main, [] (MainComponent& m) { m.getArrangement().deleteSelection(); })));
             menu.addSeparator();
             menu.addItem (makeItem ("Select all", "Ctrl+A", true, on (main, [] (MainComponent& m) { m.getArrangementModel().selectAll(); })));

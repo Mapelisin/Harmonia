@@ -46,6 +46,7 @@ namespace harmonia::ui
                 { "Del, Ctrl+X / C / V, Ctrl+B, Ctrl+E", "With time selected: delete, cut, copy, paste there, repeat, split at its edges" },
                 { "Drag the selected time", "Move what is in it (Ctrl: copy), in place of what is there" },
                 { "Ctrl+L", "The selected time becomes the loop region" },
+                { "Ctrl+J", "One clip of the selected time (or of the selected clips) on each row; sound goes to a new file" },
                 { "Shift+drag on empty space", "Select whole clips with a rectangle" },
                 { "Drag a clip's edge", "Hide or show its beginning or end (a looping clip repeats)" },
                 { "Audio clip over another", "They crossfade over the overlap (the clip's menu turns that off); its menu also loops it" },

@@ -70,6 +70,10 @@ add_library(harmonia_core STATIC
     Drums.cpp
     NoteRecorder.h
     NoteRecorder.cpp
+    AutomationCurves.h
+    AutomationCurves.cpp
+    AutomationPieces.h
+    AutomationPieces.cpp
     AudioTempo.h
     AudioTempo.cpp
     AudioClips.h
