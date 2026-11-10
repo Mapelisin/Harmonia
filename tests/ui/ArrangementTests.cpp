@@ -47,6 +47,9 @@ namespace
             return { view.beatToX (beat), view.trackToY (trackIndex) + yInRow };
         }
 
+        /** A point on a clip's name strip (its header): where a clip is taken to be moved. */
+        juce::Point<float> onName (double beat, int trackIndex) const       { return at (beat, trackIndex, 7.0f); }
+
         void click (juce::Point<float> position, int mods = 0, int clicks = 1)
         {
             gestures.down ({ position, juce::ModifierKeys (mods | left), clicks });
@@ -274,7 +277,7 @@ TEST_SUITE ("arrangement: mouse")
         core::NoteEditor (*f.clip).add (makeNote (60, 1.0));
 
         // 5.2 beats to the right lands on bar 2 (beat 4).
-        f.drag (f.at (4.0, 0), f.at (9.2, 1));
+        f.drag (f.onName (4.0, 0), f.at (9.2, 1));
         CHECK (f.clipsOn (*f.track).isEmpty());
         REQUIRE (f.clipsOn (*second).size() == 1);
         CHECK (clips::getStartBeat (*f.clip) == doctest::Approx (4.0));
@@ -286,11 +289,11 @@ TEST_SUITE ("arrangement: mouse")
         CHECK (clips::getStartBeat (*f.clipsOn (*f.track).getFirst()) == doctest::Approx (0.0));
 
         // Alt: no snap.
-        f.drag (f.at (4.0, 0), f.at (6.5, 0), alt);
+        f.drag (f.onName (4.0, 0), f.at (6.5, 0), alt);
         CHECK (clips::getStartBeat (*f.clipsOn (*f.track).getFirst()) == doctest::Approx (2.5));
 
         // Never before the song's start or off the tracks.
-        f.drag (f.at (4.0, 0), f.at (-30.0, 5));
+        f.drag (f.onName (4.0, 0), f.at (-30.0, 5));
         CHECK (clips::getStartBeat (*f.clipsOn (*second).getFirst()) == doctest::Approx (0.0));
     }
 
@@ -300,7 +303,7 @@ TEST_SUITE ("arrangement: mouse")
         auto* other = f.project->addMidiClip (*f.track, 16.0, 4.0);
         f.model.setSelection ({ f.clip, other });
 
-        f.drag (f.at (2.0, 0), f.at (10.0, 0));
+        f.drag (f.onName (2.0, 0), f.at (10.0, 0));
         CHECK (clips::getStartBeat (*f.clip) == doctest::Approx (8.0));
         CHECK (clips::getStartBeat (*other) == doctest::Approx (24.0));
         CHECK (f.model.getSelectedClips().size() == 2);
@@ -311,7 +314,7 @@ TEST_SUITE ("arrangement: mouse")
         ArrangementFixture f;
         core::NoteEditor (*f.clip).add (makeNote (60, 1.0));
 
-        f.drag (f.at (4.0, 0), f.at (20.0, 0), shift);
+        f.drag (f.onName (4.0, 0), f.at (20.0, 0), shift);
         auto onTrack = f.clipsOn (*f.track);
         REQUIRE (onTrack.size() == 2);
         CHECK (clips::getStartBeat (*onTrack[0]) == doctest::Approx (0.0));
@@ -324,7 +327,7 @@ TEST_SUITE ("arrangement: mouse")
         CHECK (f.clipsOn (*f.track).size() == 1);
         CHECK_FALSE (links::isLinked (*f.clip));
 
-        f.drag (f.at (4.0, 0), f.at (36.0, 0), ctrl);
+        f.drag (f.onName (4.0, 0), f.at (36.0, 0), ctrl);
         onTrack = f.clipsOn (*f.track);
         REQUIRE (onTrack.size() == 2);
         CHECK (clips::getStartBeat (*onTrack[1]) == doctest::Approx (32.0));
@@ -369,14 +372,20 @@ TEST_SUITE ("arrangement: mouse")
         CHECK (f.clipsOn (*f.track).size() == 3);
     }
 
-    TEST_CASE ("dragging on empty space selects the clips in the rectangle")
+    TEST_CASE ("Shift+drag on empty space selects the clips in the rectangle (a plain drag selects time)")
     {
         ArrangementFixture f;
         auto* second = f.addTrack();
         auto* other = f.project->addMidiClip (*second, 16.0, 4.0);
         auto* far = f.project->addMidiClip (*second, 40.0, 4.0);
 
+        // Without Shift: a piece of time, no clip selected (see TimeSelectionTests).
         f.drag (f.at (30.0, 0), f.at (10.0, 1));
+        CHECK (f.model.getSelectedClips().isEmpty());
+        CHECK (f.model.getTimeSelection().has_value());
+        f.model.deselectAll();
+
+        f.drag (f.at (30.0, 0), f.at (10.0, 1), shift);
         auto selected = f.model.getSelectedClips();
         CHECK (selected.size() == 2);
         CHECK (selected.contains (f.clip));
@@ -416,7 +425,14 @@ TEST_SUITE ("arrangement: mouse")
 
         using Pointer = ArrangementGestures::Pointer;
         CHECK (f.gestures.getCursorFor (Pointer { { f.view.beatToX (16.0) - 2.0f, 30.0f } }) == juce::MouseCursor (juce::MouseCursor::LeftRightResizeCursor));
-        CHECK (f.gestures.getCursorFor (Pointer { { f.view.beatToX (8.0), 30.0f } }) == juce::MouseCursor (juce::MouseCursor::NormalCursor));
+        // A clip's name strip takes the clip; below it (and on empty rows) a drag selects time.
+        CHECK (f.gestures.getCursorFor (Pointer { { f.view.beatToX (8.0), 7.0f } }) == juce::MouseCursor (juce::MouseCursor::NormalCursor));
+        CHECK (f.gestures.getCursorFor (Pointer { { f.view.beatToX (8.0), 30.0f } }) == juce::MouseCursor (juce::MouseCursor::IBeamCursor));
+        CHECK (f.gestures.getCursorFor (Pointer { { f.view.beatToX (40.0), 30.0f } }) == juce::MouseCursor (juce::MouseCursor::IBeamCursor));
+
+        // Over the selected piece of time: it can be taken.
+        f.model.setTimeSelection (4.0, 12.0, 0, 0);
+        CHECK (f.gestures.getCursorFor (Pointer { { f.view.beatToX (8.0), 30.0f } }) == juce::MouseCursor (juce::MouseCursor::DraggingHandCursor));
     }
 }
 

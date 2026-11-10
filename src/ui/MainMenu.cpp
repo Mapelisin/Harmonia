@@ -76,8 +76,10 @@ namespace harmonia::ui
         // The same commands as the keys: on the clips while the arrangement has the keyboard.
         if (main.isArrangementTheEditTarget())
         {
-            const auto selected = ! arrangementModel.getSelectedClips().isEmpty();
-            menu.addSectionHeader ("Clips in the arrangement");
+            // Clips selected, or a piece of time: the same commands act on either.
+            const auto time = arrangementModel.getTimeSelection().has_value();
+            const auto selected = time || ! arrangementModel.getSelectedClips().isEmpty();
+            menu.addSectionHeader (time ? "The selected time in the arrangement" : "Clips in the arrangement");
             menu.addItem (makeItem ("Cut", "Ctrl+X", selected, on (main, [] (MainComponent& m) { m.getArrangement().cutSelected(); })));
             menu.addItem (makeItem ("Copy", "Ctrl+C", selected, on (main, [] (MainComponent& m) { m.getArrangement().copySelected(); })));
             menu.addItem (makeItem ("Paste at the playhead", "Ctrl+V", arrangement::ArrangementModel::canPaste(),
@@ -88,7 +90,7 @@ namespace harmonia::ui
                                     on (main, [] (MainComponent& m) { m.getArrangementModel().duplicateSelected (false); })));
             menu.addItem (makeItem ("Split at the playhead", "Ctrl+E", true,
                                     on (main, [] (MainComponent& m) { m.getArrangement().splitAtPlayhead(); })));
-            menu.addItem (makeItem ("Delete", "Del", selected, on (main, [] (MainComponent& m) { m.getArrangementModel().deleteSelected(); })));
+            menu.addItem (makeItem ("Delete", "Del", selected, on (main, [] (MainComponent& m) { m.getArrangement().deleteSelection(); })));
             menu.addSeparator();
             menu.addItem (makeItem ("Select all", "Ctrl+A", true, on (main, [] (MainComponent& m) { m.getArrangementModel().selectAll(); })));
             menu.addItem (makeItem ("Deselect", "Ctrl+D", selected, on (main, [] (MainComponent& m) { m.getArrangementModel().deselectAll(); })));

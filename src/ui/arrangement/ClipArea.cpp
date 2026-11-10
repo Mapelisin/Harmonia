@@ -53,6 +53,12 @@ namespace harmonia::ui::arrangement
             if (onViewChanged != nullptr)
                 onViewChanged();
         };
+
+        gestures.onProblem = [this] (const juce::String& text)
+        {
+            if (onProblem != nullptr)
+                onProblem (text);
+        };
     }
 
     //==============================================================================
@@ -115,6 +121,27 @@ namespace harmonia::ui::arrangement
             g.fillRect (*rectangle);
             g.setColour (theme::colour::accent);
             g.drawRect (*rectangle, 1.0f);
+        }
+
+        // The selected piece of time, over the clips; and, while it is dragged, where it would land.
+        const auto boundsOf = [this] (const ArrangementModel::TimeSelection& piece)
+        {
+            return juce::Rectangle<float>::leftTopRightBottom (view.beatToX (piece.startBeat), view.trackToY (piece.firstRow),
+                                                               view.beatToX (piece.endBeat), view.trackToY (piece.lastRow + 1));
+        };
+
+        if (const auto piece = model.getTimeSelection())
+        {
+            g.setColour (theme::colour::accent.withAlpha (0.28f));
+            g.fillRect (boundsOf (*piece));
+            g.setColour (theme::colour::accent);
+            g.drawRect (boundsOf (*piece), 1.0f);
+        }
+
+        if (const auto target = gestures.getTimeMoveTarget())
+        {
+            g.setColour (theme::colour::textPrimary.withAlpha (0.9f));
+            g.drawRect (boundsOf (*target), 2.0f);
         }
 
         paintReadout (g);

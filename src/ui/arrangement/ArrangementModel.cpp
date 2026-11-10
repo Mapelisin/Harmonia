@@ -421,7 +421,13 @@ namespace harmonia::ui::arrangement
             if (clip != nullptr && std::find (ids.begin(), ids.end(), clip->itemID) == ids.end())
                 ids.push_back (clip->itemID);
 
-        if (ids != selection)
+        // Clips or a piece of time: one kind of selection at a time.
+        const auto hadTime = timeSelection.has_value() && ! ids.empty();
+
+        if (hadTime)
+            timeSelection.reset();
+
+        if (ids != selection || hadTime)
         {
             selection = std::move (ids);
             clipsDirty = true;
@@ -455,7 +461,65 @@ namespace harmonia::ui::arrangement
 
     void ArrangementModel::deselectAll()
     {
+        clearTimeSelection();
         setSelection ({});
+    }
+
+    //==============================================================================
+    std::optional<ArrangementModel::TimeSelection> ArrangementModel::getTimeSelection() const
+    {
+        if (! timeSelection.has_value())
+            return std::nullopt;
+
+        // Rows may have gone since (a track deleted, a folder collapsed).
+        const auto numRows = getNumTracks();
+        auto piece = *timeSelection;
+
+        if (piece.firstRow >= numRows)
+            return std::nullopt;
+
+        piece.lastRow = std::min (piece.lastRow, numRows - 1);
+        return piece;
+    }
+
+    void ArrangementModel::setTimeSelection (double beatA, double beatB, int rowA, int rowB)
+    {
+        const auto numRows = getNumTracks();
+        const auto start = std::max (0.0, std::min (beatA, beatB)), end = std::max (0.0, std::max (beatA, beatB));
+
+        if (numRows == 0 || end - start < 1.0e-6)
+        {
+            clearTimeSelection();
+            return;
+        }
+
+        TimeSelection piece;
+        piece.startBeat = start;
+        piece.endBeat = end;
+        piece.firstRow = juce::jlimit (0, numRows - 1, std::min (rowA, rowB));
+        piece.lastRow = juce::jlimit (0, numRows - 1, std::max (rowA, rowB));
+
+        const auto same = timeSelection.has_value()
+                            && std::abs (timeSelection->startBeat - piece.startBeat) < 1.0e-9
+                            && std::abs (timeSelection->endBeat - piece.endBeat) < 1.0e-9
+                            && timeSelection->firstRow == piece.firstRow && timeSelection->lastRow == piece.lastRow;
+
+        if (same && selection.empty())
+            return;
+
+        timeSelection = piece;
+        selection.clear();
+        clipsDirty = true;
+        changed();
+    }
+
+    void ArrangementModel::clearTimeSelection()
+    {
+        if (timeSelection.has_value())
+        {
+            timeSelection.reset();
+            changed();
+        }
     }
 
     //==============================================================================
@@ -1061,19 +1125,106 @@ namespace harmonia::ui::arrangement
     //==============================================================================
     namespace
     {
+        constexpr double smallestPieceBeats = 1.0 / 64.0;       // of a clip, after a cut
+
         /** What Ctrl+C keeps: copies of the clips' states, and where each was relative to the
-            earliest clip and the topmost track. */
+            earliest clip and the topmost track. Of a piece of time, a clip may be only a part:
+            `shown` is the part (song beats, where the clip was). */
         struct CopiedClip
         {
             te::ClipCopy copy;
             int trackOffset = 0;
             double beatOffset = 0.0;
+            double wasAtBeat = 0.0;
+            std::optional<juce::Range<double>> shown;
         };
 
-        std::vector<CopiedClip>& getClipboard()
+        /** The clips copied; for a piece of time, how long it was and how many rows. */
+        struct Clipboard
         {
-            static std::vector<CopiedClip> clipboard;
+            std::vector<CopiedClip> clips;
+            double pieceBeats = 0.0;
+            int pieceRows = 0;
+
+            bool isPiece() const noexcept       { return pieceRows > 0; }
+        };
+
+        Clipboard& getClipboard()
+        {
+            static Clipboard clipboard;
             return clipboard;
+        }
+
+        /** What a track has between two beats, as copies (the track isn't touched). */
+        void copyRange (te::AudioTrack& track, double from, double to, int trackOffset, std::vector<CopiedClip>& into)
+        {
+            for (auto* clip : clips::getClips (track))
+            {
+                const auto start = clips::getStartBeat (*clip), end = clips::getEndBeat (*clip);
+                const auto shownFrom = std::max (start, from), shownTo = std::min (end, to);
+
+                if (shownTo - shownFrom < smallestPieceBeats)
+                    continue;
+
+                CopiedClip copied { te::ClipCopy::fromClip (*clip), trackOffset, shownFrom - from, start, std::nullopt };
+
+                if (shownFrom > start + 1.0e-6 || shownTo < end - 1.0e-6)
+                    copied.shown = juce::Range<double> (shownFrom, shownTo);
+
+                into.push_back (std::move (copied));
+            }
+        }
+
+        /** What a track has between two beats goes: clips are cut at the two beats, and what is
+            between is removed. Into the current undo step. Returns how many clips it touched. */
+        int deleteRange (te::AudioTrack& track, double from, double to)
+        {
+            juce::Array<te::Clip*> gone;
+            int touched = 0;
+
+            for (auto* clip : clips::getClips (track))
+            {
+                const auto start = clips::getStartBeat (*clip), end = clips::getEndBeat (*clip);
+
+                if (std::min (end, to) - std::max (start, from) < smallestPieceBeats)
+                    continue;
+
+                ++touched;
+                auto* inside = clip;
+
+                // The part from `from` on; then of that, the part up to `to`.
+                if (start < from - smallestPieceBeats)
+                    inside = clips::split (*clip, from);
+
+                if (inside == nullptr)
+                    continue;
+
+                if (clips::getEndBeat (*inside) > to + smallestPieceBeats)
+                    clips::split (*inside, to);
+
+                gone.add (inside);
+            }
+
+            clips::remove (gone);
+            return touched;
+        }
+
+        /** A copy on `track` starting at `startBeat`: the whole clip, or the part of it copied. */
+        te::Clip* insertCopied (te::AudioTrack& track, const CopiedClip& copied, double startBeat)
+        {
+            if (! copied.shown.has_value())
+                return clips::insertCopy (track, copied.copy, startBeat);
+
+            // Where the clip was, cut down to the part; then to its place.
+            auto* clip = clips::insertCopy (track, copied.copy, copied.wasAtBeat);
+
+            if (clip == nullptr)
+                return nullptr;
+
+            clips::setStart (*clip, copied.shown->getStart(), smallestPieceBeats);
+            clips::setEnd (*clip, copied.shown->getEnd(), smallestPieceBeats);
+            clips::move (*clip, startBeat, track);
+            return clip;
         }
     }
 
@@ -1126,14 +1277,15 @@ namespace harmonia::ui::arrangement
         }
 
         auto& clipboard = getClipboard();
-        clipboard.clear();
+        clipboard = {};
 
         for (auto* clip : selected)
-            clipboard.push_back ({ te::ClipCopy::fromClip (*clip),
-                                   indexOf (clip->getTrack()) - topTrack,
-                                   clips::getStartBeat (*clip) - firstBeat });
+            clipboard.clips.push_back ({ te::ClipCopy::fromClip (*clip),
+                                         indexOf (clip->getTrack()) - topTrack,
+                                         clips::getStartBeat (*clip) - firstBeat,
+                                         clips::getStartBeat (*clip), std::nullopt });
 
-        return (int) clipboard.size();
+        return (int) clipboard.clips.size();
     }
 
     int ArrangementModel::cutSelected()
@@ -1149,19 +1301,59 @@ namespace harmonia::ui::arrangement
         return count;
     }
 
-    int ArrangementModel::paste (double beat)
+    int ArrangementModel::paste (double beat, int row)
     {
         const auto& clipboard = getClipboard();
 
-        if (clipboard.empty())
+        if (clipboard.clips.empty())
             return 0;
 
         const auto tracks = getTracks();
-        const auto baseTrack = std::max (0, indexOf (getCurrentTrack()));
-        project.beginGesture ("Paste clips");
+        const auto baseTrack = row >= 0 ? row : std::max (0, indexOf (getCurrentTrack()));
+        beat = std::max (0.0, beat);
         juce::Array<te::Clip*> pasted;
 
-        for (const auto& copied : clipboard)
+        if (clipboard.isPiece())
+        {
+            // A piece of time: row for row, in place of what is there.
+            project.beginGesture ("Paste time");
+
+            for (int i = 0; i < clipboard.pieceRows; ++i)
+            {
+                auto* track = getTrack (baseTrack + i);
+
+                if (track == nullptr || isLockedRow (track))
+                    continue;
+
+                // A row that can't take what the piece has for it (notes onto a row of sound) is
+                // left as it is; a row the piece has nothing for is emptied there (time is pasted,
+                // silence too).
+                auto fits = true;
+
+                for (const auto& copied : clipboard.clips)
+                    fits = fits && (copied.trackOffset != i || clips::canTake (*track, copied.copy));
+
+                if (! fits)
+                    continue;
+
+                deleteRange (*track, beat, beat + clipboard.pieceBeats);
+
+                for (const auto& copied : clipboard.clips)
+                    if (copied.trackOffset == i)
+                        if (auto* clip = insertCopied (*track, copied, beat + copied.beatOffset))
+                            pasted.add (clip);
+            }
+
+            clipsDirty = true;
+            validateCurrent();
+            setTimeSelection (beat, beat + clipboard.pieceBeats, baseTrack, baseTrack + clipboard.pieceRows - 1);
+            changed();
+            return pasted.size();
+        }
+
+        project.beginGesture ("Paste clips");
+
+        for (const auto& copied : clipboard.clips)
         {
             for (int i = baseTrack + copied.trackOffset; i < tracks.size(); ++i)
             {
@@ -1183,12 +1375,224 @@ namespace harmonia::ui::arrangement
 
     bool ArrangementModel::canPaste()
     {
-        return ! getClipboard().empty();
+        return ! getClipboard().clips.empty();
+    }
+
+    bool ArrangementModel::hasCopiedTime()
+    {
+        return getClipboard().isPiece();
     }
 
     int ArrangementModel::getNumCopiedClips()
     {
-        return (int) getClipboard().size();
+        return (int) getClipboard().clips.size();
+    }
+
+    //==============================================================================
+    int ArrangementModel::deleteTime()
+    {
+        const auto piece = getTimeSelection();
+
+        if (! piece.has_value())
+            return 0;
+
+        // Is there anything in it at all? (Nothing: no undo step.)
+        std::vector<CopiedClip> inside;
+
+        for (int row = piece->firstRow; row <= piece->lastRow; ++row)
+            if (auto* track = getTrack (row); track != nullptr && ! isLockedRow (track))
+                copyRange (*track, piece->startBeat, piece->endBeat, 0, inside);
+
+        if (inside.empty())
+            return 0;
+
+        project.beginGesture ("Delete time");
+        int touched = 0;
+
+        for (int row = piece->firstRow; row <= piece->lastRow; ++row)
+            if (auto* track = getTrack (row); track != nullptr && ! isLockedRow (track))
+                touched += deleteRange (*track, piece->startBeat, piece->endBeat);
+
+        clipsDirty = true;
+        validateCurrent();
+        changed();
+        return touched;
+    }
+
+    int ArrangementModel::copyTime()
+    {
+        const auto piece = getTimeSelection();
+
+        if (! piece.has_value())
+            return 0;
+
+        Clipboard copied;
+        copied.pieceBeats = piece->getLength();
+        copied.pieceRows = piece->getNumRows();
+
+        for (int row = piece->firstRow; row <= piece->lastRow; ++row)
+            if (auto* track = getTrack (row); track != nullptr && ! isLockedRow (track))
+                copyRange (*track, piece->startBeat, piece->endBeat, row - piece->firstRow, copied.clips);
+
+        if (copied.clips.empty())
+            return 0;
+
+        const auto count = (int) copied.clips.size();
+        getClipboard() = std::move (copied);
+        return count;
+    }
+
+    int ArrangementModel::cutTime()
+    {
+        const auto count = copyTime();
+
+        if (count > 0)
+        {
+            deleteTime();
+            project.getEdit().getUndoManager().setCurrentTransactionName ("Cut time");
+        }
+
+        return count;
+    }
+
+    int ArrangementModel::duplicateTime()
+    {
+        const auto piece = getTimeSelection();
+
+        if (! piece.has_value())
+            return 0;
+
+        std::vector<CopiedClip> copies;
+
+        for (int row = piece->firstRow; row <= piece->lastRow; ++row)
+            if (auto* track = getTrack (row); track != nullptr && ! isLockedRow (track))
+                copyRange (*track, piece->startBeat, piece->endBeat, row - piece->firstRow, copies);
+
+        if (copies.empty())
+            return 0;
+
+        project.beginGesture ("Duplicate time");
+        const auto to = piece->endBeat;
+        juce::Array<te::Clip*> made;
+
+        for (int row = piece->firstRow; row <= piece->lastRow; ++row)
+            if (auto* track = getTrack (row); track != nullptr && ! isLockedRow (track))
+                deleteRange (*track, to, to + piece->getLength());
+
+        for (const auto& copied : copies)
+            if (auto* track = getTrack (piece->firstRow + copied.trackOffset))
+                if (auto* clip = insertCopied (*track, copied, to + copied.beatOffset))
+                    made.add (clip);
+
+        clipsDirty = true;
+        validateCurrent();
+        setTimeSelection (to, to + piece->getLength(), piece->firstRow, piece->lastRow);
+        changed();
+        return made.size();
+    }
+
+    int ArrangementModel::splitTime()
+    {
+        const auto piece = getTimeSelection();
+
+        if (! piece.has_value())
+            return 0;
+
+        // The clips an edge of the piece goes through.
+        std::vector<std::pair<te::Clip*, double>> cuts;
+
+        for (int row = piece->firstRow; row <= piece->lastRow; ++row)
+        {
+            auto* track = getTrack (row);
+
+            if (track == nullptr || isLockedRow (track))
+                continue;
+
+            for (auto* clip : clips::getClips (*track))
+                for (const auto beat : { piece->endBeat, piece->startBeat })       // the later cut first: the clip keeps its first part
+                    if (clips::getStartBeat (*clip) < beat - smallestPieceBeats && beat < clips::getEndBeat (*clip) - smallestPieceBeats)
+                        cuts.push_back ({ clip, beat });
+        }
+
+        if (cuts.empty())
+            return 0;
+
+        project.beginGesture (cuts.size() == 1 ? "Split clip" : "Split clips");
+        int made = 0;
+
+        for (const auto& [clip, beat] : cuts)
+            if (clips::split (*clip, beat) != nullptr)
+                ++made;
+
+        clipsDirty = true;
+        changed();
+        return made;
+    }
+
+    juce::String ArrangementModel::moveTime (double deltaBeats, int deltaRows, bool copy)
+    {
+        const auto piece = getTimeSelection();
+
+        if (! piece.has_value() || (std::abs (deltaBeats) < 1.0e-9 && deltaRows == 0))
+            return {};
+
+        if (piece->startBeat + deltaBeats < -1.0e-9)
+            return "It can't go before the start of the song";
+
+        if (piece->firstRow + deltaRows < 0 || piece->lastRow + deltaRows >= getNumTracks())
+            return "There are no tracks there";
+
+        std::vector<CopiedClip> copies;
+
+        for (int row = piece->firstRow; row <= piece->lastRow; ++row)
+            if (auto* track = getTrack (row); track != nullptr && ! isLockedRow (track))
+                copyRange (*track, piece->startBeat, piece->endBeat, row - piece->firstRow, copies);
+
+        // Every piece of clip must be able to go where it would land.
+        for (const auto& copied : copies)
+        {
+            auto* target = getTrack (piece->firstRow + deltaRows + copied.trackOffset);
+
+            if (target == nullptr || isLockedRow (target))
+                return "It can't go onto a frozen track or a folded folder";
+
+            if (! clips::canTake (*target, copied.copy))
+                return "Notes go on instrument tracks, sound on audio tracks";
+        }
+
+        const auto to = std::max (0.0, piece->startBeat + deltaBeats);
+        project.beginGesture (copy ? "Copy time" : "Move time");
+
+        if (! copy)
+            for (int row = piece->firstRow; row <= piece->lastRow; ++row)
+                if (auto* track = getTrack (row); track != nullptr && ! isLockedRow (track))
+                    deleteRange (*track, piece->startBeat, piece->endBeat);
+
+        for (int row = piece->firstRow; row <= piece->lastRow; ++row)
+            if (auto* track = getTrack (row + deltaRows); track != nullptr && ! isLockedRow (track))
+                deleteRange (*track, to, to + piece->getLength());
+
+        for (const auto& copied : copies)
+            if (auto* track = getTrack (piece->firstRow + deltaRows + copied.trackOffset))
+                insertCopied (*track, copied, to + copied.beatOffset);
+
+        clipsDirty = true;
+        validateCurrent();
+        setTimeSelection (to, to + piece->getLength(), piece->firstRow + deltaRows, piece->lastRow + deltaRows);
+        changed();
+        return {};
+    }
+
+    bool ArrangementModel::loopTime()
+    {
+        const auto piece = getTimeSelection();
+
+        if (! piece.has_value())
+            return false;
+
+        setLoopRegion ({ piece->startBeat, piece->endBeat });
+        setPlayMode (PlayMode::song);
+        return true;
     }
 
     void ArrangementModel::makeUnique (te::MidiClip& clip)

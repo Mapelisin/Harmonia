@@ -9,14 +9,22 @@ namespace harmonia::ui::arrangement
     /** Mouse behaviour of the clip area, separate from drawing so it can be tested with
         synthetic pointer events. Positions are in clip-area pixels.
 
-        Click a clip: select it and open it in the piano roll. Drag it: move (also to another
-        track; the whole selection moves). Shift+drag: linked copy (as FL clones a pattern);
-        Ctrl+drag: independent copy; Ctrl+click: add to / remove from the selection. Drag a
-        clip's left or right edge: show or hide its beginning or end. Right button: delete
-        (drag over clips to delete several). Drag on empty space: select with a rectangle
-        (Shift or Ctrl adds). Double-click on empty space: new clip (not on audio tracks; audio
-        clips only move to audio tracks, MIDI clips to instrument tracks). The small mark at a clip's
-        top left opens its menu. Alt turns snap off. Middle button scrolls.
+        Click a clip: select it and open it in the piano roll. Drag it by its name strip (the
+        top of it): move (also to another track; the whole selection moves). Shift+drag: linked
+        copy (as FL clones a pattern); Ctrl+drag: independent copy; Ctrl+click: add to / remove
+        from the selection. Drag a clip's left or right edge: show or hide its beginning or end.
+
+        Drag anywhere else in the rows, over clips (below their name strips) or empty space:
+        select a piece of time on the rows the drag crosses, whatever the clips' borders, as in
+        Ableton's arrangement (ArrangementModel::TimeSelection; the edit keys then act on it).
+        Drag the selected piece: move what is in it, Ctrl: copy it (applied when the button is
+        let go; getTimeMoveTarget is where it would land). A click lets the piece go.
+
+        Right button: delete (drag over clips to delete several). Shift or Ctrl + drag on empty
+        space: select whole clips with a rectangle. Double-click on empty space: new clip (not on
+        audio tracks; audio clips only move to audio tracks, MIDI clips to instrument tracks).
+        The small mark at a clip's top left opens its menu. Alt turns snap off. Middle button
+        scrolls.
 
         An audio clip has three handles at the top of its waveform: drag the left / right one
         across for a fade in / out, the middle one up and down for the clip's gain; double-click
@@ -44,6 +52,12 @@ namespace harmonia::ui::arrangement
         /** The selection rectangle while one is being dragged. */
         std::optional<juce::Rectangle<float>> getSelectionRectangle() const;
 
+        /** While the selected piece of time is being dragged: where it would land. */
+        std::optional<ArrangementModel::TimeSelection> getTimeMoveTarget() const;
+
+        /** The piece of time couldn't go where it was dropped (notes onto an audio track...). */
+        std::function<void (const juce::String&)> onProblem;
+
         /** The clip's menu mark was clicked (position in clip-area pixels). */
         std::function<void (te::Clip&, juce::Point<float>)> onClipMenuRequested;
 
@@ -69,7 +83,7 @@ namespace harmonia::ui::arrangement
         std::optional<std::pair<DrawnClip, Zone>> hitTest (juce::Point<float>);
 
     private:
-        enum class Kind { none, move, resizeStart, resizeEnd, erase, rectangle, pan, fadeIn, fadeOut, gain };
+        enum class Kind { none, move, resizeStart, resizeEnd, erase, rectangle, pan, fadeIn, fadeOut, gain, timeSelect, moveTime };
 
         ArrangementModel& model;
         ArrangementView& view;
@@ -97,6 +111,16 @@ namespace harmonia::ui::arrangement
 
         // rectangle
         juce::Array<te::Clip*> selectionAtStart;
+
+        // a piece of time: being selected (a click instead: on this clip, if any), or being moved
+        te::Clip::Ptr clickedClip;
+        std::optional<ArrangementModel::TimeSelection> movingPiece;
+        double moveBeats = 0.0;
+        int moveRows = 0;
+
+        void beginTime (const Pointer&, te::Clip* clipUnderIt);
+        void dragTime (const Pointer&);
+        void dragPiece (const Pointer&);
 
         core::snap::Mode getSnapMode (const Pointer&) const;
         int trackAt (float y) const;

@@ -31,14 +31,15 @@ drag them onto tracks.
 | Mouse | What it does |
 |---|---|
 | Click a clip | Open it in the piano roll (and select it) |
-| Drag a clip | Move it (also to another track). Everything selected moves |
-| **Shift** + drag | **A linked copy**: edit one and all of them change (like pattern clones in FL) |
-| **Ctrl** + drag | An ordinary (independent) copy |
+| Drag a clip **by its name** (the strip at its top) | Move it (also to another track). Everything selected moves |
+| **Shift** + drag its name | **A linked copy**: edit one and all of them change (like pattern clones in FL) |
+| **Ctrl** + drag its name | An ordinary (independent) copy |
+| Drag **anywhere else in the rows**: over a clip below its name, or on an empty spot | **Select a piece of time** on the rows the mouse crosses, whatever the clips' borders (see "A piece of time" below) |
 | **Ctrl** + click | Add to the selection / remove from it |
 | Drag the left / right edge | Hide or show the start / end of the clip (the notes stay in place) |
 | Right-click | Delete the clip (dragging with the right button deletes every clip the mouse passes over) |
 | Double click on an empty spot | A new clip one bar long |
-| Drag on an empty spot | Select with a box (**Shift** / **Ctrl** to add) |
+| **Shift** (or Ctrl) + drag on an empty spot | Select whole clips with a box |
 | The ▾ triangle in the corner of a clip | A menu: rename, colour, make independent, copies, split, copy / cut / paste, delete |
 | **Alt** while dragging | No snapping to the grid |
 | Wheel / Shift+wheel / Ctrl+wheel | Up-down / left-right / zoom; the middle button moves the view |
@@ -76,6 +77,29 @@ Keys (when your last click was in the arrangement):
 
 **Snap** (next to "+ Track") sets what clips stick to: **Line** is the visible grid (bars, and beats when
 zoomed in), Bar, Beat, 1/2 and 1/4 of a beat, or no snapping.
+
+### A piece of time: cut anything, anywhere (as in Ableton)
+
+Drag across the rows, over clips or empty space alike, and a **piece of time** is selected: from one grid
+line to another, on one row or several. The clips' borders don't matter: the piece can begin in the middle of
+one clip and end in the middle of another, notes and sound alike. (A clip itself is taken by its name strip.)
+
+| With a piece selected | What happens |
+|---|---|
+| **Del** | What the rows have in the piece goes. The clips are cut at its edges by themselves |
+| **Ctrl+X** / **Ctrl+C** | Cut / copy what is in the piece |
+| **Ctrl+V** | Paste at the start of the selected time, from its first row down, **in place of** what is there. With no time selected: at the playback cursor |
+| **Ctrl+B** | Repeat the piece right after itself; the selection moves onto the copy, so pressing again repeats it further |
+| **Ctrl+E** | Split the clips at both edges of the piece |
+| **Ctrl+L** | The piece becomes the loop region (Song mode plays it round) |
+| Drag the piece | Move what is in it to another place or other rows, in place of what is there. **Ctrl**: a copy. A frame shows where it will land |
+| A click, or **Esc** | Let the piece go |
+
+- Notes land only on instrument tracks, sound only on audio tracks: a piece dropped where it can't go stays
+  where it was, and the status bar says why.
+- A part moved or copied out of a linked clip is a clip of its own (not linked).
+- Every one of these is one **Ctrl+Z** step.
+- **Alt** while dragging selects off the grid.
 
 ## Audio clips (sound files)
 

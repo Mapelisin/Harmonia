@@ -152,7 +152,64 @@ namespace harmonia::ui::arrangement
         void setSelection (const juce::Array<te::Clip*>&);
         void setSelected (te::Clip&, bool shouldBeSelected);
         void selectAll();
+
+        /** No clip selected, and no piece of time either. */
         void deselectAll();
+
+        //==============================================================================
+        // A piece of time selected on rows next to each other, whatever the clips' borders (as
+        // in Ableton's arrangement). While there is one, the edit commands below act on what the
+        // rows have in it: the clips are cut at its edges by themselves. Selecting clips clears
+        // it, and it clears the selected clips.
+
+        struct TimeSelection
+        {
+            double startBeat = 0.0, endBeat = 0.0;
+            int firstRow = 0, lastRow = 0;
+
+            double getLength() const noexcept               { return endBeat - startBeat; }
+            int getNumRows() const noexcept                 { return lastRow - firstRow + 1; }
+
+            bool contains (double beat, int row) const noexcept
+            {
+                return beat >= startBeat && beat < endBeat && row >= firstRow && row <= lastRow;
+            }
+        };
+
+        /** The piece of time selected, if any (on rows there still are). */
+        std::optional<TimeSelection> getTimeSelection() const;
+
+        /** From one beat to another and one row to another, in any order (not before the song's
+            start, only rows there are). A piece of no length clears it. */
+        void setTimeSelection (double beatA, double beatB, int rowA, int rowB);
+        void clearTimeSelection();
+
+        /** Del: what the rows have in the piece goes. One undo step. Returns how many clips it
+            touched (0: there was nothing in it, and nothing changed). */
+        int deleteTime();
+
+        /** Ctrl+C: remembers what the rows have in the piece; the song isn't touched. Returns how
+            many clips (pieces of clips). */
+        int copyTime();
+
+        /** Ctrl+X: copyTime, then deleteTime (one undo step). */
+        int cutTime();
+
+        /** Ctrl+B: what the rows have in the piece once more right after it, in place of what was
+            there; the selection moves onto the copy (so again repeats it further). One undo step. */
+        int duplicateTime();
+
+        /** Ctrl+E: cuts the clips at both edges of the piece. One undo step. Returns how many cuts. */
+        int splitTime();
+
+        /** Moves what the rows have in the piece by `deltaBeats` and `deltaRows` (or puts a copy
+            there), in place of what is there; the selection goes with it. One undo step. Returns
+            why it can't (notes onto an audio track, off the song's rows or before its start), or
+            an empty string. */
+        juce::String moveTime (double deltaBeats, int deltaRows, bool copy);
+
+        /** Ctrl+L: the loop region becomes the piece (and the song plays it round). */
+        bool loopTime();
 
         //==============================================================================
         // Snap (FL's playlist snap; "Line" follows the zoom)
@@ -266,8 +323,15 @@ namespace harmonia::ui::arrangement
             on the current track; the others keep their distance in time and in tracks. A clip lands
             on the nearest track below its place that takes its kind (MIDI on instrument tracks, audio
             on audio tracks), or is left out. One undo step; the pasted clips become the selection.
-            Returns how many were pasted. */
-        int paste (double beat);
+            Returns how many were pasted.
+
+            A copied piece of time (copyTime) goes onto the rows from `row` down (the current
+            track's for none), each of its rows onto the row at the same distance, in place of
+            what those rows have there; the pasted piece becomes the time selection. */
+        int paste (double beat, int row = -1);
+
+        /** What was copied last is a piece of time (not whole clips). */
+        static bool hasCopiedTime();
 
         /** Something was copied. */
         static bool canPaste();
@@ -406,6 +470,7 @@ namespace harmonia::ui::arrangement
 
         // Selected clips by ID, so a clip deleted by undo can't leave a dangling pointer.
         std::vector<te::EditItemID> selection;
+        std::optional<TimeSelection> timeSelection;
 
         core::snap::Mode snapMode = core::snap::Mode::line;
         double pixelsPerBeat = 16.0;

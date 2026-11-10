@@ -53,6 +53,9 @@ namespace
             return { view.beatToX (beat), view.trackToY (trackIndex) + yInRow };
         }
 
+        /** A point on a clip's name strip: where a clip is taken to be moved. */
+        juce::Point<float> onName (double beat, int trackIndex) const       { return at (beat, trackIndex, 7.0f); }
+
         void drag (juce::Point<float> from, juce::Point<float> to, int mods = 0)
         {
             const juce::ModifierKeys keys (mods | left);
@@ -377,10 +380,10 @@ TEST_SUITE ("arrangement: audio")
         REQUIRE (clip != nullptr);
         dispatch();   // Tracktion sorts a track's clips a moment after they change, as the app would
 
-        f.drag (f.at (2.0, 1), f.at (2.0, 0));
+        f.drag (f.onName (2.0, 1), f.at (2.0, 0));
         CHECK (clip->getClipTrack() == first);
 
-        f.drag (f.at (2.0, 1), f.at (18.0, 2));
+        f.drag (f.onName (2.0, 1), f.at (18.0, 2));
         CHECK (clip->getClipTrack() == second);
         CHECK (clips::getStartBeat (*clip) == doctest::Approx (16.0));
         dispatch();
@@ -400,11 +403,11 @@ TEST_SUITE ("arrangement: audio")
         CHECK (f.model.getClips()[1].trackIndex == 2);
 
         // A MIDI clip dragged onto an audio track stays home.
-        f.drag (f.at (8.0, 0), f.at (8.0, 1));
+        f.drag (f.onName (8.0, 0), f.at (8.0, 1));
         CHECK (f.midiClip->getClipTrack() == f.instrumentTrack);
 
         // Shift-drag copies; Delete removes; the copy is a plain copy.
-        f.drag (f.at (17.0, 2), f.at (33.0, 2), juce::ModifierKeys::shiftModifier);
+        f.drag (f.onName (17.0, 2), f.at (33.0, 2), juce::ModifierKeys::shiftModifier);
         const auto onSecond = clips::getClips (*second);
         REQUIRE (onSecond.size() == 2);
         CHECK (clips::getStartBeat (*onSecond[1]) == doctest::Approx (32.0));

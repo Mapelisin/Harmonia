@@ -100,7 +100,23 @@ namespace harmonia::ui::arrangement
             return;
         }
 
-        if (const auto hit = hitTest (p.position))
+        const auto hit = hitTest (p.position);
+        const auto onNameStrip = hit.has_value() && p.position.y < view.trackToY (hit->first.trackIndex) + clipHeaderHeight;
+
+        // Inside the selected piece of time (not on a clip's name strip, edges or handles): the
+        // piece is taken, to be moved.
+        if (const auto piece = model.getTimeSelection();
+            piece.has_value() && p.clicks < 2 && (! hit.has_value() || (hit->second == Zone::body && ! onNameStrip))
+              && piece->contains (view.xToBeat (p.position.x), trackAt (p.position.y)))
+        {
+            kind = Kind::moveTime;
+            movingPiece = piece;
+            moveBeats = 0.0;
+            moveRows = 0;
+            return;
+        }
+
+        if (hit.has_value())
         {
             auto* clip = hit->first.clip;
             const auto zone = hit->second;
@@ -162,7 +178,12 @@ namespace harmonia::ui::arrangement
                 return;
             }
 
-            beginMove (*clip, p);
+            // The clip's name strip takes the clip; the rest of it is time, as the empty rows are.
+            if (onNameStrip)
+                beginMove (*clip, p);
+            else
+                beginTime (p, clip);
+
             return;
         }
 
@@ -178,12 +199,65 @@ namespace harmonia::ui::arrangement
             return;
         }
 
-        kind = Kind::rectangle;
-        const auto adding = p.mods.isShiftDown() || p.mods.isCommandDown();
-        selectionAtStart = adding ? model.getSelectedClips() : juce::Array<te::Clip*>();
+        // Shift or Ctrl: whole clips, with a rectangle (added to the selection). Else: time.
+        if (p.mods.isShiftDown() || p.mods.isCommandDown())
+        {
+            kind = Kind::rectangle;
+            selectionAtStart = model.getSelectedClips();
+            return;
+        }
 
-        if (! adding)
-            model.deselectAll();
+        beginTime (p, nullptr);
+    }
+
+    void ArrangementGestures::beginTime (const Pointer& p, te::Clip* clipUnderIt)
+    {
+        kind = Kind::timeSelect;
+        clickedClip = clipUnderIt;
+
+        // Without a drag it is a click: on a clip, Ctrl adds it to the selection or takes it out.
+        toggleOnClick = clipUnderIt != nullptr && p.mods.isCommandDown();
+    }
+
+    void ArrangementGestures::dragTime (const Pointer& p)
+    {
+        const auto rows = model.getNumTracks();
+
+        if (rows == 0)
+            return;
+
+        const auto mode = getSnapMode (p);
+        const auto context = model.getSnapContext();
+        model.setTimeSelection (snap::snapNearest (view.xToBeat (downPointer.position.x), mode, context),
+                                snap::snapNearest (view.xToBeat (p.position.x), mode, context),
+                                juce::jlimit (0, rows - 1, view.yToTrack (downPointer.position.y)),
+                                juce::jlimit (0, rows - 1, view.yToTrack (p.position.y)));
+    }
+
+    void ArrangementGestures::dragPiece (const Pointer& p)
+    {
+        if (! movingPiece.has_value())
+            return;
+
+        // Its start lands on the grid; never before the song, never off the rows.
+        const auto raw = movingPiece->startBeat + (double) (p.position.x - downPointer.position.x) / view.pixelsPerBeat;
+        moveBeats = std::max (-movingPiece->startBeat,
+                              snap::snapNearest (raw, getSnapMode (p), model.getSnapContext()) - movingPiece->startBeat);
+        moveRows = juce::jlimit (-movingPiece->firstRow, std::max (-movingPiece->firstRow, model.getNumTracks() - 1 - movingPiece->lastRow),
+                                 view.yToTrack (p.position.y) - view.yToTrack (downPointer.position.y));
+    }
+
+    std::optional<ArrangementModel::TimeSelection> ArrangementGestures::getTimeMoveTarget() const
+    {
+        if (kind != Kind::moveTime || ! dragged || ! movingPiece.has_value())
+            return std::nullopt;
+
+        auto target = *movingPiece;
+        target.startBeat += moveBeats;
+        target.endBeat += moveBeats;
+        target.firstRow += moveRows;
+        target.lastRow += moveRows;
+        return target;
     }
 
     void ArrangementGestures::drag (const Pointer& p)
@@ -201,6 +275,8 @@ namespace harmonia::ui::arrangement
             case Kind::gain:        if (dragged) dragHandle (p); break;
             case Kind::erase:       eraseAlong (lastPosition, p.position); break;
             case Kind::rectangle:   if (dragged) updateRectangleSelection (p); break;
+            case Kind::timeSelect:  if (dragged) dragTime (p); break;
+            case Kind::moveTime:    if (dragged) dragPiece (p); break;
 
             case Kind::pan:
                 view.scrollByPixels (-(double) (p.position.x - lastPosition.x), -(double) (p.position.y - lastPosition.y));
@@ -233,11 +309,56 @@ namespace harmonia::ui::arrangement
         {
             updateRectangleSelection (p);
         }
+        else if (kind == Kind::timeSelect)
+        {
+            if (dragged)
+            {
+                dragTime (p);
+            }
+            else if (auto* clip = clickedClip.get())
+            {
+                // A click on a clip: it is selected (Ctrl: added or taken out), no time is.
+                model.clearTimeSelection();
+
+                if (toggleOnClick)
+                    model.setSelected (*clip, ! model.isSelected (*clip));
+                else
+                    model.setSelection ({ clip });
+            }
+            else
+            {
+                model.deselectAll();
+            }
+        }
+        else if (kind == Kind::moveTime)
+        {
+            if (dragged && movingPiece.has_value())
+            {
+                dragPiece (p);
+
+                if (const auto problem = model.moveTime (moveBeats, moveRows, p.mods.isCommandDown());
+                    problem.isNotEmpty() && onProblem != nullptr)
+                    onProblem (problem);
+            }
+            else
+            {
+                // A click inside the piece lets it go; on a clip, it is a click on the clip.
+                model.clearTimeSelection();
+
+                if (const auto hit = hitTest (p.position))
+                {
+                    model.focusClip (*hit->first.clip);
+                    model.setSelection ({ hit->first.clip });
+                }
+            }
+        }
 
         kind = Kind::none;
         targets.clear();
         grabbed = nullptr;
         selectionAtStart.clear();
+        clickedClip = nullptr;
+        movingPiece.reset();
     }
 
     juce::MouseCursor ArrangementGestures::getCursorFor (const Pointer& p)
@@ -248,10 +369,20 @@ namespace harmonia::ui::arrangement
         if (kind == Kind::gain)
             return juce::MouseCursor::UpDownResizeCursor;
 
+        if (kind == Kind::timeSelect)
+            return juce::MouseCursor::IBeamCursor;
+
+        if (kind == Kind::moveTime)
+            return juce::MouseCursor::DraggingHandCursor;
+
         if (kind != Kind::none)
             return juce::MouseCursor::NormalCursor;
 
-        if (const auto hit = hitTest (p.position))
+        const auto hit = hitTest (p.position);
+        const auto row = trackAt (p.position.y);
+        const auto onNameStrip = hit.has_value() && p.position.y < view.trackToY (hit->first.trackIndex) + clipHeaderHeight;
+
+        if (hit.has_value() && hit->second != Zone::body)
         {
             switch (hit->second)
             {
@@ -262,11 +393,19 @@ namespace harmonia::ui::arrangement
                 case Zone::gain:        return juce::MouseCursor::UpDownResizeCursor;
                 case Zone::menu:        return juce::MouseCursor::PointingHandCursor;
                 case Zone::body:
-                default:                return juce::MouseCursor::NormalCursor;
+                default:                break;
             }
         }
 
-        return juce::MouseCursor::NormalCursor;
+        // A clip's name strip takes the clip; the selected piece of time can be taken; anywhere
+        // else in the rows a drag selects time.
+        if (onNameStrip)
+            return juce::MouseCursor::NormalCursor;
+
+        if (const auto piece = model.getTimeSelection(); piece.has_value() && piece->contains (view.xToBeat (p.position.x), row))
+            return juce::MouseCursor::DraggingHandCursor;
+
+        return row >= 0 ? juce::MouseCursor::IBeamCursor : juce::MouseCursor::NormalCursor;
     }
 
     std::optional<juce::Rectangle<float>> ArrangementGestures::getSelectionRectangle() const

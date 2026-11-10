@@ -29,6 +29,9 @@ namespace harmonia::ui::arrangement
         /** The view was zoomed or scrolled with the mouse. */
         std::function<void()> onViewChanged;
 
+        /** Something couldn't be done with the mouse (a piece of time dropped where it can't go). */
+        std::function<void (const juce::String&)> onProblem;
+
         /** Where dragged-in audio files would land: on the track's row, or (newTrack) on a new
             track below it (trackIndex -1: below all tracks). */
         struct DropMarker

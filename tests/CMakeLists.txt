@@ -71,6 +71,7 @@ add_executable(harmonia_tests
     ui/SamplerPanelTests.cpp
     ui/PluginChooserTests.cpp
     ui/SongFilesMenuTests.cpp
+    ui/TimeSelectionTests.cpp
     ui/StepSequencerTests.cpp
     ui/TrackFolderUiTests.cpp
     ui/AudioLoopUiTests.cpp

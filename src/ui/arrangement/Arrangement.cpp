@@ -44,6 +44,7 @@ namespace harmonia::ui::arrangement
         };
 
         clipArea.onViewChanged = [this] { viewChanged(); };
+        clipArea.onProblem = [this] (const juce::String& text) { tell (text, true); };
         headers.onViewChanged = [this] { viewChanged(); };
         headers.onMessage = [this] (const juce::String& text, bool isProblem) { tell (text, isProblem); };
         clipArea.getGestures().onClipMenuRequested = [this] (te::Clip& clip, juce::Point<float> position)
@@ -154,7 +155,25 @@ namespace harmonia::ui::arrangement
         {
             switch (letter)
             {
-                case 'B': model.duplicateSelected (! mods.isShiftDown()); return true;
+                case 'B':
+                    if (model.getTimeSelection().has_value())
+                    {
+                        if (model.duplicateTime() == 0)
+                            tell ("Nothing to repeat: the selected time is empty", true);
+                    }
+                    else
+                    {
+                        model.duplicateSelected (! mods.isShiftDown());
+                    }
+
+                    return true;
+
+                case 'L':
+                    if (mods.isShiftDown() || ! model.loopTime())
+                        return false;
+
+                    tell ("The selected time is the loop region now (Song mode plays it round)", false);
+                    return true;
                 case 'A': if (! mods.isShiftDown()) { model.selectAll(); return true; } return false;
                 case 'D': if (! mods.isShiftDown()) { model.deselectAll(); return true; } return false;
                 case 'C': if (! mods.isShiftDown()) { copySelected(); return true; } return false;
@@ -170,7 +189,7 @@ namespace harmonia::ui::arrangement
 
         if (code == juce::KeyPress::deleteKey || code == juce::KeyPress::backspaceKey)
         {
-            model.deleteSelected();
+            deleteSelection();
             return true;
         }
 
@@ -233,8 +252,32 @@ namespace harmonia::ui::arrangement
             onMessage (text, isProblem);
     }
 
+    void Arrangement::deleteSelection()
+    {
+        if (model.getTimeSelection().has_value())
+        {
+            if (model.deleteTime() == 0)
+                tell ("Nothing to delete: the selected time is empty", true);
+
+            return;
+        }
+
+        model.deleteSelected();
+    }
+
     void Arrangement::copySelected()
     {
+        // A piece of time is selected: what it has, cut to its edges.
+        if (model.getTimeSelection().has_value())
+        {
+            if (const auto count = model.copyTime(); count == 0)
+                tell ("Nothing to copy: the selected time is empty", true);
+            else
+                tell ("Copied the selected time (Ctrl+V puts it where time is selected next, or at the playhead)", false);
+
+            return;
+        }
+
         const auto count = model.copySelected();
 
         if (count == 0)
@@ -246,6 +289,16 @@ namespace harmonia::ui::arrangement
 
     void Arrangement::cutSelected()
     {
+        if (model.getTimeSelection().has_value())
+        {
+            if (const auto count = model.cutTime(); count == 0)
+                tell ("Nothing to cut: the selected time is empty", true);
+            else
+                tell ("Cut the selected time (Ctrl+V puts it back somewhere)", false);
+
+            return;
+        }
+
         const auto count = model.cutSelected();
 
         if (count == 0)
@@ -262,9 +315,23 @@ namespace harmonia::ui::arrangement
             return;
         }
 
-        const auto beat = std::max (0.0, snap::snapFloor (getPlayheadBeat(), model.getSnap(), model.getSnapContext()));
-        const auto count = model.paste (beat);
+        // Where time is selected: at its start, from its first row down. Else at the playhead.
+        const auto piece = model.getTimeSelection();
+        const auto beat = piece.has_value() ? piece->startBeat
+                                            : std::max (0.0, snap::snapFloor (getPlayheadBeat(), model.getSnap(), model.getSnapContext()));
+        const auto count = model.paste (beat, piece.has_value() ? piece->firstRow : -1);
         const auto copied = ArrangementModel::getNumCopiedClips();
+
+        if (ArrangementModel::hasCopiedTime())
+        {
+            if (count < copied)
+                tell ("Pasted " + juce::String (count) + " of " + juce::String (copied)
+                          + " pieces: notes go on instrument tracks, sound on audio tracks", true);
+            else
+                tell ("Pasted the copied time, in place of what was there", false);
+
+            return;
+        }
 
         if (count == 0)
             tell ("Nothing pasted: MIDI clips go on instrument tracks, audio clips on audio tracks", true);
@@ -277,6 +344,15 @@ namespace harmonia::ui::arrangement
 
     void Arrangement::splitAtPlayhead()
     {
+        // A piece of time is selected: the clips are cut at its two edges.
+        if (model.getTimeSelection().has_value())
+        {
+            if (model.splitTime() == 0)
+                tell ("Nothing to split: no clip crosses an edge of the selected time", true);
+
+            return;
+        }
+
         if (model.splitAt (getPlayheadBeat()) == 0)
             tell ("Nothing to split: put the playhead over a clip of the current track (click the ruler), "
                   "or select the clips to split", true);
