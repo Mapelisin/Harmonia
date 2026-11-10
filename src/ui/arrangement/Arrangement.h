@@ -47,6 +47,9 @@ namespace harmonia::ui::arrangement
             was done, or why nothing was. */
         void consolidate();
 
+        /** The clip's menu: its hits onto the keys of a new drum track; says what was made. */
+        void sliceToDrums (te::AudioClipBase&);
+
         /** The view scrolled or zoomed (what lines up with it repaints). */
         std::function<void()> onViewChanged;
 

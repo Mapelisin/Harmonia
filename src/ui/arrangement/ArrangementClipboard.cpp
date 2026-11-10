@@ -1,11 +1,14 @@
 #include "ui/arrangement/ArrangementModel.h"
 #include "audio/Consolidate.h"
+#include "audio/Instruments.h"
+#include "audio/Slices.h"
 #include "core/AutomationPieces.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
 #include "core/Tracks.h"
 
-// ArrangementModel: copy, cut and paste of clips, and the commands on a selected piece of time.
+// ArrangementModel: copy, cut and paste of clips, the commands on a selected piece of time, and
+// what is made of clips (one clip of several, a drum track of a loop).
 
 namespace harmonia::ui::arrangement
 {
@@ -511,6 +514,50 @@ namespace harmonia::ui::arrangement
         setLoopRegion ({ piece->startBeat, piece->endBeat });
         setPlayMode (PlayMode::song);
         return true;
+    }
+
+    ArrangementModel::Sliced ArrangementModel::sliceToDrums (te::AudioClipBase& clip)
+    {
+        Sliced result;
+        auto* from = dynamic_cast<te::AudioTrack*> (clip.getTrack());
+
+        if (from == nullptr || isLockedRow (from))
+            return result;
+
+        // What can fail (reading the sound, writing the pieces) first, the song untouched.
+        const auto sliced = audio::slices::prepare (clip, result.problem);
+
+        if (! sliced.has_value())
+            return result;
+
+        project.beginGesture ("Slice to a drum track");
+        auto* track = project.addTrack (sliced->name + " slices", from);
+
+        if (track != nullptr && audio::instruments::makeDrumTrack (*track).isEmpty())
+            result.clip = audio::slices::apply (project, *track, *sliced);
+
+        if (result.clip == nullptr)
+        {
+            // Nothing made of it after all.
+            project.getEdit().getUndoManager().undoCurrentTransactionOnly();
+
+            for (const auto& slice : sliced->slices)
+                slice.file.deleteFile();
+
+            result.problem = "The drum track couldn't be made";
+            return result;
+        }
+
+        core::tracks::setColour (*track, core::tracks::getColour (*from));
+        clips::remove ({ &clip });
+
+        result.track = track;
+        result.pieces = (int) sliced->slices.size();
+        setSelection ({ result.clip });
+        setCurrent (track, result.clip);
+        clipsDirty = true;
+        changed();
+        return result;
     }
 
     ArrangementModel::Consolidated ArrangementModel::consolidate()

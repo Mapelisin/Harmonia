@@ -787,6 +787,24 @@ namespace harmonia::ui::arrangement
         menu.addSubMenu (semitones == 0 ? juce::String ("Pitch")
                                         : "Pitch (" + juce::String (semitones > 0 ? "+" : "") + juce::String (semitones) + " semitones)",
                          pitch);
+
+        menu.addItem ("Slice to a drum track (each hit on a key of its own)", isWave, false, [this, target]
+        {
+            if (auto* audio = dynamic_cast<te::AudioClipBase*> (target.get()); audio != nullptr && core::clips::isInEdit (*audio))
+                sliceToDrums (*audio);
+        });
+    }
+
+    void Arrangement::sliceToDrums (te::AudioClipBase& clip)
+    {
+        const auto name = clip.getName();
+        const auto made = model.sliceToDrums (clip);
+
+        if (made.problem.isNotEmpty())
+            tell (made.problem, true);
+        else if (made.clip != nullptr)
+            tell ("\"" + name + "\" is " + juce::String (made.pieces) + " pieces on the keys of a new drum track now (C1 up), played by a clip of notes: "
+                      "move the notes about to play it another way. Ctrl+Z brings the audio clip back", false);
     }
 
     void Arrangement::askForLoopBpm (te::WaveAudioClip& clip)

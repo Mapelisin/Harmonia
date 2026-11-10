@@ -42,6 +42,69 @@ namespace harmonia::test
         return file;
     }
 
+    /** Writes a 24-bit mono WAV with a short click (a kilohertz, gone in a few milliseconds) at
+        each of `seconds`, at `levels` (as many, or all 0.9), and `tailSeconds` after the last. */
+    inline juce::File writeClicks (const juce::File& file, const std::vector<double>& seconds, double tailSeconds,
+                                   const std::vector<float>& levels = {})
+    {
+        constexpr double sampleRate = 44100.0;
+        file.deleteFile();
+        juce::AudioBuffer<float> buffer (1, (int) std::round ((seconds.back() + tailSeconds) * sampleRate));
+        buffer.clear();
+
+        for (size_t n = 0; n < seconds.size(); ++n)
+        {
+            const auto start = (int) std::round (seconds[n] * sampleRate);
+            const auto level = n < levels.size() ? levels[n] : 0.9f;
+
+            for (int i = 0; i < (int) (0.01 * sampleRate) && start + i < buffer.getNumSamples(); ++i)
+                buffer.setSample (0, start + i, level * (float) std::sin (juce::MathConstants<double>::twoPi * 1000.0 * i / sampleRate)
+                                                      * (float) std::exp (-i / (0.003 * sampleRate)));
+        }
+
+        std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (file);
+        juce::WavAudioFormat wav;
+        auto writer = wav.createWriterFor (stream, juce::AudioFormatWriterOptions {}.withSampleRate (sampleRate)
+                                                                                     .withNumChannels (1)
+                                                                                     .withBitsPerSample (24));
+        jassert (writer != nullptr);
+
+        if (writer != nullptr)
+            writer->writeFromAudioSampleBuffer (buffer, 0, buffer.getNumSamples());
+
+        return file;
+    }
+
+    /** Where the clicks of a sound file start, in seconds: louder than `threshold` after a tenth
+        of a second that wasn't. */
+    inline std::vector<double> findClicks (const juce::File& file, float threshold = 0.2f)
+    {
+        juce::AudioFormatManager formats;
+        formats.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
+        std::vector<double> clicks;
+
+        if (reader == nullptr)
+            return clicks;
+
+        juce::AudioBuffer<float> buffer ((int) reader->numChannels, (int) reader->lengthInSamples);
+        reader->read (&buffer, 0, buffer.getNumSamples(), 0, true, true);
+        auto lastLoud = -(int) reader->sampleRate;
+
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            if (std::abs (buffer.getSample (0, i)) <= threshold)
+                continue;
+
+            if (i - lastLoud > (int) (0.1 * reader->sampleRate))
+                clicks.push_back (i / reader->sampleRate);
+
+            lastLoud = i;
+        }
+
+        return clicks;
+    }
+
     /** A new empty folder in the temp directory, deleted afterwards (with the engine's open files
         let go first, or Windows would keep them). */
     struct TempFolder

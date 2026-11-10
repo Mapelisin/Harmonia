@@ -211,6 +211,20 @@ namespace harmonia::ui::arrangement
         /** Ctrl+L: the loop region becomes the piece (and the song plays it round). */
         bool loopTime();
 
+        /** What `sliceToDrums` made: the drum track, its clip of notes, how many pieces; or why not. */
+        struct Sliced
+        {
+            te::AudioTrack* track = nullptr;
+            te::MidiClip* clip = nullptr;
+            int pieces = 0;
+            juce::String problem;
+        };
+
+        /** Cuts an audio clip at its hits and puts the pieces on the keys of a new drum track,
+            right under the clip's, with a clip of notes that plays them as the loop went
+            (audio::slices). The audio clip is taken out: the notes play it now. One undo step. */
+        Sliced sliceToDrums (te::AudioClipBase&);
+
         /** What `consolidate` did: how many rows got one clip, of how many clips; or why not. */
         struct Consolidated
         {

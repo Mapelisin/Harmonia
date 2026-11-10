@@ -77,6 +77,11 @@ namespace harmonia::audio::drum_kit
         it can't (not a sound file, not a key). */
     juce::String setSample (te::Plugin& drums, int note, const juce::File&);
 
+    /** Several keys at once play these files from now on (a loop cut into its hits): into the
+        current undo step, which the caller starts. Keys that aren't the kit's and files that
+        aren't sounds are left out. */
+    void setSamples (te::Plugin& drums, const std::vector<std::pair<int, juce::File>>& files);
+
     /** The key plays the kit's own sound again: one undo step. */
     void clearSample (te::Plugin& drums, int note);
 

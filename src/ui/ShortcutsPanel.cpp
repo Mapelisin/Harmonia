@@ -52,7 +52,7 @@ namespace harmonia::ui
                 { "Audio clip over another", "They crossfade over the overlap (the clip's menu turns that off); its menu also loops it" },
                 { "Right button", "Delete the clips under the mouse" },
                 { "Double-click empty space", "A new one-bar clip" },
-                { "Clip's corner mark", "Its menu: rename, colour, loop, copies, split; sounds: reverse, normalize..." },
+                { "Clip's corner mark", "Its menu: rename, colour, loop, copies, split; sounds: reverse, normalize, slice to a drum track..." },
                 { "Del", "Delete the selected clips" },
                 { "Ctrl+B / Ctrl+Shift+B", "Repeat the selection right after it: linked / independent copies" },
                 { "Ctrl+A / Ctrl+D, Esc", "Select all / deselect" },

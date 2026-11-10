@@ -375,6 +375,21 @@ In the audio clip menu (▾):
   and twice as long.
 - **Pitch**: higher or lower by a semitone or an octave, with no change of speed (up to 24 semitones each
   way); **Original pitch** goes back to the original pitch.
+- **Slice to a drum track**: cuts the loop at its hits and puts every hit on a key of its own. See below.
+
+**A loop cut into its hits.** To play a loop another way (other order, other rhythm, some hits left out),
+choose **Slice to a drum track** in the audio clip's menu (▾). Harmonia finds the hits in the sound and:
+- cuts what the clip plays from hit to hit, and writes each piece to a file of its own next to the song's
+  recordings;
+- adds a drum track right under the clip's track, called "<clip> slices", with the pieces on its keys from
+  C1 up;
+- puts a clip of notes there, a note for each hit, where the hit was. The audio clip is taken out: the notes
+  play the loop now, and it sounds as it did.
+
+Then it is drums like any other: move the notes in the piano roll or the step sequencer (Alt+T), delete
+some, give a key its own volume and tuning in the drum machine's window. **Ctrl+Z** brings the audio clip
+back and takes the drum track away. A loop with more than 64 hits keeps the 64 strongest; a sound with no
+hits (a pad, a phrase) or a clip that repeats can't be sliced, and the status bar says so.
 
 Every change is one **Ctrl+Z** step. The sound is stretched by Signalsmith Stretch (open source, MIT
 license) during playback: you do not have to wait for a copy of the file to be prepared.

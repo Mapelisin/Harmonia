@@ -123,6 +123,29 @@ namespace harmonia::audio::drum_kit
         return keys;
     }
 
+    namespace
+    {
+        /** The key's file in the song, into the current undo step. */
+        void putSample (te::Plugin& drums, int note, const juce::File& file)
+        {
+            auto* undoManager = &drums.edit.getUndoManager();
+            auto samples = drums.state.getOrCreateChildWithName (samplesTag, undoManager);
+            auto node = samples.getChildWithProperty (noteId, note);
+
+            if (node.isValid())
+            {
+                // Another file: its own volume and tuning start afresh.
+                node.setProperty (fileId, file.getFullPathName(), undoManager);
+                node.removeProperty (gainId, undoManager);
+                node.removeProperty (tuneId, undoManager);
+            }
+            else
+            {
+                samples.appendChild (juce::ValueTree (sampleTag, { { noteId, note }, { fileId, file.getFullPathName() } }), undoManager);
+            }
+        }
+    }
+
     juce::String setSample (te::Plugin& drums, int note, const juce::File& file)
     {
         if (! isKey (note))
@@ -131,26 +154,17 @@ namespace harmonia::audio::drum_kit
         if (const auto error = SampleData::check (drums.edit.engine, file); error.isNotEmpty())
             return error;
 
-        auto* undoManager = &drums.edit.getUndoManager();
-        undoManager->beginNewTransaction ("Sample for " + (core::drums::getName (note).isNotEmpty() ? core::drums::getName (note)
-                                                                                                  : juce::String ("a key")));
-
-        auto samples = drums.state.getOrCreateChildWithName (samplesTag, undoManager);
-        auto node = samples.getChildWithProperty (noteId, note);
-
-        if (node.isValid())
-        {
-            // Another file: its own volume and tuning start afresh.
-            node.setProperty (fileId, file.getFullPathName(), undoManager);
-            node.removeProperty (gainId, undoManager);
-            node.removeProperty (tuneId, undoManager);
-        }
-        else
-        {
-            samples.appendChild (juce::ValueTree (sampleTag, { { noteId, note }, { fileId, file.getFullPathName() } }), undoManager);
-        }
-
+        drums.edit.getUndoManager().beginNewTransaction ("Sample for " + (core::drums::getName (note).isNotEmpty() ? core::drums::getName (note)
+                                                                                                                 : juce::String ("a key")));
+        putSample (drums, note, file);
         return {};
+    }
+
+    void setSamples (te::Plugin& drums, const std::vector<std::pair<int, juce::File>>& files)
+    {
+        for (const auto& [note, file] : files)
+            if (isKey (note) && SampleData::check (drums.edit.engine, file).isEmpty())
+                putSample (drums, note, file);
     }
 
     void clearSample (te::Plugin& drums, int note)

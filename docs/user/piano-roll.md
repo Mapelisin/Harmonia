@@ -93,6 +93,8 @@ kick), *Lo-fi* (dark, soft); **Tune** is higher/lower by ±12 semitones; **Decay
   100% cuts them short). The samples are saved with the song and in the drum machine's presets (**Presets**
   in the same window: "my kit" for any song). The files stay where they are: if one is moved or deleted,
   its drum plays the kit's own sound again and the window says **Missing**.
+- A whole loop can be put on the keys at once, a hit a key: **Slice to a drum track** in an audio clip's
+  menu (see [the arrangement](arrangement.md)).
 - Every change is one Ctrl+Z step.
 
 It is put in automatically when:

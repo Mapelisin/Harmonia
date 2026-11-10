@@ -84,6 +84,7 @@ expect bugs.
 - VST3 instruments and effects. Every plugin runs in a process of its own: if it crashes or hangs, the song
   keeps playing and the plugin can be restarted.
 - A built-in synth and a built-in drum machine: any drum can play a sample of yours (drag a sound onto it).
+- Slice a loop to a drum track: every hit on a key of its own, with the notes that play it as it went.
 - A step sequencer for drums: the clip as a grid of drums and steps.
 - A sampler: any sound becomes an instrument that the keys play higher and lower.
 - A plugin chooser: type two letters and press Enter; favourites and the ones used lately on top.

@@ -61,6 +61,7 @@ add_executable(harmonia_tests
     audio/EffectChainTests.cpp
     audio/AudioLoopTests.cpp
     audio/ConsolidateTests.cpp
+    audio/SlicesTests.cpp
     audio/FreezeTests.cpp
     ui/PianoRollTests.cpp
     ui/PianoRollViewTests.cpp

@@ -97,10 +97,17 @@ int main (int argc, char** argv)
 
     int result = 0;
 
+    // The sound files the tests have the program make (tracks rendered or frozen, clips joined, loops
+    // cut up) go to a folder of this run's own, gone when it is over: never among the user's own
+    // recordings in Documents, where a session without one would put them.
+    const auto recordings = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                                .getNonexistentChildFile ("harmonia-test-recordings-" + juce::Uuid().toString().substring (0, 12), {}, false);
+
     {
         harmonia::core::Session::Options options;
         options.openDevices = false;
         options.settingsName = "HarmoniaTests";
+        options.recordingsFolder = recordings;
         options.pluginHost = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
         options.pluginHangLimitMs = 1000;
 
@@ -121,6 +128,8 @@ int main (int argc, char** argv)
 
         harmonia::test::sharedSession = nullptr;
     }
+
+    recordings.deleteRecursively();
 
     juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
     juce::Logger::setCurrentLogger (nullptr);

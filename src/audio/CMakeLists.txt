@@ -19,6 +19,8 @@ add_library(harmonia_audio STATIC
     Export.cpp
     Consolidate.h
     Consolidate.cpp
+    Slices.h
+    Slices.cpp
     ExportFormat.h
     ExportFormat.cpp
     Mp3Encoder.h
