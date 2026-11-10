@@ -72,9 +72,19 @@ namespace harmonia::ui::audioeditor
         bool normalize();
         void setReversed (bool);
         void setFadeShape (core::clips::FadeShape);
-        void setFollowsTempo (bool);
         void halveLoopBpm();
         void doubleLoopBpm();
+
+        /** Follow the song's tempo or not: one undo step. Says what was found in the sound (its
+            tempo and first beat are measured: ArrangementModel::setFollowsTempo). */
+        arrangement::ArrangementModel::TempoFound setFollowsTempo (bool);
+
+        /** Slides the sound under the clip by `beats` (earlier: negative), while it follows the
+            tempo: one undo step. False if it couldn't (it doesn't follow, or the file ends). */
+        bool slide (double beats);
+
+        /** Can the sound be slid (a clip following the tempo that doesn't repeat)? */
+        bool canSlide() const;
 
         /** Can the clip follow the tempo (a plain sound file clip)? */
         bool canFollowTempo() const;

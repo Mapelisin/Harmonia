@@ -286,11 +286,24 @@ namespace harmonia::ui::arrangement
 
         void renameClip (te::Clip&, const juce::String&);
 
+        /** What turning Follow tempo on found, to tell the user. */
+        struct TempoFound
+        {
+            juce::String note;          // "Its beat was measured: 72.3 BPM..."; empty: nothing to say
+            bool isProblem = false;     // no beat could be found: the user sets the tempo
+        };
+
         /** The audio clip follows the song's tempo (core::audio_tempo), or plays at its own speed
-            again. Its loop tempo: what its file says, or what the length of a file called a loop
-            suggests, or else the song's tempo (it sounds as before, and follows from then on).
-            One undo step. Dropped loops follow by themselves (importFiles). */
-        void setFollowsTempo (te::WaveAudioClip&, bool);
+            again. Its tempo is measured from its sound (core::beat_finder: any tempo, 72.3 too),
+            and the clip starts on its first beat, so that its hits are on the song's grid. A
+            sound with no steady beat to hear: what its file or its name says, else the song's
+            tempo (it sounds as before, and follows from then on). One undo step. Dropped loops
+            follow by themselves (importFiles). */
+        TempoFound setFollowsTempo (te::WaveAudioClip&, bool);
+
+        /** Slides the sound of a clip following the tempo under the clip by `beats` (earlier:
+            negative), for a first beat that was taken a step off. One undo step. */
+        bool slideSound (te::WaveAudioClip&, double beats);
 
         /** The tempo the file of a clip following the song is at (it is played faster or slower
             to fit). One undo step. */
@@ -380,6 +393,12 @@ namespace harmonia::ui::arrangement
         /** A new track called `name` with an empty clip; `giveInstrument` puts its instrument on. */
         te::AudioTrack* addInstrumentTrack (const juce::String& undoName, const juce::String& name,
                                             const std::function<void (te::AudioTrack&)>& giveInstrument);
+
+        /** Makes the clip follow the tempo (into the current undo step): at the tempo measured
+            from its sound, starting on its first beat; if `named` (what the file says about its
+            tempo) is far from the measurement, or nothing could be measured, at that; else at the
+            song's. */
+        TempoFound follow (te::WaveAudioClip&, std::optional<double> named);
 
         juce::ReferenceCountedObjectPtr<te::AudioTrack> currentTrack;
         juce::ReferenceCountedObjectPtr<te::MidiClip> openedClip;

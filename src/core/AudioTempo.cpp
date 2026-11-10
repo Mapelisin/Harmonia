@@ -38,6 +38,36 @@ namespace harmonia::core::audio_tempo
         }
     }
 
+    std::optional<beat_finder::Beat> measure (te::Engine& engine, const juce::File& file, double nearBpm)
+    {
+        constexpr double longestSeconds = 120.0;
+        std::unique_ptr<juce::AudioFormatReader> reader (te::AudioFileUtils::createReaderFor (engine, file));
+
+        if (reader == nullptr || reader->lengthInSamples <= 0 || reader->sampleRate <= 0.0 || reader->numChannels == 0)
+            return std::nullopt;
+
+        const auto whole = reader->lengthInSamples <= (juce::int64) (longestSeconds * reader->sampleRate);
+        const auto numSamples = (int) std::min<juce::int64> (reader->lengthInSamples, (juce::int64) (longestSeconds * reader->sampleRate));
+        const auto channels = std::min (2, (int) reader->numChannels);
+        juce::AudioBuffer<float> buffer (channels, numSamples);
+
+        if (! reader->read (&buffer, 0, numSamples, 0, true, channels > 1))
+            return std::nullopt;
+
+        // Both sides together.
+        if (channels > 1)
+        {
+            buffer.addFrom (0, 0, buffer, 1, 0, numSamples);
+            buffer.applyGain (0, 0, numSamples, 0.5f);
+        }
+
+        const auto hits = beat_finder::findHits (buffer.getReadPointer (0), numSamples, reader->sampleRate);
+
+        // Of a file cut short here, the length says nothing about its beats.
+        auto beat = beat_finder::findBeat (hits, whole ? reader->lengthInSamples / reader->sampleRate : 0.0, nearBpm);
+        return beat;
+    }
+
     std::optional<double> guessFromLength (double seconds, double songBpm)
     {
         if (seconds <= 0.0 || songBpm <= 0.0)
@@ -122,6 +152,60 @@ namespace harmonia::core::audio_tempo
             setLengthSeconds (clip, seconds, songBps / (*previous / 60.0));
             audio_clips::prepareForPlayback (clip);
         }
+    }
+
+    double startOnBeat (te::WaveAudioClip& clip, const beat_finder::Beat& beat)
+    {
+        const auto bpm = getLoopBpm (clip);
+
+        if (! bpm.has_value() || beat.bpm <= 0.0 || audio_clips::isLooping (clip))
+            return 0.0;
+
+        const auto songBps = getSongBeatsPerSecond (clip);
+        const auto loopBps = *bpm / 60.0;
+        const auto position = clip.getPosition();
+        const auto shownFrom = position.getOffset().inSeconds() * songBps / loopBps;       // seconds of the file
+        const auto beatSeconds = 60.0 / beat.bpm;
+
+        // The first beat at or after where the clip starts showing its file (a hair before counts).
+        const auto steps = std::max (0.0, std::ceil ((shownFrom - beat.firstBeatSeconds - 0.004) / beatSeconds));
+        const auto startsAt = beat.firstBeatSeconds + steps * beatSeconds;
+        const auto hidden = startsAt - shownFrom;
+        const auto lengthBeats = getLengthBeats (clip) - hidden * loopBps;
+
+        if (hidden < 0.0005 || lengthBeats < 0.25)
+            return 0.0;
+
+        const auto& tempo = clip.edit.tempoSequence;
+        const auto start = position.getStart();
+        const auto end = tempo.toTime (tempo.toBeats (start) + te::BeatDuration::fromBeats (lengthBeats));
+        clip.setPosition (te::ClipPosition { { start, end }, te::TimeDuration::fromSeconds (startsAt * loopBps / songBps) });
+        return hidden;
+    }
+
+    bool slide (te::WaveAudioClip& clip, double beats)
+    {
+        const auto bpm = getLoopBpm (clip);
+
+        if (! bpm.has_value() || std::abs (beats) < 1.0e-9 || audio_clips::isLooping (clip))
+            return false;
+
+        const auto songBps = getSongBeatsPerSecond (clip);
+        const auto loopBps = *bpm / 60.0;
+        const auto position = clip.getPosition();
+        const auto fileSeconds = clip.getAudioFile().getLength();
+
+        // The sound later: the clip shows its file from an earlier moment; never from before
+        // the file, nor from so late that nothing is left of it.
+        const auto shownFrom = position.getOffset().inSeconds() * songBps / loopBps;
+        const auto wanted = shownFrom - beats / loopBps;
+        const auto startsAt = juce::jlimit (0.0, std::max (0.0, fileSeconds - 0.05), wanted);
+
+        if (std::abs (startsAt - shownFrom) < 1.0e-6)
+            return false;
+
+        clip.setPosition (te::ClipPosition { position.time, te::TimeDuration::fromSeconds (startsAt * loopBps / songBps) });
+        return true;
     }
 
     bool followsTempo (const te::AudioClipBase& clip)

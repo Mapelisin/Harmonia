@@ -65,6 +65,8 @@ expect bugs.
 - Audio tracks: drag in WAV, MP3, FLAC, AIFF or OGG files; record from a sound card input, with a count-in
   and loop recording of takes.
 - Audio clip editor: fades, gain, reverse, normalize, stretching to the tempo and changing the pitch.
+- Follow tempo puts any sample on the grid with one click: its tempo (72.3 BPM too) and first beat are
+  measured from the sound itself.
 - Overlapping audio clips crossfade by themselves; an audio clip can loop when made longer.
 
 **Mixer and effects**
@@ -99,7 +101,7 @@ expect bugs.
 
 ## What comes next
 
-- Loops of any tempo locked to the grid by one button (the tempo measured from the sound itself).
+- Editing in the arrangement the Ableton way: select a piece of time and cut, copy or move it.
 - Local AI models: stem separation, a mastering helper, finding sounds by description.
 - macOS (Apple Silicon).
 

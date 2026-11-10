@@ -355,6 +355,102 @@ TEST_SUITE ("audio clip editor")
         CHECK (editor.getFileLabel().getText().isEmpty());
     }
 
+    TEST_CASE ("Follow tempo measures the sound: any tempo, the clip starts on its first beat, and says what it found")
+    {
+        // Clicks at 72.3 BPM after 0.3 s of silence, in a song at 120: nothing but the sound says so.
+        test::TempFolder temp;
+        const auto file = temp.getFile ("Mystery.wav");
+        {
+            constexpr double rate = 44100.0, bpm = 72.3;
+            juce::AudioBuffer<float> buffer (1, (int) ((0.3 + 12 * 60.0 / bpm + 0.2) * rate));
+            buffer.clear();
+
+            for (int beat = 0; beat < 12; ++beat)
+                for (int i = 0; i < 441; ++i)
+                    buffer.setSample (0, (int) std::round ((0.3 + beat * 60.0 / bpm) * rate) + i,
+                                      0.9f * (float) std::sin (i * 0.1425) * (float) std::exp (-i / 132.0));
+
+            std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (file);
+            auto writer = juce::WavAudioFormat().createWriterFor (stream, juce::AudioFormatWriterOptions {}.withSampleRate (rate)
+                                                                              .withNumChannels (1).withBitsPerSample (16));
+            REQUIRE (writer != nullptr);
+            writer->writeFromAudioSampleBuffer (buffer, 0, buffer.getNumSamples());
+        }
+
+        auto project = core::Project::createEmpty (test::session());
+        ui::arrangement::ArrangementModel arrangement (*project);
+        auto* track = arrangement.addAudioTrack();
+        REQUIRE (track != nullptr);
+        juce::String error;
+        auto* clip = project->addAudioClip (*track, file, 8.0, error);
+        REQUIRE_MESSAGE (clip != nullptr, error.toStdString());
+        arrangement.setCurrentTrack (track);
+        dispatch();
+        project->clearUndoHistory();
+
+        audio::Transport transport { project->getEdit() };
+        AudioEditor editor { arrangement, transport };
+        editor.setBounds (0, 0, 1200, 300);
+        juce::String said;
+        auto wasProblem = true;
+        editor.onMessage = [&said, &wasProblem] (const juce::String& text, bool isProblem) { said = text; wasProblem = isProblem; };
+        editor.refresh();
+        CHECK_FALSE (editor.getEarlierButton().isEnabled());
+
+        // One click.
+        editor.getFollowButton().onClick();
+        editor.refresh();
+        REQUIRE (audio_tempo::followsTempo (*clip));
+        CHECK (*audio_tempo::getLoopBpm (*clip) == doctest::Approx (144.6).epsilon (0.0005));       // nearest the song's 120
+        CHECK (editor.getLoopBpmNumber().getValue() == doctest::Approx (144.6).epsilon (0.0005));
+        CHECK (said.startsWith ("Its beat was measured: 144.6"));
+        CHECK (said.contains ("first beat 0.30 s in"));
+        CHECK_FALSE (wasProblem);
+        CHECK (project->getUndoDescription() == "Follow the song tempo");
+
+        // The clip stays where it was put and starts on the first hit: the hit is on beat 8.
+        CHECK (clips::getStartBeat (*clip) == doctest::Approx (8.0));
+        CHECK (editor.getModel().fileSecondsToBeat (0.3) == doctest::Approx (8.0).epsilon (0.0005));
+        CHECK (editor.getModel().fileSecondsToBeat (0.3 + 60.0 / 72.3) == doctest::Approx (10.0).epsilon (0.0005));
+
+        // Half: the tempo as another song would hear it. The arrows slide the sound by sixteenths.
+        editor.getHalveButton().onClick();
+        CHECK (*audio_tempo::getLoopBpm (*clip) == doctest::Approx (72.3).epsilon (0.0005));
+        editor.getDoubleButton().onClick();
+        editor.refresh();
+        CHECK (editor.getEarlierButton().isEnabled());
+        editor.getEarlierButton().onClick();
+        CHECK (editor.getModel().fileSecondsToBeat (0.3) == doctest::Approx (7.75).epsilon (0.0005));
+        CHECK (project->getUndoDescription() == "Slide the sound");
+        editor.getLaterButton().onClick();
+        CHECK (editor.getModel().fileSecondsToBeat (0.3) == doctest::Approx (8.0).epsilon (0.0005));
+
+        // One Ctrl+Z each; the first click undone leaves the clip as it was dropped.
+        project->undo();
+        project->undo();
+        project->undo();
+        project->undo();
+        CHECK (project->getUndoDescription() == "Follow the song tempo");
+        project->undo();
+        dispatch();
+        CHECK_FALSE (audio_tempo::followsTempo (*clip));
+        CHECK (clip->getPosition().getOffset().inSeconds() == doctest::Approx (0.0));
+        CHECK_FALSE (project->canUndo());
+
+        // A sound with no beat in it: said as a problem, and it plays as before.
+        const auto pad = test::writeTone (temp.getFile ("Pad.wav"), 3.0, 0.3f);
+        auto* padClip = project->addAudioClip (*track, pad, 40.0, error);
+        REQUIRE (padClip != nullptr);
+        dispatch();
+        arrangement.focusClip (*padClip);
+        editor.refresh();
+        editor.getFollowButton().onClick();
+        CHECK (audio_tempo::followsTempo (*padClip));
+        CHECK (*audio_tempo::getLoopBpm (*padClip) == doctest::Approx (120.0));
+        CHECK (said.startsWith ("No steady beat could be heard"));
+        CHECK (wasProblem);
+    }
+
     TEST_CASE ("the main window paints the audio clip editor in place of the piano roll on an audio track")
     {
         test::TempFolder temp;

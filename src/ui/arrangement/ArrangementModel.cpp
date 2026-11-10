@@ -12,6 +12,7 @@
 #include "core/MidiFiles.h"
 #include "core/NoteEditor.h"
 #include "core/Sections.h"
+#include "core/TempoChanges.h"
 #include "core/Tracks.h"
 
 namespace harmonia::ui::arrangement
@@ -596,9 +597,10 @@ namespace harmonia::ui::arrangement
 
             if (auto* clip = project.addAudioClip (*track, file, start, error))
             {
-                // A loop plays in time with the song; anything else at its own speed.
+                // A loop plays in time with the song (at its tempo to the hundredth, measured);
+                // anything else at its own speed.
                 if (const auto bpm = core::audio_tempo::findLoopBpm (getEdit().engine, file, project.getTempoBpm()))
-                    core::audio_tempo::setFollowsTempo (*clip, bpm);
+                    follow (*clip, bpm);
 
                 added.add (clip);
             }
@@ -1326,22 +1328,69 @@ namespace harmonia::ui::arrangement
         clips::setLooping (clip, shouldLoop);
     }
 
-    void ArrangementModel::setFollowsTempo (te::WaveAudioClip& clip, bool shouldFollow)
+    ArrangementModel::TempoFound ArrangementModel::setFollowsTempo (te::WaveAudioClip& clip, bool shouldFollow)
     {
-        if (core::audio_tempo::followsTempo (clip) == shouldFollow)
-            return;
+        namespace audio_tempo = core::audio_tempo;
+
+        if (audio_tempo::followsTempo (clip) == shouldFollow)
+            return {};
 
         project.beginGesture (shouldFollow ? "Follow the song tempo" : "Play at its own speed");
 
         if (! shouldFollow)
         {
-            core::audio_tempo::setFollowsTempo (clip, std::nullopt);
-            return;
+            audio_tempo::setFollowsTempo (clip, std::nullopt);
+            return {};
         }
 
-        const auto songBpm = project.getTempoBpm();
-        const auto found = core::audio_tempo::findLoopBpm (getEdit().engine, clip.getOriginalFile(), songBpm);
-        core::audio_tempo::setFollowsTempo (clip, found.value_or (songBpm));
+        const auto songBpm = core::tempo_changes::getBpmAt (getEdit(), clips::getStartBeat (clip));
+        return follow (clip, audio_tempo::findLoopBpm (getEdit().engine, clip.getOriginalFile(), songBpm));
+    }
+
+    ArrangementModel::TempoFound ArrangementModel::follow (te::WaveAudioClip& clip, std::optional<double> named)
+    {
+        namespace audio_tempo = core::audio_tempo;
+
+        // The tempo of the song where the clip is; what the file says about itself is the better
+        // guide to which of the tempi that fit (twice, half as fast) is meant.
+        const auto songBpm = core::tempo_changes::getBpmAt (getEdit(), clips::getStartBeat (clip));
+        auto measured = audio_tempo::measure (getEdit().engine, clip.getAudioFile().getFile(), named.value_or (songBpm));
+
+        // The file knows its tempo: a measurement far from it heard something else in the sound.
+        if (measured.has_value() && named.has_value() && std::abs (measured->bpm / *named - 1.0) > 0.02)
+            measured.reset();
+
+        if (measured.has_value())
+        {
+            audio_tempo::setFollowsTempo (clip, measured->bpm);
+            const auto hidden = audio_tempo::startOnBeat (clip, *measured);
+
+            auto note = "Its beat was measured: " + juce::String (measured->bpm, 2) + " BPM";
+
+            if (hidden > 0.0005)
+                note << ", first beat " << juce::String (hidden, 2) << " s in (the clip starts there now)";
+
+            note << ". Not on the grid? Loop, " << juce::String::fromUTF8 ("\xc3\xb7" "2 / " "\xc3\x97" "2") << " and the arrows put it right";
+            return { note, false };
+        }
+
+        if (named.has_value())
+        {
+            audio_tempo::setFollowsTempo (clip, *named);
+            return { "No clear beat to hear in the sound: its tempo is as its file says, " + audio_tempo::formatBpm (*named) + " BPM", false };
+        }
+
+        audio_tempo::setFollowsTempo (clip, songBpm);
+        return { "No steady beat could be heard in this sound: it plays as before until you set its tempo (Loop)", true };
+    }
+
+    bool ArrangementModel::slideSound (te::WaveAudioClip& clip, double beats)
+    {
+        if (! core::audio_tempo::followsTempo (clip))
+            return false;
+
+        project.beginGesture ("Slide the sound");
+        return core::audio_tempo::slide (clip, beats);
     }
 
     void ArrangementModel::setLoopBpm (te::WaveAudioClip& clip, double bpm)

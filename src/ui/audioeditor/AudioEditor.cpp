@@ -69,7 +69,7 @@ namespace harmonia::ui::audioeditor
                 model.setFadeShape ((clips::FadeShape) (id - 1));
         };
 
-        for (auto* c : std::initializer_list<juce::Component*> { &gain, &pitch, &loopBpm, &normalize, &follow, &halve, &twice, &reverse,
+        for (auto* c : std::initializer_list<juce::Component*> { &gain, &pitch, &loopBpm, &normalize, &follow, &halve, &twice, &earlier, &later, &reverse,
                                                                  &showClip, &takes, &fadeShape })
         {
             c->setWantsKeyboardFocus (false);
@@ -130,8 +130,29 @@ namespace harmonia::ui::audioeditor
                 onMessage ("Nothing to normalize: the clip is silent, or its file can't be read", true);
         };
 
-        follow.setTooltip ("Follow the song's tempo: a loop is played faster or slower so that its beats stay on the song's");
-        follow.onClick = [this] { model.setFollowsTempo (! follow.getToggleState()); };
+        follow.setTooltip ("Follow the song's tempo: the sound's own tempo and first beat are measured, and it is played "
+                           "faster or slower so that its hits are on the song's grid");
+        follow.onClick = [this]
+        {
+            const auto found = model.setFollowsTempo (! follow.getToggleState());
+
+            if (found.note.isNotEmpty() && onMessage != nullptr)
+                onMessage (found.note, found.isProblem);
+        };
+
+        // A first beat taken a step off: the sound slides under the grid.
+        const auto slideBy = [this] (double direction)
+        {
+            const auto step = juce::ModifierKeys::currentModifiers.isShiftDown() ? 1.0 / 64.0 : 0.25;
+
+            if (! model.slide (direction * step) && onMessage != nullptr)
+                onMessage ("The sound can't go further that way: its file ends there", true);
+        };
+
+        earlier.setTooltip ("Slide the sound a sixteenth earlier under the grid (Shift: a hair)");
+        earlier.onClick = [slideBy] { slideBy (-1.0); };
+        later.setTooltip ("Slide the sound a sixteenth later under the grid (Shift: a hair)");
+        later.onClick = [slideBy] { slideBy (1.0); };
 
         halve.setTooltip ("The loop's tempo halved: it plays twice as fast");
         halve.onClick = [this] { model.halveLoopBpm(); };
@@ -190,6 +211,8 @@ namespace harmonia::ui::audioeditor
             loopBpm.setEnabled (false);
             halve.setEnabled (false);
             twice.setEnabled (false);
+            earlier.setEnabled (false);
+            later.setEnabled (false);
             follow.setToggleState (false, juce::dontSendNotification);
             reverse.setToggleState (false, juce::dontSendNotification);
             return;
@@ -206,6 +229,8 @@ namespace harmonia::ui::audioeditor
         loopBpm.setValue (loop.value_or (arrangement.getProject().getTempoBpm()));
         halve.setEnabled (loop.has_value() && *loop / 2.0 >= audio_tempo::minLoopBpm - 0.05);
         twice.setEnabled (loop.has_value() && *loop * 2.0 <= audio_tempo::maxLoopBpm + 0.05);
+        earlier.setEnabled (model.canSlide());
+        later.setEnabled (model.canSlide());
 
         reverse.setToggleState (clips::isReversed (*clip), juce::dontSendNotification);
         fadeShape.setSelectedId ((int) clips::getFadeShape (*clip) + 1, juce::dontSendNotification);
@@ -243,6 +268,10 @@ namespace harmonia::ui::audioeditor
         place (halve, 28);
         gap (2);
         place (twice, 28);
+        gap (4);
+        place (earlier, 24);
+        gap (2);
+        place (later, 24);
         gap (12);
         place (fadeLabel, 42);
         place (fadeShape, 86);

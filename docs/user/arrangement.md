@@ -146,8 +146,11 @@ are dim. Above it is a ruler with the bars of the song.
   (from −60 to +24 dB; with the handle on the waveform, up to +6). **Normalize** puts the loudest point at
   0 dB.
 - **Pitch**: higher or lower in semitones (Shift for tenths); the speed does not change.
-- **Follow tempo**: follow the tempo of the song; **Loop** is the tempo the loop was recorded at (drag or
-  type), **÷2** / **×2** halves or doubles it.
+- **Follow tempo**: one click puts the sound on the song's grid. Harmonia listens to the sound itself,
+  measures its tempo (any tempo, 72.3 BPM too) and finds its first beat, then stretches it so that its hits
+  land on the song's beats; the status bar says what it found. **Loop** is the measured tempo (drag or
+  type to correct it), **÷2** / **×2** halves or doubles it, **◀ ▶** slide the sound a sixteenth earlier or
+  later under the grid (with Shift, a hair). See "Loops in the tempo of the song" below.
 - **Fades**: the fade shape: Linear, S-curve, Fast, Slow.
 - **Reverse**: play backwards.
 - On the right is the file: name, sample rate, mono or stereo, length.
@@ -275,6 +278,9 @@ It takes the tempo:
 - if the name has the word "loop" but no tempo, from the length: it looks for a whole number of bars that
   is closest to the tempo of the song.
 
+The tempo found this way is then checked against the sound itself: if the loop is really at 94.8, it plays
+at 94.8.
+
 Hits, single sounds and a recorded voice (no tempo and no "loop" in the name) play at their own speed.
 
 After the clip name you can see what was done to it: "· 95 BPM" means it follows the tempo of the song and
@@ -283,11 +289,22 @@ the loop was recorded at 95 BPM; "· +3 st" means it sounds 3 semitones higher.
 If you change the tempo of the song, such a clip speeds up or slows down with it and stays on the same
 bars.
 
+**Any sound onto the grid: Follow tempo.** For a sound whose name says nothing (a downloaded sample at
+72.3 BPM, a piece of a recording), click **Follow tempo** in the audio clip editor, or **Follow the song
+tempo** in the clip's menu (▾). Harmonia then:
+- finds the hits in the sound and measures the tempo they keep, to hundredths of a BPM;
+- finds the first beat and makes the clip start on it (silence before it is hidden, not lost: drag the
+  clip's left edge to see it again);
+- stretches the sound so that its hits are on the song's grid, at whatever tempo the song is.
+
+The same hits fit a tempo twice or half as fast: Harmonia takes the one nearest the song's tempo, so that the
+sound is changed least. If it should be the other one, press **÷2** or **×2**. If the first beat was taken
+a step off, **◀ ▶** slide the sound by sixteenths. A sound with no steady beat to hear (a pad, a phrase, a
+single hit, playing that speeds up and slows down) gets a message saying so: then set **Loop** by hand.
+
 In the audio clip menu (▾):
-- **Follow the song tempo**: turn on or off. If you turn it off, the clip plays at its own speed again.
-  You can also turn it on for a sound that is not a loop: then the program assumes it was recorded at the
-  current tempo of the song. For now it sounds as before, and when the tempo changes it will change with the
-  song.
+- **Follow the song tempo**: turn on or off. If you turn it off, the clip plays at its own speed again, from
+  where its file starts.
 - **Loop tempo**, if the tempo was guessed wrong: **Set...** to type your own (from 50 to 250 BPM),
   **Half** / **Double** to halve or double it. For example, a loop was guessed as 140, but it is really 70
   and twice as long.

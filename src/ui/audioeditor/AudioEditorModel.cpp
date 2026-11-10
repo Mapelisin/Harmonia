@@ -212,10 +212,24 @@ namespace harmonia::ui::audioeditor
         clips::setFadeShape (*clip, shape);
     }
 
-    void AudioEditorModel::setFollowsTempo (bool shouldFollow)
+    arrangement::ArrangementModel::TempoFound AudioEditorModel::setFollowsTempo (bool shouldFollow)
     {
         if (auto* wave = getWaveClip())
-            arrangement.setFollowsTempo (*wave, shouldFollow);
+            return arrangement.setFollowsTempo (*wave, shouldFollow);
+
+        return {};
+    }
+
+    bool AudioEditorModel::slide (double beats)
+    {
+        auto* wave = getWaveClip();
+        return wave != nullptr && arrangement.slideSound (*wave, beats);
+    }
+
+    bool AudioEditorModel::canSlide() const
+    {
+        auto* wave = getWaveClip();
+        return wave != nullptr && audio_tempo::followsTempo (*wave) && ! core::audio_clips::isLooping (*wave);
     }
 
     void AudioEditorModel::halveLoopBpm()

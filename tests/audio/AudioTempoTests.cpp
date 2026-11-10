@@ -50,6 +50,25 @@ namespace
         return writeWav (file, buffer);
     }
 
+    /** Clicks on `beats` beats at `bpm`, with silence before the first and after the last beat. */
+    juce::File writeClicks (const juce::File& file, double bpm, int beats, double leadSeconds, double tailSeconds)
+    {
+        const auto beatSamples = rate * 60.0 / bpm;
+        juce::AudioBuffer<float> buffer (1, (int) std::round (leadSeconds * rate + beatSamples * beats + tailSeconds * rate));
+        buffer.clear();
+
+        for (int beat = 0; beat < beats; ++beat)
+        {
+            const auto start = (int) std::round (leadSeconds * rate + beat * beatSamples);
+
+            for (int i = 0; i < (int) (0.01 * rate) && start + i < buffer.getNumSamples(); ++i)
+                buffer.setSample (0, start + i, 0.9f * (float) std::sin (juce::MathConstants<double>::twoPi * 1000.0 * i / rate)
+                                                     * (float) std::exp (-i / (0.003 * rate)));
+        }
+
+        return writeWav (file, buffer);
+    }
+
     juce::File writeSine (const juce::File& file, double seconds, double hz)
     {
         juce::AudioBuffer<float> buffer (1, (int) (seconds * rate));
@@ -229,6 +248,130 @@ TEST_SUITE ("audio: clips follow the song tempo")
         song.project->undo();
         CHECK_FALSE (audio_tempo::followsTempo (*clip));
         CHECK (clip->getPosition().getLength().inSeconds() == doctest::Approx (19.2));
+    }
+
+    TEST_CASE ("the tempo of a sound is measured from the sound: 72.3 BPM with no name and no data, silence before it")
+    {
+        test::TempFolder temp;
+        auto& engine = test::session().getEngine();
+
+        const auto mystery = writeClicks (temp.getFile ("Mystery.wav"), 72.3, 16, 0.25, 0.37);
+        CHECK_FALSE (audio_tempo::findLoopBpm (engine, mystery, 150.0).has_value());      // nothing says its tempo
+
+        // In a song at 75 it is what it is; in one at 150, the same hits twice as fast.
+        auto measured = audio_tempo::measure (engine, mystery, 75.0);
+        REQUIRE (measured.has_value());
+        CHECK (measured->bpm == doctest::Approx (72.3).epsilon (0.0005));
+        CHECK (std::abs (measured->firstBeatSeconds - 0.25) < 0.003);
+        CHECK_FALSE (measured->wholeLoop);
+
+        measured = audio_tempo::measure (engine, mystery, 150.0);
+        REQUIRE (measured.has_value());
+        CHECK (measured->bpm == doctest::Approx (144.6).epsilon (0.0005));
+        CHECK (std::abs (measured->firstBeatSeconds - 0.25) < 0.003);
+
+        // Cut to length it is a loop: exact, from its first sample.
+        measured = audio_tempo::measure (engine, writeClickLoop (temp.getFile ("Cut.wav"), 72.3, 16), 75.0);
+        REQUIRE (measured.has_value());
+        CHECK (measured->wholeLoop);
+        CHECK (measured->bpm == doctest::Approx (72.3).epsilon (0.0001));
+        CHECK (measured->firstBeatSeconds == 0.0);
+
+        // A stereo file as well.
+        {
+            juce::AudioBuffer<float> stereo (2, (int) (8.0 * rate));
+            stereo.clear();
+
+            for (int beat = 0; beat < 16; ++beat)
+                for (int i = 0; i < 400; ++i)
+                    stereo.setSample (beat % 2, (int) (beat * 0.5 * rate) + i, 0.8f * (float) std::sin (i * 0.14) * (float) std::exp (-i / 130.0));
+
+            const auto file = temp.getFile ("Wide.wav");
+            file.deleteFile();
+            std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (file);
+            auto writer = juce::WavAudioFormat().createWriterFor (stream, juce::AudioFormatWriterOptions {}.withSampleRate (rate)
+                                                                              .withNumChannels (2).withBitsPerSample (16));
+            REQUIRE (writer != nullptr);
+            writer->writeFromAudioSampleBuffer (stereo, 0, stereo.getNumSamples());
+            writer.reset();
+
+            measured = audio_tempo::measure (engine, file, 120.0);
+            REQUIRE (measured.has_value());
+            CHECK (measured->bpm == doctest::Approx (120.0).epsilon (0.0002));
+        }
+
+        // Nothing to measure: a held tone, a file that isn't there.
+        CHECK_FALSE (audio_tempo::measure (engine, writeSine (temp.getFile ("Pad.wav"), 4.0, 220.0), 120.0).has_value());
+        CHECK_FALSE (audio_tempo::measure (engine, temp.getFile ("No such file.wav"), 120.0).has_value());
+    }
+
+    TEST_CASE ("measured and following, the hits of a sound at 72.3 BPM are on the grid of a song at 150; the sound slides by sixteenths")
+    {
+        AudioSong song;
+        song.project->setTempoBpm (150.0);
+        const auto file = writeClicks (song.temp.getFile ("Mystery.wav"), 72.3, 16, 0.25, 0.37);
+        auto* clip = song.add (file, 4.0);
+        song.project->getEdit().dispatchPendingUpdatesSynchronously();
+
+        const auto measured = audio_tempo::measure (test::session().getEngine(), file, 150.0);
+        REQUIRE (measured.has_value());
+
+        song.project->beginGesture ("Follow the tempo");
+        audio_tempo::setFollowsTempo (*clip, measured->bpm);
+        const auto hidden = audio_tempo::startOnBeat (*clip, *measured);
+        CHECK (std::abs (hidden - 0.25) < 0.003);
+        CHECK (core::clips::getStartBeat (*clip) == doctest::Approx (4.0));
+
+        // Each beat of the sound is two beats of the song (0.8 s), the first where the clip starts
+        // (beat 4 of the song: 1.6 s). 16 beats and the tail: 32 beats and a little.
+        CHECK (core::clips::getEndBeat (*clip) - core::clips::getStartBeat (*clip) == doctest::Approx (32.0 + 0.37 * 144.6 / 60.0).epsilon (0.002));
+
+        // Where the clicks of the song as exported are.
+        const auto exportedClicks = [&song]
+        {
+            double sampleRate = 0.0;
+            const auto rendered = song.render (sampleRate);
+            return findClicks (rendered, sampleRate);
+        };
+
+        auto clicks = exportedClicks();
+        REQUIRE (clicks.size() == 16);
+
+        for (size_t i = 0; i < clicks.size(); ++i)
+        {
+            CAPTURE (i);
+            CHECK (std::abs (clicks[i] - (1.6 + 0.8 * (double) i)) < 0.004);
+        }
+
+        // Starting on a beat again changes nothing.
+        CHECK (audio_tempo::startOnBeat (*clip, *measured) == 0.0);
+
+        // A sixteenth later, the clip staying where it is: every hit 0.1 s later.
+        CHECK (audio_tempo::slide (*clip, 0.25));
+        CHECK (core::clips::getStartBeat (*clip) == doctest::Approx (4.0));
+        clicks = exportedClicks();
+        REQUIRE (clicks.size() == 16);
+        CHECK (std::abs (clicks[0] - 1.7) < 0.004);
+        CHECK (std::abs (clicks[15] - (1.7 + 0.8 * 15.0)) < 0.004);
+
+        // Two sixteenths earlier: the first hit is now before the clip, the second 0.7 s in.
+        CHECK (audio_tempo::slide (*clip, -0.5));
+        clicks = exportedClicks();
+        REQUIRE (clicks.size() == 15);
+        CHECK (std::abs (clicks[0] - (1.6 + 0.8 - 0.1)) < 0.004);
+
+        // Later only as far as the file has sound before: then it stops.
+        CHECK (audio_tempo::slide (*clip, 100.0));
+        CHECK_FALSE (audio_tempo::slide (*clip, 1.0));
+        clicks = exportedClicks();
+        REQUIRE (clicks.size() == 16);
+        CHECK (std::abs (clicks[0] - (1.6 + 0.25 * 144.6 / 150.0)) < 0.004);      // the silence before it, at the song's speed
+
+        // One Ctrl+Z: its own speed, its whole file, as dropped.
+        song.project->undo();
+        CHECK_FALSE (audio_tempo::followsTempo (*clip));
+        CHECK (clip->getPosition().getOffset().inSeconds() == doctest::Approx (0.0));
+        CHECK_FALSE (audio_tempo::slide (*clip, 0.25));
     }
 
     TEST_CASE ("a loop following the tempo is saved with its tempo")

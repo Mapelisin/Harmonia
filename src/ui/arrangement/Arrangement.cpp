@@ -656,7 +656,9 @@ namespace harmonia::ui::arrangement
                                           : juce::String ("Follow the song tempo"),
                       isWave, loopBpm.has_value(), withWave ([this, follows = loopBpm.has_value()] (te::WaveAudioClip& w)
                       {
-                          model.setFollowsTempo (w, ! follows);
+                          // Says what tempo and first beat it measured in the sound.
+                          if (const auto found = model.setFollowsTempo (w, ! follows); found.note.isNotEmpty())
+                              tell (found.note, found.isProblem);
                       }));
 
         juce::PopupMenu loopTempo;
