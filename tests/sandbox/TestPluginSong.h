@@ -43,6 +43,14 @@ namespace harmonia::test::plugins
             auto* clip = project->addMidiClip (track, 0.0, 8.0, "Note");
             REQUIRE (clip != nullptr);
             clip->getSequence().addNote (60, te::BeatPosition::fromBeats (0.0), te::BeatDuration::fromBeats (8.0), 100, 0, nullptr);
+
+            // The engine puts the new clip's node in its place among the track's a moment later, as
+            // an undo step. Here, not in the middle of the test's first step: undone with that
+            // step, it would be done again by the engine, and the step couldn't be redone.
+            for (int i = 0; i < 2000 && project->isSettling(); ++i)
+                juce::MessageManager::getInstance()->runDispatchLoopUntil (1);
+
+            REQUIRE_FALSE (project->isSettling());
         }
 
         te::Plugin& instrument()
