@@ -8,21 +8,6 @@ namespace harmonia::core::automation_pieces
     {
         constexpr double tolerance = 1.0e-6;
 
-        bool isAt (const Point& point, double beat)
-        {
-            return std::abs (point.beat - beat) < tolerance;
-        }
-
-        /** The value a line has at `beat` once any jump there is over. */
-        float valueAfter (te::Edit& edit, te::AutomatableParameter& parameter, const std::vector<Point>& points, double beat)
-        {
-            for (auto point = points.rbegin(); point != points.rend(); ++point)
-                if (isAt (*point, beat))
-                    return point->value;
-
-            return automation_curves::valueAt (edit, parameter, beat);
-        }
-
         /** The lines of the track that have points. */
         juce::Array<te::AutomatableParameter*> getLines (te::AudioTrack& track)
         {
@@ -46,12 +31,23 @@ namespace harmonia::core::automation_pieces
             Piece::Line line { parameter->getOwnerID(), parameter->paramID, {} };
 
             // From the value the line has at the start (after a jump there) to the one it
-            // reaches at the end (before a jump there), with its points between.
-            line.points.push_back ({ 0.0, valueAfter (edit, *parameter, all, startBeat), 0.0f, true });
+            // reaches at the end (before a jump there), with its points between. A bent stretch
+            // cut by an edge keeps its shape.
+            std::vector<Point> inside;
 
             for (const auto& point : all)
                 if (point.beat > startBeat + tolerance && point.beat < endBeat - tolerance)
-                    line.points.push_back ({ point.beat - startBeat, point.value, point.curve });
+                    inside.push_back (point);
+
+            automation_curves::appendPart (line.points, edit, *parameter, startBeat, endBeat, true, -startBeat);
+
+            for (size_t i = 0; i < inside.size(); ++i)
+            {
+                if (i + 1 < inside.size())
+                    line.points.push_back ({ inside[i].beat - startBeat, inside[i].value, inside[i].curve });
+                else
+                    automation_curves::appendPart (line.points, edit, *parameter, inside[i].beat, endBeat, false, -startBeat);
+            }
 
             line.points.push_back ({ piece.lengthBeats, automation_curves::valueAt (edit, *parameter, endBeat), 0.0f, true });
             piece.lines.push_back (std::move (line));
@@ -84,20 +80,20 @@ namespace harmonia::core::automation_pieces
 
             // A line with no points left is flat at where its knob is.
             const auto before = all.empty() ? parameter.getCurrentValue() : automation_curves::valueAt (edit, parameter, startBeat);
-            const auto after = all.empty() ? parameter.getCurrentValue() : valueAfter (edit, parameter, all, endBeat);
-
             std::vector<Point> points;
 
             for (const auto& point : all)
                 if (point.beat < startBeat - tolerance)
                     points.push_back (point);
 
+            // The stretches the piece's edges cut keep their shape outside it.
+            automation_curves::endAt (points, edit, parameter, startBeat);
             points.push_back ({ startBeat, before, 0.0f, true });
 
             for (const auto& point : line.points)
                 points.push_back ({ startBeat + point.beat, point.value, point.curve, point.added });
 
-            points.push_back ({ endBeat, after, 0.0f, true });
+            automation_curves::appendPart (points, edit, parameter, endBeat, std::numeric_limits<double>::max(), true);
 
             for (const auto& point : all)
                 if (point.beat > endBeat + tolerance)
@@ -123,7 +119,7 @@ namespace harmonia::core::automation_pieces
                 return point.beat > startBeat - tolerance && point.beat < endBeat + tolerance;
             });
 
-            // Already one straight run across the stretch.
+            // Already one run across the stretch, with nothing in it to take out.
             if (! hasPointsThere)
                 continue;
 
@@ -133,9 +129,11 @@ namespace harmonia::core::automation_pieces
                 if (point.beat < startBeat - tolerance)
                     points.push_back (point);
 
+            // The stretches the edges cut keep their shape outside.
+            automation_curves::endAt (points, edit, *parameter, startBeat);
             const Point atStart { startBeat, automation_curves::valueAt (edit, *parameter, startBeat), 0.0f, true };
             points.push_back (atStart);
-            points.push_back ({ endBeat, valueAfter (edit, *parameter, all, endBeat), 0.0f, true });
+            automation_curves::appendPart (points, edit, *parameter, endBeat, std::numeric_limits<double>::max(), true);
 
             for (const auto& point : all)
                 if (point.beat > endBeat + tolerance)

@@ -156,29 +156,46 @@ namespace harmonia::core::sections
 
         for (auto& curve : getCurves (edit))
         {
-            // The values the curve reaches at the edges (before a jump there, if it jumps there).
-            const auto atStart = valueAt (edit, *curve.parameter, startBeat);
+            // The value the curve reaches at the end (before a jump there, if it jumps there).
             const auto atEnd = valueAt (edit, *curve.parameter, endBeat);
             const auto pointAtStart = std::any_of (curve.points.begin(), curve.points.end(),
                                                    [startBeat] (const Point& p) { return std::abs (p.beat - startBeat) < tolerance; });
+            const auto pointAtEnd = std::any_of (curve.points.begin(), curve.points.end(),
+                                                 [endBeat] (const Point& p) { return std::abs (p.beat - endBeat) < tolerance; });
             std::vector<Point> points;
+            auto& parameter = *curve.parameter;
 
             for (const auto& p : curve.points)
                 if (p.beat < endBeat - tolerance)
                     points.push_back (p);
 
-            // The stretch ends as it did; its copy starts as it started (with the points there).
+            // The stretch ends as it did (a bent run of the line cut there keeps its shape); its
+            // copy starts as it started (with the points there).
+            endAt (points, edit, parameter, endBeat);
             points.push_back ({ endBeat, atEnd, 0.0f, true });
 
             if (! pointAtStart)
-                points.push_back ({ endBeat, atStart, 0.0f, true });
+                appendPart (points, edit, parameter, startBeat, endBeat, true, length);
+
+            std::vector<Point> copied;
 
             for (const auto& p : curve.points)
                 if (p.beat > startBeat - tolerance && p.beat < endBeat - tolerance)
-                    points.push_back ({ p.beat + length, p.value, p.curve });
+                    copied.push_back (p);
+
+            for (size_t i = 0; i < copied.size(); ++i)
+            {
+                if (i + 1 < copied.size())
+                    points.push_back ({ copied[i].beat + length, copied[i].value, copied[i].curve });
+                else
+                    appendPart (points, edit, parameter, copied[i].beat, endBeat, false, length);
+            }
 
             // The copy ends as the stretch did; then what came after (from the points at the end).
-            points.push_back ({ endBeat + length, atEnd, 0.0f, true });
+            if (pointAtEnd)
+                points.push_back ({ endBeat + length, atEnd, 0.0f, true });
+            else
+                appendPart (points, edit, parameter, endBeat, std::numeric_limits<double>::max(), true, length);
 
             for (const auto& p : curve.points)
                 if (p.beat >= endBeat - tolerance)

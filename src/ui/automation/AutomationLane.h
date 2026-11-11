@@ -5,8 +5,8 @@
 namespace harmonia::ui::automation
 {
     /** The line of one parameter over the song, under the arrangement and lined up with it (the
-        same beats across). Draws the bars, the line with its points and the playhead; the mouse
-        edits it (see AutomationGestures). */
+        same beats across). Draws the bars, the line with its points, the handles its stretches
+        are bent by and the playhead; the mouse edits it (see AutomationGestures). */
     class AutomationLane final : public juce::Component
     {
     public:
@@ -40,11 +40,12 @@ namespace harmonia::ui::automation
         AutomationGestures gestures { model, view };
         juce::Colour lineColour { 0xff4f9fe0 };
         std::optional<double> playheadBeat;
-        int hovered = -1;
+        int hovered = -1, hoveredBend = -1;
 
         void paintGrid (juce::Graphics&);
         void paintLine (juce::Graphics&, te::AutomatableParameter&);
-        void paintReadout (juce::Graphics&, te::AutomatableParameter&, int pointIndex);
+        void paintReadout (juce::Graphics&, const juce::String& text, juce::Point<float> at);
+        juce::String describePoint (te::AutomatableParameter&, const audio::automation::Point&) const;
         void updateHover (juce::Point<float>);
         AutomationGestures::Pointer toPointer (const juce::MouseEvent&) const;
     };

@@ -7,7 +7,8 @@ namespace harmonia::ui::automation
 
     namespace
     {
-        constexpr float minBarPixels = 6.0f, pointRadius = 4.0f;
+        constexpr float minBarPixels = 6.0f, pointRadius = 4.0f, bendRadius = 3.0f;
+        constexpr float curveStepPixels = 3.0f;     // a bent stretch is drawn as short straight ones
     }
 
     AutomationLane::AutomationLane (arrangement::ArrangementModel& m, const arrangement::ArrangementView& v)
@@ -22,7 +23,7 @@ namespace harmonia::ui::automation
             return;
 
         gestures.setParameter (parameter);
-        hovered = -1;
+        hovered = hoveredBend = -1;
         repaint();
     }
 
@@ -136,18 +137,28 @@ namespace harmonia::ui::automation
             g.setColour (theme::colour::textSecondary);
             g.setFont (juce::FontOptions (theme::size::fontSize));
             g.drawText ("Click to add points: " + automation::getDisplayName (parameter)
-                            + " follows the line while the song plays. Right-click deletes a point.",
+                            + " follows the line while the song plays. Right-click deletes a point; the small handle between two points bends the line.",
                         getLocalBounds().reduced (theme::size::padding, 0).removeFromBottom (24),
                         juce::Justification::centredLeft, true);
             return;
         }
 
-        // Flat before the first point and after the last, straight between them.
+        // Flat before the first point and after the last; between them straight, or bent.
         juce::Path line;
         line.startNewSubPath (std::min (0.0f, view.beatToX (points.front().beat)), gestures.valueToY (points.front().value));
+        line.lineTo (view.beatToX (points.front().beat), gestures.valueToY (points.front().value));
 
-        for (const auto& point : points)
-            line.lineTo (view.beatToX (point.beat), gestures.valueToY (point.value));
+        for (size_t i = 0; i + 1 < points.size(); ++i)
+        {
+            const auto from = view.beatToX (points[i].beat), to = view.beatToX (points[i + 1].beat);
+
+            // A bent stretch as the parameter will go: its value every few pixels of what is in view.
+            if (points[i].curve != 0.0f)
+                for (auto x = std::max (from, -curveStepPixels) + curveStepPixels; x < std::min (to, width + curveStepPixels); x += curveStepPixels)
+                    line.lineTo (x, gestures.valueToY (automation::getValueAt (parameter, view.xToBeat (x))));
+
+            line.lineTo (to, gestures.valueToY (points[i + 1].value));
+        }
 
         line.lineTo (std::max (width, view.beatToX (points.back().beat)), gestures.valueToY (points.back().value));
 
@@ -161,6 +172,23 @@ namespace harmonia::ui::automation
         g.fillPath (fill);
         g.setColour (lineColour);
         g.strokePath (line, juce::PathStrokeType (1.5f));
+
+        // The handles the stretches are bent by: smaller than the points, and hollow.
+        const auto bent = gestures.getBentStretch();
+
+        for (size_t i = 0; i + 1 < points.size(); ++i)
+        {
+            const auto handle = gestures.getBendHandle ((int) i);
+
+            if (! handle.has_value() || handle->x < -bendRadius || handle->x > width + bendRadius)
+                continue;
+
+            const auto circle = juce::Rectangle<float> (2.0f * bendRadius, 2.0f * bendRadius).withCentre (*handle);
+            g.setColour (theme::arrangement::laneEven);
+            g.fillEllipse (circle);
+            g.setColour ((int) i == hoveredBend || (int) i == bent ? theme::pianoroll::noteSelected : lineColour);
+            g.drawEllipse (circle, 1.5f);
+        }
 
         const auto dragged = gestures.getDraggedPoint();
 
@@ -182,24 +210,36 @@ namespace harmonia::ui::automation
         }
 
         const auto shown = dragged >= 0 ? dragged : hovered;
+        const auto shownBend = bent >= 0 ? bent : hoveredBend;
 
         if (juce::isPositiveAndBelow (shown, (int) points.size()))
-            paintReadout (g, parameter, shown);
+        {
+            const auto& point = points[(size_t) shown];
+            paintReadout (g, describePoint (parameter, point), { view.beatToX (point.beat), gestures.valueToY (point.value) });
+        }
+        else if (const auto handle = gestures.getBendHandle (shownBend))
+        {
+            const auto bend = juce::roundToInt (100.0f * points[(size_t) shownBend].curve);
+            paintReadout (g, bend == 0 ? juce::String ("Straight: drag up or down to bend")
+                                       : "Bend " + juce::String (std::abs (bend)) + "%: " + (bend > 0 ? "late" : "early"),
+                          *handle);
+        }
     }
 
-    void AutomationLane::paintReadout (juce::Graphics& g, te::AutomatableParameter& parameter, int pointIndex)
+    juce::String AutomationLane::describePoint (te::AutomatableParameter& parameter, const automation::Point& point) const
     {
-        const auto point = automation::getPoints (parameter)[(size_t) pointIndex];
         const auto beatsPerBar = model.getBeatsPerBar();
         const auto bar = (int) std::floor (point.beat / beatsPerBar);
         const auto beatInBar = point.beat - bar * beatsPerBar;
 
-        const auto text = automation::valueToText (parameter, point.value) + juce::String::fromUTF8 ("  \xc2\xb7  ")
-                        + "bar " + juce::String (bar + 1) + "." + juce::String (beatInBar + 1.0, beatInBar == std::floor (beatInBar) ? 0 : 2);
+        return automation::valueToText (parameter, point.value) + juce::String::fromUTF8 ("  \xc2\xb7  ")
+             + "bar " + juce::String (bar + 1) + "." + juce::String (beatInBar + 1.0, beatInBar == std::floor (beatInBar) ? 0 : 2);
+    }
 
+    void AutomationLane::paintReadout (juce::Graphics& g, const juce::String& text, juce::Point<float> at)
+    {
         const juce::Font font { juce::FontOptions (theme::size::smallFontSize) };
         const auto textWidth = juce::GlyphArrangement::getStringWidth (font, text) + 10.0f;
-        const juce::Point<float> at { view.beatToX (point.beat), gestures.valueToY (point.value) };
 
         auto box = juce::Rectangle<float> (textWidth, 18.0f).withPosition (at.x + 8.0f, at.y - 24.0f);
 
@@ -225,6 +265,7 @@ namespace harmonia::ui::automation
     {
         gestures.down (toPointer (e));
         hovered = gestures.getDraggedPoint();
+        hoveredBend = gestures.getBentStretch();
         setMouseCursor (gestures.getCursorFor (e.position));
         repaint();
 
@@ -255,9 +296,9 @@ namespace harmonia::ui::automation
 
     void AutomationLane::mouseExit (const juce::MouseEvent&)
     {
-        if (hovered >= 0)
+        if (hovered >= 0 || hoveredBend >= 0)
         {
-            hovered = -1;
+            hovered = hoveredBend = -1;
             repaint();
         }
     }
@@ -265,11 +306,13 @@ namespace harmonia::ui::automation
     void AutomationLane::updateHover (juce::Point<float> position)
     {
         const auto index = gestures.pointAt (position);
+        const auto bend = index >= 0 ? -1 : gestures.bendAt (position);
         setMouseCursor (gestures.getCursorFor (position));
 
-        if (index != hovered)
+        if (index != hovered || bend != hoveredBend)
         {
             hovered = index;
+            hoveredBend = bend;
             repaint();
         }
     }

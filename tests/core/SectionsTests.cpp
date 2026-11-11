@@ -1,6 +1,7 @@
 #include <doctest.h>
 
 #include "TestSession.h"
+#include "core/AutomationCurves.h"
 #include "core/AutomationPieces.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
@@ -102,6 +103,28 @@ namespace
             CHECK (after[j] == doctest::Approx (before[i]).epsilon (1.0e-4));
         }
     }
+
+    /** The most `after` from `toBeat` on is away from `before` from `fromBeat` on, over `lengthBeats`. */
+    float mostApart (const std::vector<float>& before, double fromBeat, const std::vector<float>& after, double toBeat,
+                     double lengthBeats)
+    {
+        auto most = 0.0f;
+
+        for (double b = 0.25; b < lengthBeats; b += 0.5)
+        {
+            const auto i = sampleAt (fromBeat + b), j = sampleAt (toBeat + b);
+            REQUIRE (i < before.size());
+            REQUIRE (j < after.size());
+            most = std::max (most, std::abs (after[j] - before[i]));
+        }
+
+        return most;
+    }
+
+    /** A cut bent stretch stays this near the shape it had (automation_curves::shapeTolerance,
+        which is measured at other places than these samples). A straight line is several times
+        further away. */
+    constexpr float nearEnough = 0.01f;
 }
 
 TEST_SUITE ("core::sections")
@@ -236,6 +259,132 @@ TEST_SUITE ("core::sections")
 
 TEST_SUITE ("core: the automation of a piece of time")
 {
+    TEST_CASE ("a bent stretch cut by a piece of time keeps its shape: in the piece, where it is put, and where it was")
+    {
+        for (const auto bend : { 0.25f, 0.5f, -0.5f, 0.85f, -0.85f })
+        {
+            CAPTURE (bend);
+            Song song;
+            auto& volume = *song.keys->getVolumePlugin()->volParam;
+            auto& edit = song.edit();
+            auto& curve = volume.getCurve();
+            const auto at = [&edit] (double beat) { return edit.tempoSequence.toTime (te::BeatPosition::fromBeats (beat)); };
+
+            // Flat, a bent rise from beat 2 to beat 10, a fall bent the other way to beat 14, flat.
+            curve.addPoint (at (2.0), 0.3f, bend, &edit.getUndoManager());
+            curve.addPoint (at (10.0), 0.7f, -bend, &edit.getUndoManager());
+            curve.addPoint (at (14.0), 0.4f, 0.0f, &edit.getUndoManager());
+            song.project->clearUndoHistory();
+            const auto original = sample (edit, volume, 40.0);
+            const auto points = curve.getNumPoints();
+
+            // It is bent: in the middle of the rise well away from the straight line.
+            CHECK (std::abs (original[sampleAt (6.25)] - (0.3f + 0.4f * 4.25f / 8.0f)) > 0.02f);
+
+            // A whole stretch is its point with its bend; so is a part where one bend follows it,
+            // and where none can there are points along it. Level before, level after.
+            const auto whole = automation_curves::getPart (edit, volume, 2.0);
+            REQUIRE (whole.size() == 1);
+            CHECK (whole[0].beat == doctest::Approx (2.0));
+            CHECK (whole[0].value == doctest::Approx (0.3f));
+            CHECK (whole[0].curve == bend);
+            CHECK (automation_curves::getPart (edit, volume, 2.0, 10.0)[0].curve == bend);
+            CHECK (automation_curves::getPart (edit, volume, 0.0, 2.0)[0].curve == 0.0f);
+            CHECK (automation_curves::getPart (edit, volume, 14.0)[0].curve == 0.0f);
+
+            const auto part = automation_curves::getPart (edit, volume, 4.0, 8.0);
+            CHECK (part.size() <= (std::abs (bend) < 0.3f ? 1u : 8u));      // a gentle bend needs no more points
+            CHECK (part[0].beat == doctest::Approx (4.0));
+            CHECK (part[0].value == doctest::Approx (curve.getValueAt (at (4.0), 0.0f)));
+
+            for (const auto& p : part)
+            {
+                CHECK (p.added);
+                CHECK (p.beat < 8.0);
+            }
+
+            SUBCASE ("copied: the copy does what the part did; the line it came from is as it was")
+            {
+                const auto piece = automation_pieces::copy (*song.keys, 4.0, 8.0);
+                song.project->beginGesture ("Copy time");
+                automation_pieces::paste (*song.keys, piece, 20.0);
+                const auto after = sample (edit, volume, 40.0);
+                checkSame (original, 0.0, after, 0.0, 20.0);
+                CHECK (mostApart (original, 4.0, after, 20.0, 4.0) < nearEnough);
+                checkSame (original, 24.0, after, 24.0, 16.0);
+
+                song.project->undo();
+                CHECK (curve.getNumPoints() == points);
+                CHECK (sample (edit, volume, 40.0) == original);
+            }
+
+            SUBCASE ("copied into the bent stretch itself: before and after the copy the stretch goes on as it went")
+            {
+                const auto piece = automation_pieces::copy (*song.keys, 16.0, 18.0);        // flat at 0.4
+                song.project->beginGesture ("Copy time");
+                automation_pieces::paste (*song.keys, piece, 5.0);
+                const auto after = sample (edit, volume, 40.0);
+                checkSame (original, 0.0, after, 0.0, 2.0);
+                CHECK (mostApart (original, 2.0, after, 2.0, 3.0) < nearEnough);
+                CHECK (after[sampleAt (5.25)] == doctest::Approx (0.4f).epsilon (1.0e-4));
+                CHECK (after[sampleAt (6.75)] == doctest::Approx (0.4f).epsilon (1.0e-4));
+                CHECK (mostApart (original, 7.0, after, 7.0, 3.0) < nearEnough);
+                checkSame (original, 10.0, after, 10.0, 30.0);
+            }
+
+            SUBCASE ("moved from inside one stretch: nothing to take out there, the line stays whole")
+            {
+                const auto piece = automation_pieces::copy (*song.keys, 4.0, 8.0);
+                song.project->beginGesture ("Move time");
+                automation_pieces::clear (*song.keys, 4.0, 8.0);
+                automation_pieces::paste (*song.keys, piece, 20.0);
+                const auto after = sample (edit, volume, 40.0);
+                checkSame (original, 0.0, after, 0.0, 20.0);
+                CHECK (mostApart (original, 4.0, after, 20.0, 4.0) < nearEnough);
+            }
+
+            SUBCASE ("moved with a point in it: straight where it was, what is left of both stretches keeps its shape")
+            {
+                const auto piece = automation_pieces::copy (*song.keys, 8.0, 12.0);
+                song.project->beginGesture ("Move time");
+                automation_pieces::clear (*song.keys, 8.0, 12.0);
+                automation_pieces::paste (*song.keys, piece, 20.0);
+                const auto after = sample (edit, volume, 40.0);
+                CHECK (mostApart (original, 8.0, after, 20.0, 4.0) < nearEnough);
+                CHECK (mostApart (original, 0.0, after, 0.0, 8.0) < nearEnough);
+                CHECK (mostApart (original, 12.0, after, 12.0, 8.0) < nearEnough);
+
+                // Where it was: straight from the value at beat 8 to the value at beat 12.
+                const auto from = curve.getValueAt (at (8.0), 0.0f), to = curve.getValueAt (at (12.0), 0.0f);
+                CHECK (from == doctest::Approx (original[sampleAt (7.75)]).epsilon (0.05));
+                CHECK (after[sampleAt (9.25)] == doctest::Approx (from + (to - from) * 1.25f / 4.0f).epsilon (1.0e-3));
+
+                song.project->undo();
+                CHECK (curve.getNumPoints() == points);
+                CHECK (sample (edit, volume, 40.0) == original);
+            }
+
+            SUBCASE ("bars repeated: the copy of the bars bends as they do, the rest of the line too")
+            {
+                for (auto [start, end] : { std::pair { 4.0, 8.0 }, std::pair { 8.0, 12.0 }, std::pair { 2.0, 10.0 }, std::pair { 0.0, 16.0 } })
+                {
+                    CAPTURE (start);
+                    song.project->beginGesture ("Duplicate");
+                    sections::duplicateRange (edit, start, end);
+                    const auto after = sample (edit, volume, 56.0);
+                    const auto length = end - start;
+                    CHECK (mostApart (original, 0.0, after, 0.0, end) < nearEnough);
+                    CHECK (mostApart (original, start, after, end, length) < nearEnough);
+                    CHECK (mostApart (original, end, after, end + length, 16.0) < nearEnough);
+
+                    song.project->undo();
+                    CHECK (curve.getNumPoints() == points);
+                    CHECK (sample (edit, volume, 40.0) == original);
+                }
+            }
+        }
+    }
+
     TEST_CASE ("a track's lines over a stretch are taken out and put elsewhere; outside both stretches they keep their shape")
     {
         Song song;

@@ -30,15 +30,32 @@ The panel opens in place of the piano roll: the **Automation** button on the rig
 | Shift + drag a point | Up and down only, the bar does not change |
 | Right-click a point, double click | Delete the point |
 | Right-click and drag over points | Delete every point you pass over |
+| Drag the small circle in the middle of a stretch | Bend the line between two points |
+| Double click or right-click the small circle | Straight again |
 | **Clear** | Remove the whole line of this knob |
 
 The value is shown above the point under the mouse ("-6.0 dB · bar 5.1").
 Every mouse action is one **Ctrl+Z** step.
 
+## Curved lines
+
+Between every two points there is a small circle in the middle of the line. Drag it up or down and the
+line bends: the knob holds its value and then moves quickly at the end ("late"), or moves quickly first
+and then settles ("early"). The circle stays under the mouse; the hint above it says how much the line is
+bent. Double click the circle (or right-click it) to make the line straight again.
+
+- There is no circle where there is nothing to bend: at a jump (two points one above the other), between
+  two points with the same value, and where the two points are too close on the screen (zoom in).
+- A point always wins: if the mouse is on a point, you take the point, not the circle.
+- A new point put on a bent line keeps both halves bent the same way.
+- What you see is what you hear: playback and the export follow the bent line.
+- When you cut, move or repeat a piece of time that goes through a bent line, both parts keep their shape.
+  If the bend is strong, the program adds a few points of its own along the cut part to hold the shape.
+
 ## How it works
 
 - Before the first point the knob stays at the value of the first point; after the last point, at the value of
-  the last one. Between points the line is straight.
+  the last one. Between points the line is straight, unless you bend it (see "Curved lines").
 - While a knob has a line, the line drives it during playback: moving the fader or the knob does nothing, the
   line puts it back. Remove the line (**Clear**, or delete the last point) and the knob is again where you left
   it.
@@ -60,5 +77,5 @@ What you recorded appears in the line of this knob (F8) as ordinary points: you 
 One movement is one **Ctrl+Z** step. Turn **Write** off when you are done: otherwise any knob movement during
 playback will be recorded again.
 
-Not possible yet: drawing and recording a line on return tracks and the master, smooth (curved) transitions
-between points, seeing the lines right on the clips in the arrangement.
+Not possible yet: drawing and recording a line on return tracks and the master, S-shaped curves (a line
+bends one way only), seeing the lines right on the clips in the arrangement.

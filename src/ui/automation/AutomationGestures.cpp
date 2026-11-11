@@ -12,7 +12,7 @@ namespace harmonia::ui::automation
     void AutomationGestures::setParameter (te::AutomatableParameter* newParameter)
     {
         parameter = newParameter;
-        dragged = -1;
+        dragged = bending = -1;
         erasing = false;
     }
 
@@ -50,6 +50,47 @@ namespace harmonia::ui::automation
         return best;
     }
 
+    std::optional<juce::Point<float>> AutomationGestures::getBendHandle (int index) const
+    {
+        if (parameter == nullptr)
+            return std::nullopt;
+
+        const auto handle = automation::getBendHandle (*parameter, index);
+
+        if (! handle.has_value())
+            return std::nullopt;
+
+        const auto points = automation::getPoints (*parameter);
+
+        if (view.beatToX (points[(size_t) index + 1].beat) - view.beatToX (points[(size_t) index].beat) < minBendPixels)
+            return std::nullopt;
+
+        return juce::Point<float> { view.beatToX (handle->beat), valueToY (handle->value) };
+    }
+
+    int AutomationGestures::bendAt (juce::Point<float> position) const
+    {
+        if (parameter == nullptr)
+            return -1;
+
+        auto best = -1;
+        auto bestDistance = bendHitRadius + 1.0f;
+
+        for (int i = 0; i + 1 < parameter->getCurve().getNumPoints(); ++i)
+        {
+            if (const auto handle = getBendHandle (i))
+            {
+                if (const auto distance = handle->getDistanceFrom (position); distance <= bendHitRadius && distance < bestDistance)
+                {
+                    best = i;
+                    bestDistance = distance;
+                }
+            }
+        }
+
+        return best;
+    }
+
     double AutomationGestures::toBeat (const Pointer& p) const
     {
         const auto beat = std::max (0.0, view.xToBeat (p.position.x));
@@ -62,7 +103,7 @@ namespace harmonia::ui::automation
 
     void AutomationGestures::down (const Pointer& p)
     {
-        dragged = -1;
+        dragged = bending = -1;
         erasing = false;
 
         if (parameter == nullptr)
@@ -70,11 +111,16 @@ namespace harmonia::ui::automation
 
         auto& project = model.getProject();
         const auto hit = pointAt (p.position);
+        const auto bend = hit >= 0 ? -1 : bendAt (p.position);       // a point is taken before a handle
 
         if (p.mods.isPopupMenu())
         {
             erasing = true;
-            project.beginGesture ("Delete automation points");
+            project.beginGesture (bend >= 0 ? "Straighten automation line" : "Delete automation points");
+
+            if (bend >= 0)
+                automation::setCurve (*parameter, bend, 0.0f);
+
             eraseAt (p.position);
             return;
         }
@@ -94,6 +140,21 @@ namespace harmonia::ui::automation
             return;
         }
 
+        if (bend >= 0 && p.clicks >= 2)
+        {
+            project.beginGesture ("Straighten automation line");
+            automation::setCurve (*parameter, bend, 0.0f);
+            return;
+        }
+
+        if (bend >= 0)
+        {
+            project.beginGesture ("Bend automation line");
+            bending = bend;
+            bendGrabOffset = getBendHandle (bend)->y - p.position.y;
+            return;
+        }
+
         project.beginGesture ("Add automation point");
         dragged = automation::addPoint (*parameter, toBeat (p), yToValue (p.position.y));
         grabBeat = toBeat (p);
@@ -110,6 +171,13 @@ namespace harmonia::ui::automation
             return;
         }
 
+        if (bending >= 0)
+        {
+            automation::setCurve (*parameter, bending,
+                                  automation::getCurveForHandle (*parameter, bending, yToValue (p.position.y + bendGrabOffset)));
+            return;
+        }
+
         if (dragged < 0)
             return;
 
@@ -119,7 +187,7 @@ namespace harmonia::ui::automation
 
     void AutomationGestures::up (const Pointer&)
     {
-        dragged = -1;
+        dragged = bending = -1;
         erasing = false;
     }
 
@@ -134,6 +202,12 @@ namespace harmonia::ui::automation
         if (dragged >= 0)
             return juce::MouseCursor::DraggingHandCursor;
 
-        return pointAt (position) >= 0 ? juce::MouseCursor::DraggingHandCursor : juce::MouseCursor::CrosshairCursor;
+        if (bending >= 0)
+            return juce::MouseCursor::UpDownResizeCursor;
+
+        if (pointAt (position) >= 0)
+            return juce::MouseCursor::DraggingHandCursor;
+
+        return bendAt (position) >= 0 ? juce::MouseCursor::UpDownResizeCursor : juce::MouseCursor::CrosshairCursor;
     }
 }

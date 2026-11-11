@@ -227,6 +227,160 @@ TEST_SUITE ("audio::automation")
         CHECK (cleared[0] == doctest::Approx (dry[1]).epsilon (0.02));
     }
 
+    TEST_CASE ("a stretch of the line bends, late or soon; its handle is the middle of the bend; saved with the project")
+    {
+        test::TempFolder temp;
+        auto project = core::Project::createEmpty (test::session());
+        auto& volume = volumeOf (*project->getTracks().getFirst());
+
+        automation::addPoint (volume, 0.0, 0.2f);
+        automation::addPoint (volume, 8.0, 0.8f);       // a rise
+        automation::addPoint (volume, 12.0, 0.8f);      // level
+        automation::addPoint (volume, 12.0, 0.4f);      // a jump
+        automation::addPoint (volume, 20.0, 0.1f);      // a fall
+        project->clearUndoHistory();
+
+        // Straight: half way up in the middle, and the handle is there.
+        CHECK (automation::getValueAt (volume, 4.0) == doctest::Approx (0.5f));
+        auto handle = automation::getBendHandle (volume, 0);
+        REQUIRE (handle.has_value());
+        CHECK (handle->beat == doctest::Approx (4.0));
+        CHECK (handle->value == doctest::Approx (0.5f));
+        CHECK (handle->curve == 0.0f);
+
+        // Nothing to bend where the line is level, jumps or ends.
+        CHECK_FALSE (automation::getBendHandle (volume, 1).has_value());
+        CHECK_FALSE (automation::getBendHandle (volume, 2).has_value());
+        CHECK (automation::getBendHandle (volume, 3).has_value());
+        CHECK_FALSE (automation::getBendHandle (volume, 4).has_value());
+        CHECK_FALSE (automation::getBendHandle (volume, -1).has_value());
+
+        // Late: the value holds, then goes. The line still rises all the way, between the same ends.
+        project->beginGesture ("Bend");
+        automation::setCurve (volume, 0, 0.5f);
+        CHECK (automation::getPoints (volume)[0].curve == 0.5f);
+        CHECK (automation::getValueAt (volume, 0.0) == doctest::Approx (0.2f));
+        CHECK (automation::getValueAt (volume, 8.0) == doctest::Approx (0.8f));
+        CHECK (automation::getValueAt (volume, 4.0) < 0.4f);
+
+        for (double beat = 0.5; beat <= 8.0; beat += 0.5)
+            CHECK (automation::getValueAt (volume, beat) >= automation::getValueAt (volume, beat - 0.5));
+
+        // The handle: half of the way from the middle to the corner, and on the line.
+        handle = automation::getBendHandle (volume, 0);
+        REQUIRE (handle.has_value());
+        CHECK (handle->value == doctest::Approx (0.35f));
+        CHECK (handle->beat == doctest::Approx (6.0));
+        CHECK (handle->curve == 0.5f);
+        CHECK (automation::getValueAt (volume, handle->beat) == doctest::Approx (handle->value).epsilon (0.001));
+
+        // The bend that puts the handle at a value: what dragging it there asks for.
+        CHECK (automation::getCurveForHandle (volume, 0, 0.35f) == doctest::Approx (0.5f));
+        CHECK (automation::getCurveForHandle (volume, 0, 0.65f) == doctest::Approx (-0.5f));
+        CHECK (automation::getCurveForHandle (volume, 0, 0.5f) == doctest::Approx (0.0f));
+        CHECK (automation::getCurveForHandle (volume, 0, 0.0f) == 1.0f);
+        CHECK (automation::getCurveForHandle (volume, 0, 1.0f) == -1.0f);
+        CHECK (automation::getCurveForHandle (volume, 1, 0.3f) == 0.0f);       // level: nothing to ask
+
+        // A fall bends the same way: late holds the value up.
+        automation::setCurve (volume, 3, 0.5f);
+        CHECK (automation::getValueAt (volume, 16.0) > 0.3f);
+        CHECK (automation::getBendHandle (volume, 3)->value == doctest::Approx (0.325f));
+        CHECK (automation::getCurveForHandle (volume, 3, 0.325f) == doctest::Approx (0.5f));
+        CHECK (automation::getCurveForHandle (volume, 3, 0.175f) == doctest::Approx (-0.5f));
+
+        // All the way: a step at the end, or at the start.
+        automation::setCurve (volume, 0, 5.0f);
+        CHECK (automation::getPoints (volume)[0].curve == 1.0f);
+        CHECK (automation::getValueAt (volume, 7.0) == doctest::Approx (0.2f).epsilon (0.01));
+        automation::setCurve (volume, 0, -1.0f);
+        CHECK (automation::getValueAt (volume, 1.0) == doctest::Approx (0.8f).epsilon (0.01));
+
+        // One undo step for the lot.
+        project->undo();
+        CHECK (automation::getPoints (volume)[0].curve == 0.0f);
+        CHECK (automation::getPoints (volume)[3].curve == 0.0f);
+        project->redo();
+        CHECK (automation::getPoints (volume)[0].curve == -1.0f);
+
+        // A point put on a bent stretch bends on as it did; moved, it keeps its bend.
+        automation::setCurve (volume, 0, 0.5f);
+        CHECK (automation::addPoint (volume, 4.0, 0.3f) == 1);
+        CHECK (automation::getPoints (volume)[0].curve == 0.5f);
+        CHECK (automation::getPoints (volume)[1].curve == 0.5f);
+        automation::movePoint (volume, 1, 5.0, 0.35f);
+        CHECK (automation::getPoints (volume)[1] == automation::Point { 5.0, 0.35f, 0.5f });
+
+        // The bends are in the song's file.
+        const auto file = temp.getFile ("Song.harmonia");
+        REQUIRE (project->save (file).isEmpty());
+
+        juce::String error;
+        auto loaded = core::Project::load (test::session(), file, error);
+        REQUIRE (loaded != nullptr);
+        const auto loadedPoints = automation::getPoints (volumeOf (*loaded->getTracks().getFirst()));
+        REQUIRE (loadedPoints.size() == 6);
+        CHECK (loadedPoints[0].curve == 0.5f);
+        CHECK (loadedPoints[1].curve == 0.5f);
+        CHECK (loadedPoints[4].curve == 0.5f);
+        CHECK (loadedPoints[2].curve == 0.0f);
+    }
+
+    TEST_CASE ("the export follows a bent line: what is heard is what the line shows")
+    {
+        test::TempFolder temp;
+        auto project = core::Project::createEmpty (test::session());
+        project->getEdit().deleteTrack (project->getTracks().getFirst());
+        auto& tone = addToneTrack (*project, temp, 4.0);
+        auto& volume = volumeOf (tone);
+
+        // Moments of the song (seconds; 120 BPM: two beats a second), a twentieth of a second each.
+        const std::vector<double> moments { 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5 };
+        const auto listen = [&]
+        {
+            std::vector<float> heard;
+
+            for (const auto moment : moments)
+                heard.push_back (exportRms (*project, { { moment - 0.025, moment + 0.025 } })[0]);
+
+            return heard;
+        };
+
+        // A fade from full volume to silence over the four seconds.
+        automation::addPoint (volume, 0.0, zeroDb());
+        automation::addPoint (volume, 8.0, 0.0f);
+        const auto full = exportRms (*project, { { 0.0, 0.02 } })[0];
+        REQUIRE (full > 0.05f);
+
+        const auto expected = [&] (double moment)
+        {
+            return full * te::volumeFaderPositionToGain (automation::getValueAt (volume, 2.0 * moment) * 1.0f);
+        };
+
+        for (const auto bend : { 0.0f, 0.3f, 0.5f, 0.8f, -0.5f, -0.8f })
+        {
+            CAPTURE (bend);
+            automation::setCurve (volume, 0, bend);
+            const auto heard = listen();
+
+            for (size_t i = 0; i < moments.size(); ++i)
+            {
+                CAPTURE (moments[i]);
+                CHECK (heard[i] == doctest::Approx (expected (moments[i])).epsilon (0.08));
+            }
+        }
+
+        // And the bends are heard apart: late is louder in the middle than straight, soon is quieter.
+        automation::setCurve (volume, 0, 0.5f);
+        const auto late = listen()[3];
+        automation::setCurve (volume, 0, 0.0f);
+        const auto straight = listen()[3];
+        automation::setCurve (volume, 0, -0.5f);
+        const auto soon = listen()[3];
+        CHECK (late > 1.5f * straight);
+        CHECK (soon < 0.67f * straight);
+    }
+
     TEST_CASE ("playback follows a volume line")
     {
         test::AudioRig rig;

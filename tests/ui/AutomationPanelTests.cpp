@@ -184,6 +184,85 @@ TEST_SUITE ("automation: gestures")
         CHECK (f.points().size() == 2);
     }
 
+    TEST_CASE ("the handle between two points bends the line and stays under the mouse; double-click and right-click straighten")
+    {
+        GestureFixture f;
+        f.click (f.at (2.0, 0.2f));
+        f.click (f.at (10.0, 0.8f));
+        f.click (f.at (12.0, 0.8f));
+        f.click (f.at (13.0, 0.3f));
+        REQUIRE (f.points().size() == 4);
+        f.project->clearUndoHistory();
+
+        // The rise has its handle in the middle; the level stretch has none, nor has a stretch too
+        // narrow to take hold of (20 pixels here).
+        const auto handle = f.gestures.getBendHandle (0);
+        REQUIRE (handle.has_value());
+        CHECK (handle->x == doctest::Approx (f.at (6.0, 0.5f).x));
+        CHECK (handle->y == doctest::Approx (f.at (6.0, 0.5f).y).epsilon (0.01));
+        CHECK_FALSE (f.gestures.getBendHandle (1).has_value());
+        CHECK_FALSE (f.gestures.getBendHandle (2).has_value());
+        CHECK_FALSE (f.gestures.getBendHandle (3).has_value());
+
+        CHECK (f.gestures.bendAt (*handle + juce::Point<float> (3.0f, -2.0f)) == 0);
+        CHECK (f.gestures.bendAt (*handle + juce::Point<float> (9.0f, 0.0f)) == -1);
+        CHECK (f.gestures.bendAt (f.at (2.0, 0.2f)) == -1);
+
+        // Taken a little off its centre and dragged down: the line bends late, and the handle has
+        // moved by what the mouse did.
+        const auto grab = *handle + juce::Point<float> (2.0f, -2.0f);
+        f.gestures.down (f.pointer (grab));
+        CHECK (f.gestures.getBentStretch() == 0);
+        CHECK (f.gestures.getDraggedPoint() == -1);
+        CHECK (f.points().size() == 4);                 // no point was added
+        CHECK (f.points()[0].curve == 0.0f);            // nor the line bent by the click alone
+
+        f.gestures.drag (f.pointer (grab + juce::Point<float> (0.0f, 15.0f)));
+        CHECK (f.points()[0].curve > 0.0f);
+        CHECK (f.gestures.getBendHandle (0)->y == doctest::Approx (handle->y + 15.0f).epsilon (0.01));
+        CHECK (f.gestures.getBendHandle (0)->x > handle->x);
+
+        // Far above the stretch: as soon as it can be, and no further.
+        f.gestures.drag (f.pointer (grab + juce::Point<float> (0.0f, -200.0f)));
+        CHECK (f.points()[0].curve == -1.0f);
+        f.gestures.drag (f.pointer (grab + juce::Point<float> (0.0f, 10.0f)));
+        f.gestures.up (f.pointer (grab + juce::Point<float> (0.0f, 10.0f)));
+        CHECK (f.gestures.getBentStretch() == -1);
+        const auto bent = f.points()[0].curve;
+        CHECK (bent > 0.0f);
+        CHECK (bent < 1.0f);
+        CHECK (f.project->getUndoDescription() == "Bend automation line");
+
+        // The whole drag was one step.
+        f.project->undo();
+        CHECK (f.points()[0].curve == 0.0f);
+        f.project->redo();
+        CHECK (f.points()[0].curve == bent);
+
+        // A double-click on the handle: straight again. So does a right-click.
+        f.click (*f.gestures.getBendHandle (0), {}, 2);
+        CHECK (f.points()[0].curve == 0.0f);
+        CHECK (f.project->getUndoDescription() == "Straighten automation line");
+        CHECK (f.points().size() == 4);
+
+        f.project->undo();
+        CHECK (f.points()[0].curve == bent);
+        f.click (*f.gestures.getBendHandle (0), rightButton);
+        CHECK (f.points()[0].curve == 0.0f);
+        CHECK (f.points().size() == 4);
+
+        // Zoomed out until the stretch is too narrow to take hold of (under 24 pixels): no handle.
+        f.view.pixelsPerBeat = 2.9;
+        CHECK_FALSE (f.gestures.getBendHandle (0).has_value());
+        CHECK (f.gestures.bendAt (f.at (6.0, 0.5f)) == -1);
+        f.view.pixelsPerBeat = 20.0;
+
+        // The mouse over a handle says so.
+        CHECK (f.gestures.getCursorFor (*f.gestures.getBendHandle (0)) == juce::MouseCursor::UpDownResizeCursor);
+        CHECK (f.gestures.getCursorFor (f.at (2.0, 0.2f)) == juce::MouseCursor::DraggingHandCursor);
+        CHECK (f.gestures.getCursorFor (f.at (20.0, 0.9f)) == juce::MouseCursor::CrosshairCursor);
+    }
+
     TEST_CASE ("without a parameter the gestures do nothing")
     {
         GestureFixture f;

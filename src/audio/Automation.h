@@ -5,7 +5,7 @@
 /** Automation: a parameter of a track (volume, pan, a send, an effect's or the instrument's knob)
     following a line drawn over the song. The line is Tracktion's automation curve of the parameter;
     while the song plays (and in the export) the parameter follows it, between the points in straight
-    lines, before the first point at its value and after the last at its.
+    lines or bent ones, before the first point at its value and after the last at its.
 
     Positions are song beats, values 0..1 of the parameter's range (as its knob shows it). Every
     change goes into the current undo transaction: the caller starts it (one drag = one step). */
@@ -15,6 +15,10 @@ namespace harmonia::audio::automation
     {
         double beat = 0.0;
         float value = 0.0f;
+
+        /** How the line from this point to the next bends: 0 is straight; towards 1 the value
+            changes later (it holds, then goes), towards -1 sooner. */
+        float curve = 0.0f;
 
         bool operator== (const Point&) const = default;
     };
@@ -41,13 +45,25 @@ namespace harmonia::audio::automation
     /** The 0..1 value at `beat`: from the line, or where the parameter's knob is without one. */
     float getValueAt (te::AutomatableParameter&, double beat);
 
-    /** Adds a point (at least beat 0, value clamped to 0..1). Returns its index. */
+    /** Adds a point (at least beat 0, value clamped to 0..1). Returns its index. Put on a bent
+        stretch of the line, it bends on as the stretch did. */
     int addPoint (te::AutomatableParameter&, double beat, float value);
 
     /** Moves a point: not past its neighbours (it keeps its index), value clamped. */
     void movePoint (te::AutomatableParameter&, int index, double beat, float value);
 
     void removePoint (te::AutomatableParameter&, int index);
+
+    /** Bends the line between point `index` and the next (-1..1, see Point::curve). */
+    void setCurve (te::AutomatableParameter&, int index, float curve);
+
+    /** Where the line between point `index` and the next is taken to bend it: the middle of its
+        bend (`curve` is the bend it has). Nothing if it can't bend: after the last point, in a
+        jump, or where the two points have the same value. */
+    std::optional<Point> getBendHandle (te::AutomatableParameter&, int index);
+
+    /** The bend that puts that handle at `value` (0..1): what dragging it there asks for. */
+    float getCurveForHandle (te::AutomatableParameter&, int index, float value);
 
     /** Removes the whole line: the parameter goes back to where its knob is. (So does removing
         the last point.) */

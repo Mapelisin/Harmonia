@@ -77,7 +77,7 @@ expect bugs.
 **Mixer and effects**
 - Built-in effects: EQ, Compressor, Reverb, Delay, Chorus, Phaser, Filter, Pump, a limiter.
 - Sends and return tracks, groups, sidechain; drag effects with the mouse, save effect chains to files.
-- Automation of any knob; MIDI Learn and recording of knob movements.
+- Automation of any knob, in straight or curved lines; MIDI Learn and recording of knob movements.
 - Presets for instruments and effects.
 
 **Plugins**

@@ -117,7 +117,8 @@ namespace harmonia::audio::automation
         points.reserve ((size_t) curve.getNumPoints());
 
         for (int i = 0; i < curve.getNumPoints(); ++i)
-            points.push_back ({ toBeat (curve, curve.getPointPosition (i)), to01 (parameter, curve.getPointValue (i)) });
+            points.push_back ({ toBeat (curve, curve.getPointPosition (i)), to01 (parameter, curve.getPointValue (i)),
+                                curve.getPointCurve (i) });
 
         return points;
     }
@@ -147,7 +148,17 @@ namespace harmonia::audio::automation
     int addPoint (te::AutomatableParameter& parameter, double beat, float value01)
     {
         auto& curve = parameter.getCurve();
-        return curve.addPoint (toCurvePosition (curve, beat), toValue (parameter, value01), 0.0f, getUndoManager (parameter));
+        const auto position = toCurvePosition (curve, beat);
+
+        // On a bent stretch both halves go on bending its way.
+        auto bend = 0.0f;
+
+        for (int i = 0; i + 1 < curve.getNumPoints(); ++i)
+            if (te::toUnderlying (curve.getPointPosition (i)) < te::toUnderlying (position)
+                && te::toUnderlying (position) < te::toUnderlying (curve.getPointPosition (i + 1)))
+                bend = curve.getPointCurve (i);
+
+        return curve.addPoint (position, toValue (parameter, value01), bend, getUndoManager (parameter));
     }
 
     void movePoint (te::AutomatableParameter& parameter, int index, double beat, float value01)
@@ -170,6 +181,47 @@ namespace harmonia::audio::automation
             curve.removePoint (index, getUndoManager (parameter));
             followKnobIfNoLine (parameter);
         }
+    }
+
+    void setCurve (te::AutomatableParameter& parameter, int index, float bend)
+    {
+        auto& curve = parameter.getCurve();
+
+        if (juce::isPositiveAndBelow (index, curve.getNumPoints() - 1))
+            curve.setCurveValue (index, juce::jlimit (-1.0f, 1.0f, bend), getUndoManager (parameter));
+    }
+
+    std::optional<Point> getBendHandle (te::AutomatableParameter& parameter, int index)
+    {
+        auto& curve = parameter.getCurve();
+
+        if (! juce::isPositiveAndBelow (index, curve.getNumPoints() - 1)
+            || te::toUnderlying (curve.getPointPosition (index)) >= te::toUnderlying (curve.getPointPosition (index + 1))
+            || curve.getPointValue (index) == curve.getPointValue (index + 1))
+            return std::nullopt;
+
+        const auto handle = curve.getBezierHandle (index);
+        return Point { toBeat (curve, handle.time), to01 (parameter, handle.value), curve.getPointCurve (index) };
+    }
+
+    float getCurveForHandle (te::AutomatableParameter& parameter, int index, float value01)
+    {
+        auto& curve = parameter.getCurve();
+
+        if (! juce::isPositiveAndBelow (index, curve.getNumPoints() - 1))
+            return 0.0f;
+
+        // The handle is the bend's share of the way from the middle of the straight line to the
+        // corner the line bends towards: below the middle of a rise, or above the middle of a fall,
+        // when the value changes late.
+        const auto from = curve.getPointValue (index), to = curve.getPointValue (index + 1);
+        const auto middle = 0.5f * (from + to), half = 0.5f * std::abs (to - from);
+
+        if (half <= 0.0f)
+            return 0.0f;
+
+        const auto above = (toValue (parameter, value01) - middle) / half;
+        return juce::jlimit (-1.0f, 1.0f, to > from ? -above : above);
     }
 
     void clear (te::AutomatableParameter& parameter)
