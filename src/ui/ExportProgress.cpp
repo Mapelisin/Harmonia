@@ -52,7 +52,12 @@ namespace harmonia::ui
 
         toFront (false);
         // The other windows too (plugins, settings) wait until it has ended.
-        enterModalState (true);
+        enterModalState (false);
+
+        // The keys come here (Esc cancels); only what is on the screen can have the focus.
+        if (isShowing())
+            grabKeyboardFocus();
+
         startTimer (turnMs);
         return true;
     }
