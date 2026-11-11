@@ -37,6 +37,10 @@ namespace harmonia::app
         /** A new project: one track with the built-in synth and an empty 4-bar clip. */
         static std::unique_ptr<core::Project> createNewProject (core::Session&);
 
+        /** What a new song is: one from the template new songs start from (core::templates), or
+            createNewProject if there is none or it can't be opened (`problem` then says why). */
+        static std::unique_ptr<core::Project> createStartProject (core::Session&, juce::String* problem = nullptr);
+
         /** Where projects and exports go by default: Documents/Harmonia. */
         static juce::File getDefaultFolder();
 
@@ -57,6 +61,12 @@ namespace harmonia::app
         juce::Array<juce::File> getRecentProjects() const override;
         void openRecentProject (const juce::File&) override;
         void clearRecentProjects() override;
+        juce::Array<juce::File> getTemplates() const override;
+        void newFromTemplate (const juce::File&) override;
+        void saveAsTemplate() override;
+        juce::File getStartTemplate() const override;
+        void setStartTemplate (const juce::File&) override;
+        void showTemplatesFolder() override;
 
         /** Opens a project file (also used for a file given on the command line). */
         bool open (const juce::File&);
@@ -81,6 +91,7 @@ namespace harmonia::app
         void setProject (std::unique_ptr<core::Project>, const juce::File&);
         void saveAs (std::function<void()> then);
         bool writeTo (const juce::File&);
+        void writeTemplate (const juce::String& name);
         void showError (const juce::String& title, const juce::String& message);
 
         /** Asks where to save `defaultName` in `format`, then exports the song (or `part` of it) there. */

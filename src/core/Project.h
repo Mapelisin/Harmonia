@@ -26,6 +26,10 @@ namespace harmonia::core
         static std::unique_ptr<Project> loadRecovered (Session&, const juce::File& copy, const juce::File& original,
                                                        juce::String& error);
 
+        /** Opens a template (a song written by saveCopy() to start new songs from: core::templates)
+            as a new song: it has no file of its own yet, nothing unsaved and nothing to undo. */
+        static std::unique_ptr<Project> loadTemplate (Session&, const juce::File& templateFile, juce::String& error);
+
         ~Project() override;
 
         /** Writes the project to `file`. Returns an error message, empty on success.

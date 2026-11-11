@@ -268,6 +268,13 @@ namespace harmonia::core
         return project;
     }
 
+    std::unique_ptr<Project> Project::loadTemplate (Session& session, const juce::File& templateFile, juce::String& error)
+    {
+        // A song of its own from here on: no file yet (what it records goes where an unsaved
+        // song's recordings go), and Ctrl+S asks where to save it.
+        return open (session, templateFile, {}, error);
+    }
+
     void Project::makeSoundPathsAbsolute()
     {
         // Tracktion stores a sound relative to the project file when it's near it, found from where

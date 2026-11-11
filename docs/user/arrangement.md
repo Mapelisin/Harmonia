@@ -536,7 +536,8 @@ The **File** menu (it also has **Settings...** for the sound card, MIDI keyboard
 
 | Keys | Action |
 |---|---|
-| Ctrl+N | New project |
+| Ctrl+N | New project (the empty song, or your template: see Templates below) |
+| — | Templates: a new song from a template; this song saved as a template (see below) |
 | Ctrl+O | Open (`.harmonia`) |
 | Ctrl+S / Ctrl+Shift+S | Save / Save as |
 | — | Earlier versions: the song as it was before each of the last saves (see below) |
@@ -595,6 +596,16 @@ into the file, with nothing added for the tail: you can loop it in any sampler o
 An MP3 starts with a moment of silence, so it does not repeat seamlessly: for a loop to use in a song,
 choose WAV or FLAC. The suggested file name includes the bars: "Song - bars 5-8.wav". The menu item shows
 which bars will go into the file.
+
+**Templates** (File → Templates): a template is a song to start new songs from: your usual tracks with
+their instruments and effects, sends, groups, the tempo, tracks armed for recording. Set a song up the way
+you like to begin, then **Save this song as a template...** and type a name: the song itself stays as it
+was. From then on the template's name is at the top of File → Templates: click it and a new, untitled song
+opens with everything the template had (Ctrl+S asks where to save it; the template doesn't change).
+*New songs start from* chooses what **Ctrl+N** and the start of Harmonia give you: the empty song or one of
+your templates. A template keeps the clips too: delete them before saving if you want only the tracks.
+Templates are ordinary song files in `Documents\Harmonia\Templates` (*Show the templates folder*): delete or
+rename them there. A template doesn't copy the sounds its clips play: it remembers where they were.
 
 **Autosave.** While there are unsaved changes, Harmonia quietly saves a copy of them every half a minute
 (without touching your file). If the program crashed (for example, because of a plugin) or the power went

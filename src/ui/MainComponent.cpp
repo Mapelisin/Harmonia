@@ -4,6 +4,7 @@
 #include "audio/Sampler.h"
 #include "core/Backups.h"
 #include "core/SongFiles.h"
+#include "core/Templates.h"
 #include "core/Drums.h"
 #include "core/Markers.h"
 #include "core/MidiFiles.h"
@@ -932,6 +933,56 @@ namespace harmonia::ui
     }
 
     //==============================================================================
+    juce::PopupMenu MainComponent::createTemplatesMenu()
+    {
+        juce::PopupMenu menu;
+
+        if (fileCommands == nullptr)
+            return menu;
+
+        juce::Component::SafePointer<MainComponent> safe (this);
+
+        const auto run = [safe] (std::function<void (FileCommands&)> command)
+        {
+            return [safe, command]
+            {
+                if (safe != nullptr && safe->fileCommands != nullptr)
+                    command (*safe->fileCommands);
+            };
+        };
+
+        const auto templates = fileCommands->getTemplates();
+        const auto start = fileCommands->getStartTemplate();
+
+        menu.addSectionHeader ("New song from");
+
+        if (templates.isEmpty())
+            menu.addItem ("No templates yet: save a song as one", false, false, nullptr);
+
+        for (const auto& file : templates)
+            menu.addItem (core::templates::getName (file), run ([file] (FileCommands& commands) { commands.newFromTemplate (file); }));
+
+        menu.addSeparator();
+        menu.addItem ("Save this song as a template...", run ([] (FileCommands& commands) { commands.saveAsTemplate(); }));
+
+        // What Ctrl+N and a start of Harmonia give.
+        juce::PopupMenu startMenu;
+        startMenu.addItem ("The empty song", true, start == juce::File(), run ([] (FileCommands& commands) { commands.setStartTemplate ({}); }));
+
+        if (! templates.isEmpty())
+            startMenu.addSeparator();
+
+        for (const auto& file : templates)
+            startMenu.addItem (core::templates::getName (file), true, file == start,
+                               run ([file] (FileCommands& commands) { commands.setStartTemplate (file); }));
+
+        menu.addSubMenu (start != juce::File() ? "New songs start from: " + core::templates::getName (start)
+                                               : juce::String ("New songs start from: the empty song"),
+                         startMenu);
+        menu.addItem ("Show the templates folder", run ([] (FileCommands& commands) { commands.showTemplatesFolder(); }));
+        return menu;
+    }
+
     juce::PopupMenu MainComponent::createFileMenu()
     {
         const auto hasCommands = fileCommands != nullptr;
@@ -969,6 +1020,7 @@ namespace harmonia::ui
         }
 
         menu.addSubMenu ("Open recent", recentMenu, ! recent.isEmpty());
+        menu.addSubMenu ("Templates", createTemplatesMenu(), hasCommands);
         menu.addSeparator();
         menu.addItem ("Save  (Ctrl+S)", hasCommands, false, run (&FileCommands::saveProject));
         menu.addItem ("Save as...  (Ctrl+Shift+S)", hasCommands, false, run (&FileCommands::saveProjectAs));

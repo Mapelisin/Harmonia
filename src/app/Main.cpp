@@ -82,7 +82,12 @@ namespace harmonia::app
             session = createSession (true);
             const auto deviceProblem = audio::checkStartupDevice (*session);
 
-            mainWindow = std::make_unique<MainWindow> (*session, MainWindow::createNewProject (*session));
+            // The song Harmonia starts with: the user's own template, if one is chosen for that.
+            juce::String templateProblem;
+            mainWindow = std::make_unique<MainWindow> (*session, MainWindow::createStartProject (*session, &templateProblem));
+
+            if (templateProblem.isNotEmpty())
+                mainWindow->showWarning (templateProblem);
 
             // Work a crash left behind comes first; else a project file given on the command line
             // (double-clicked in Explorer).

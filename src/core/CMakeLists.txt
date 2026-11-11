@@ -48,6 +48,8 @@ add_library(harmonia_core STATIC
     SongFiles.cpp
     ProjectFiles.h
     ProjectFiles.cpp
+    Templates.h
+    Templates.cpp
     NoteOps.h
     NoteOps.cpp
     NoteTools.h

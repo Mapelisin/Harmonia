@@ -129,6 +129,10 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   поиск, избранное и недавние (хранятся в настройках программы, не в песне). Окно выбора — `ui::PluginChooser`
   (`show`), инструмент по выбору — `InstrumentPanel::choose`, эффект — `ChannelStrip::addEffect (Entry)`.
   В тестах «найденные» плагины и чистое избранное — `test::ScannedPlugins` (`tests/TestScannedPlugins.h`).
+- Шаблоны песен — только через `core::templates` (обычные песни в `Documents\Harmonia\Templates`; в тестах —
+  своя временная папка, она параметр каждой функции). Новая песня из окна (Ctrl+N, запуск) — через
+  `MainWindow::createStartProject`, не `createNewProject` напрямую: иначе стартовый шаблон не сработает.
+  Команды шаблонов для меню — в `ui::FileCommands`.
 - Сохранение песни из окна — через `core::backups::save` (прежняя версия уходит в «<песня> Backups»), не
   `Project::save` напрямую. Всё, что в песне называет звуковой файл (клипы, дубли, сэмплы драм-машины, звук
   сэмплера), — через `core::song_files` (`forEachReference`, `resolve`): новый вид ссылки на файл добавлять

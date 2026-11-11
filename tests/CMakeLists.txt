@@ -13,6 +13,7 @@ add_executable(harmonia_tests
     core/TrackFolderTests.cpp
     core/ProjectFilesTests.cpp
     core/BackupsTests.cpp
+    core/TemplatesTests.cpp
     core/BeatFinderTests.cpp
     core/BeatMapTests.cpp
     core/NoteTests.cpp
@@ -110,6 +111,7 @@ add_executable(harmonia_tests
     ui/AudioTempoUiTests.cpp
     ui/ChordNameTests.cpp
     ui/LoopExportTests.cpp
+    ui/TemplateMenuTests.cpp
     ui/ExportOptionsTests.cpp
     ui/ExportProgressTests.cpp
     ui/StemsOptionsTests.cpp

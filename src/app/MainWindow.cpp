@@ -4,6 +4,7 @@
 #include "core/Backups.h"
 #include "core/Clips.h"
 #include "core/SongFiles.h"
+#include "core/Templates.h"
 #include "ui/ExportOptions.h"
 #include "ui/StemsOptions.h"
 #include "ui/MainComponent.h"
@@ -63,6 +64,19 @@ namespace harmonia::app
 
         p->clearUndoHistory();
         return p;
+    }
+
+    std::unique_ptr<core::Project> MainWindow::createStartProject (core::Session& session, juce::String* problem)
+    {
+        juce::String templateProblem;
+
+        if (auto song = core::templates::createStartSong (session, templateProblem))
+            return song;
+
+        if (problem != nullptr)
+            *problem = templateProblem;
+
+        return createNewProject (session);
     }
 
     juce::File MainWindow::getDefaultFolder()
@@ -176,7 +190,117 @@ namespace harmonia::app
     //==============================================================================
     void MainWindow::newProject()
     {
-        askToSaveChanges ([this] { setProject (createNewProject (session), {}); });
+        askToSaveChanges ([this]
+        {
+            juce::String problem;
+            setProject (createStartProject (session, &problem), {});
+
+            if (problem.isNotEmpty())
+                showWarning (problem);
+        });
+    }
+
+    //==============================================================================
+    juce::Array<juce::File> MainWindow::getTemplates() const
+    {
+        return core::templates::list();
+    }
+
+    void MainWindow::newFromTemplate (const juce::File& templateFile)
+    {
+        askToSaveChanges ([this, templateFile]
+        {
+            juce::String error;
+            auto song = core::templates::createSong (session, templateFile, error);
+
+            if (song == nullptr)
+            {
+                showError ("Cannot open the template", error);
+                return;
+            }
+
+            setProject (std::move (song), {});
+
+            if (auto* content = getMainComponent())
+                content->showMessage ("New song from the template " + core::templates::getName (templateFile));
+        });
+    }
+
+    void MainWindow::saveAsTemplate()
+    {
+        auto* window = new juce::AlertWindow ("Save as a template",
+                                              "The song as it is now (its tracks, instruments, effects, sends and clips), to start new songs from. "
+                                              "The template's name:",
+                                              juce::MessageBoxIconType::NoIcon);
+        window->addTextEditor ("name", file != juce::File() ? getProjectName() : juce::String ("My template"));
+        window->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
+        window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+        juce::Component::SafePointer<juce::AlertWindow> safeWindow (window);
+        juce::Component::SafePointer<MainWindow> safe (this);
+
+        window->enterModalState (true, juce::ModalCallbackFunction::create ([safeWindow, safe] (int result)
+        {
+            if (result != 1 || safeWindow == nullptr || safe == nullptr)
+                return;
+
+            const auto name = safeWindow->getTextEditorContents ("name");
+            const auto target = core::templates::getFileFor (name);
+
+            if (! target.existsAsFile())
+            {
+                safe->writeTemplate (name);
+                return;
+            }
+
+            const auto options = juce::MessageBoxOptions().withIconType (juce::MessageBoxIconType::QuestionIcon)
+                                                          .withTitle ("Replace the template?")
+                                                          .withMessage ("There is a template called \"" + core::templates::getName (target)
+                                                                        + "\" already. Replace it with this song?")
+                                                          .withButton ("Replace", 1)
+                                                          .withButton ("Cancel", 0)
+                                                          .withAssociatedComponent (safe.getComponent());
+
+            juce::AlertWindow::showAsync (options, [safe, name] (int answer)
+            {
+                if (answer == 1 && safe != nullptr)
+                    safe->writeTemplate (name);
+            });
+        }), true);
+    }
+
+    void MainWindow::writeTemplate (const juce::String& name)
+    {
+        if (const auto error = core::templates::save (*project, name); error.isNotEmpty())
+        {
+            showError ("Cannot save the template", error);
+            return;
+        }
+
+        if (auto* content = getMainComponent())
+            content->showMessage ("Template saved: " + core::templates::getName (core::templates::getFileFor (name))
+                                    + " (File > Templates starts a new song from it)");
+    }
+
+    juce::File MainWindow::getStartTemplate() const
+    {
+        return core::templates::getStartTemplate (session);
+    }
+
+    void MainWindow::setStartTemplate (const juce::File& templateFile)
+    {
+        core::templates::setStartTemplate (session, templateFile);
+
+        if (auto* content = getMainComponent())
+            content->showMessage (templateFile != juce::File() ? "New songs start from the template " + core::templates::getName (templateFile)
+                                                               : juce::String ("New songs start from the empty song"));
+    }
+
+    void MainWindow::showTemplatesFolder()
+    {
+        const auto folder = core::templates::getDefaultFolder();
+        folder.createDirectory();
+        folder.revealToUser();
     }
 
     juce::Array<juce::File> MainWindow::getRecentProjects() const

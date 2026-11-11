@@ -30,6 +30,7 @@ namespace harmonia::ui
                 { "Ctrl+T", "Computer keyboard as a piano on / off (Up / Down: its octave)" },
                 { "Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z)", "Undo / redo" },
                 { "Ctrl+N / Ctrl+O", "New project / open a project" },
+                { "File > Templates", "A new song from a template; this song saved as one; the one Ctrl+N starts from" },
                 { "Ctrl+S / Ctrl+Shift+S", "Save / save as" },
                 { "Ctrl+R", "Export the song: WAV, FLAC or MP3 (the File menu also exports the loop region)" },
                 { "Esc while it exports", "Cancel the export: no file is left half-written" },

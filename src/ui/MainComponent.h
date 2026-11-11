@@ -131,6 +131,10 @@ namespace harmonia::ui
         /** The menu bar's File menu. */
         juce::PopupMenu createFileMenu();
 
+        /** File > Templates: a new song from one, this song saved as one, which one new songs
+            start from. */
+        juce::PopupMenu createTemplatesMenu();
+
         MainMenu& getMainMenu() noexcept                                { return mainMenu; }
         juce::MenuBarComponent& getMenuBar() noexcept                   { return menuBar; }
         CpuMeter& getCpuMeter() noexcept                                { return cpuMeter; }

@@ -35,5 +35,15 @@ namespace harmonia::ui
         virtual juce::Array<juce::File> getRecentProjects() const      { return {}; }
         virtual void openRecentProject (const juce::File&)              {}
         virtual void clearRecentProjects()                              {}
+
+        /** Templates (core::templates): the ones there are, by name; a new song from one; the
+            open song saved as one (asks its name); the one new songs start from (none: the empty
+            song); and their folder shown in the file manager. */
+        virtual juce::Array<juce::File> getTemplates() const           { return {}; }
+        virtual void newFromTemplate (const juce::File&)                {}
+        virtual void saveAsTemplate()                                   {}
+        virtual juce::File getStartTemplate() const                     { return {}; }
+        virtual void setStartTemplate (const juce::File&)               {}
+        virtual void showTemplatesFolder()                              {}
     };
 }
