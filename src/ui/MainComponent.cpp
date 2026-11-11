@@ -3,6 +3,7 @@
 #include "audio/Instruments.h"
 #include "audio/Sampler.h"
 #include "core/Backups.h"
+#include "core/Clips.h"
 #include "core/SongFiles.h"
 #include "core/Templates.h"
 #include "core/Drums.h"
@@ -62,8 +63,10 @@ namespace harmonia::ui
         {
             pianoRoll.setLetterShortcutsEnabled (! noteInput.getComputerKeyboard().isEnabled());
             arrangement.setLetterShortcutsEnabled (! noteInput.getComputerKeyboard().isEnabled());
+            updateLoop();       // armed: the song doesn't go round at its end
             transportBar.refresh();
         };
+        noteInput.onClipsMade = [this] (const juce::Array<te::MidiClip*>& clips) { showRecordedClips (clips); };
         updateMidiStatus();
 
         transportBar.onPlayModeToggled = [this] { togglePlayMode(); };
@@ -186,6 +189,7 @@ namespace harmonia::ui
         menuBar.setModel (nullptr);
         transport.recordsAudio = nullptr;
         noteInput.onStateChanged = nullptr;
+        noteInput.onClipsMade = nullptr;
         midiInputs.onMessage = nullptr;
         midiInputs.onDevicesChanged = nullptr;
         midiControls.onMessage = nullptr;
@@ -215,6 +219,7 @@ namespace harmonia::ui
             currentTrack = track;
             notePreview.setTrack (track);
             midiInputs.setTrack (track);
+            noteInput.setTrack (track);
             instrumentPanel.reset();
 
             if (track != nullptr)
@@ -244,7 +249,14 @@ namespace harmonia::ui
     void MainComponent::updateLoop()
     {
         // Clip mode loops the open clip like a pattern; song mode the loop region or the song.
-        const auto range = arrangementModel.getPlayRange();
+        auto range = arrangementModel.getPlayRange();
+        const auto wholeSong = arrangementModel.getPlayMode() == arrangement::PlayMode::song
+                               && ! arrangementModel.getLoopRegion().has_value();
+
+        // Armed to record, the whole song isn't a loop: it plays on past its end, and what is
+        // played there makes it longer (recording sound does the same: audio::Transport).
+        if (wholeSong && noteInput.isRecordArmed())
+            range = {};
 
         if (std::abs (range.start - playedLoop.start) > 1.0e-9 || std::abs (range.end - playedLoop.end) > 1.0e-9)
         {
@@ -255,6 +267,30 @@ namespace harmonia::ui
         // Recording with a loop region set in song mode goes round it: a take each time.
         transport.setRecordsTakes (arrangementModel.getPlayMode() == arrangement::PlayMode::song
                                    && arrangementModel.getLoopRegion().has_value());
+    }
+
+    void MainComponent::showRecordedClips (const juce::Array<te::MidiClip*>& clips)
+    {
+        auto* first = clips.getFirst();
+
+        if (first == nullptr)
+            return;
+
+        auto* track = dynamic_cast<te::AudioTrack*> (first->getTrack());
+        const auto beatsPerBar = arrangementModel.getBeatsPerBar();
+        juce::StringArray places;
+
+        for (auto* clip : clips)
+            places.add (describeBars ({ core::clips::getStartBeat (*clip), core::clips::getEndBeat (*clip) }, beatsPerBar));
+
+        // Nothing was open (and the user hasn't gone to another track since): the piano roll
+        // shows what was just played.
+        if (track != nullptr && arrangementModel.getOpenClip() == nullptr && arrangementModel.getCurrentTrack() == track)
+            arrangementModel.openClip (first);
+
+        showMessage ((clips.size() == 1 ? juce::String ("Recorded into a new clip") : "Recorded into " + juce::String (clips.size()) + " new clips")
+                       + (track != nullptr ? " on " + track->getName() : juce::String())
+                       + ": " + places.joinIntoString (", ") + ". Ctrl+Z takes the whole take back");
     }
 
     void MainComponent::setPlayMode (arrangement::PlayMode mode)

@@ -288,6 +288,10 @@ namespace harmonia::ui
             and the instrument row follow. */
         void currentChanged();
         void updateLoop();
+
+        /** A take made clips for what was played where the track had none: with no clip open,
+            the first of them opens in the piano roll; the status bar says where they are. */
+        void showRecordedClips (const juce::Array<te::MidiClip*>&);
         void updateMidiStatus();
         void playFrom (double beat);
 

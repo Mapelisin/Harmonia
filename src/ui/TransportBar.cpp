@@ -35,7 +35,8 @@ namespace harmonia::ui
             refresh();
         };
 
-        recordButton.setTooltip ("Record (R): notes played while the song plays go into the clip open in the piano roll,\n"
+        recordButton.setTooltip ("Record (R): notes played while the song plays go into the clip open in the piano roll\n"
+                                 "(in Song mode, played anywhere else, into the clip that is there or into a new one),\n"
                                  "and armed audio tracks record their input (straight on from where the song is).\n"
                                  "In Song mode with a loop region, audio is recorded round the loop: a take each time.");
         recordButton.onClick = [this] { noteInput.setRecordArmed (! noteInput.isRecordArmed()); };

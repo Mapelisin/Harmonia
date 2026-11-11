@@ -87,6 +87,11 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Аранжировка: поведение — в `ui/arrangement/ArrangementModel` и `ArrangementGestures` (тесты без окна).
   Открытый клип и текущая дорожка живут в `ArrangementModel`; `MainComponent` переносит их в piano roll.
   Перед сменой клипа piano roll — `NoteInput::finishTake()`.
+- Запись нот (`ui::NoteInput`): сыгранное внутри открытого клипа — `PianoRollModel::addRecordedNotes`; всё
+  остальное (другое место дорожки, клип не открыт) — только через `core::TakeClips` (клип на этом месте или
+  новый, тот же шаг undo, что и дубль). Дорожку `NoteInput` узнаёт через `setTrack`
+  (`MainComponent::currentChanged`); о новых клипах сообщает `onClipsMade` после дубля. Взведённая запись в
+  режиме Song без лупа выключает зацикливание песни (`MainComponent::updateLoop`).
 - Редактор аудиоклипа (нижняя панель аудиодорожки): поведение — `ui/audioeditor/AudioEditorModel` (клип —
   `ArrangementModel::getFocusedAudioClip`, секунды файла ↔ доли песни, команды) и `AudioEditorGestures` (мышь),
   тесты без окна. Ручки фейдов и громкости аудиоклипа (и в аранжировке) — общий `ui/AudioClipHandles`.

@@ -473,8 +473,11 @@ The **Clip / Song** button (or **L**) sets what Space plays, like PAT / SONG in 
   the ruler above the clips. **Ctrl + click** on the ruler removes the loop. An ordinary click on the ruler
   plays from that place (and turns on Song).
 
-Recording (**R** or the Rec button) writes into the open clip: in Clip mode every pass adds notes; in Song
-mode, only what is played while the song is inside this clip.
+Recording (**R** or the Rec button) writes into the open clip: in Clip mode every pass adds notes. In Song
+mode what is played while the song is inside this clip goes into it, and what is played anywhere else goes
+into the clip the track has there or into a new clip (with no clip open at all, on the current track): you
+don't have to prepare a clip. Armed to record in Song mode, the song plays on past its end instead of
+going round; with a loop set, it goes round the loop.
 
 ## Tempo and time signature
 

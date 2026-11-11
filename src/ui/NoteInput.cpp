@@ -1,4 +1,5 @@
 #include "ui/NoteInput.h"
+#include "audio/Freeze.h"
 #include "core/Clips.h"
 
 namespace harmonia::ui
@@ -17,6 +18,7 @@ namespace harmonia::ui
     {
         stopTimer();
         computerKeyboard.onSettingsChanged = nullptr;
+        onClipsMade = nullptr;
         computerKeyboard.releaseAll();
         finishTake();
         model.setHeldPitches ({});
@@ -85,15 +87,37 @@ namespace harmonia::ui
     {
         update();   // playback may have started since the last timer tick
 
-        if (! recorder.isActive() || model.getClip() == nullptr || model.getClip() != takeClip.get())
+        if (! recorder.isActive() || model.getClip() != takeClip.get())
             return;
 
         if (const auto beat = heardBeat (wallMs))
+        {
             if (const auto placed = placeInsideClip (*beat))
                 model.addRecordedController (c, *placed, value);
+            else if (elsewhere != nullptr)
+                elsewhere->addController (c, *beat, value);
+        }
     }
 
     //==============================================================================
+    void NoteInput::setTrack (te::AudioTrack* newTrack)
+    {
+        if (track.get() != newTrack)
+        {
+            // A take belongs to the track it was played on.
+            finishTake();
+            track = newTrack;
+        }
+    }
+
+    te::AudioTrack* NoteInput::getRecordedTrack() const
+    {
+        auto* played = model.getClip() != nullptr ? dynamic_cast<te::AudioTrack*> (model.getClip()->getTrack()) : track.get();
+
+        // A frozen track plays a file of its sound: nothing new is written on it.
+        return played != nullptr && core::TakeClips::canRecordOn (*played) && ! audio::freeze::isFrozen (*played) ? played : nullptr;
+    }
+
     void NoteInput::setRecordArmed (bool shouldBeArmed)
     {
         if (armed != shouldBeArmed)
@@ -117,12 +141,15 @@ namespace harmonia::ui
     {
         // Not while a count-in plays before the song's start: those notes would be before beat 0.
         const auto heard = clock.isPlaying() ? clock.getHeardBeat (now()) : std::optional<double>();
-        const auto shouldRecord = armed && clock.isPlaying() && model.getClip() != nullptr && heard.value_or (0.0) >= 0.0;
+        const auto hasWhere = model.getClip() != nullptr || getRecordedTrack() != nullptr;
+        const auto shouldRecord = armed && clock.isPlaying() && hasWhere && heard.value_or (0.0) >= 0.0;
+
+        // A take belongs to the clip that was open when it began (or to none being open).
+        if (recorder.isActive() && (! shouldRecord || model.getClip() != takeClip.get()))
+            finishTake();
 
         if (shouldRecord && ! recorder.isActive())
             startTake();
-        else if (! shouldRecord && recorder.isActive())
-            finishTake();
 
         if (recorder.isActive())
         {
@@ -142,11 +169,17 @@ namespace harmonia::ui
         const auto loop = clock.getLoopBeats();
         takeLoop = { loop.getStart(), loop.getEnd() };
         takeClip = model.getClip();
-        takeClipRange = { model.getClipStartBeat(), model.getClipEndBeat() };
+        takeClipRange = { model.getClipStartBeat(), model.getClipEndBeat() };      // nothing, with no clip open
         takeWholeClip = takeClipRange;
 
         if (model.isLooping())
             takeWholeClip = { core::clips::getStartBeat (*takeClip), core::clips::getEndBeat (*takeClip) };
+
+        elsewhere.reset();
+
+        if (auto* played = getRecordedTrack())
+            elsewhere = std::make_unique<core::TakeClips> (model.getProject(), *played);
+
         recorder.start (takeLoop);
         lastHeardBeat = clock.getHeardBeat (now()).value_or (takeLoop.start);
 
@@ -164,7 +197,13 @@ namespace harmonia::ui
         model.setLiveNotes ({});
         keepOneUndoStep.reset();
         takeClip = nullptr;
+
+        const auto made = elsewhere != nullptr ? elsewhere->getMadeClips() : juce::Array<te::MidiClip*>();
+        elsewhere.reset();
         stateChanged();
+
+        if (! made.isEmpty() && onClipsMade != nullptr)
+            onClipsMade (made);
     }
 
     std::optional<double> NoteInput::heardBeat (double wallMs)
@@ -182,7 +221,7 @@ namespace harmonia::ui
     void NoteInput::commit (const std::vector<core::Note>& notes)
     {
         // The clip was switched without finishing the take (shouldn't happen): don't write into another one.
-        if (notes.empty() || model.getClip() == nullptr || model.getClip() != takeClip.get())
+        if (notes.empty() || model.getClip() != takeClip.get())
             return;
 
         auto grid = model.getGridBeats();
@@ -190,15 +229,23 @@ namespace harmonia::ui
         if (grid <= 0.0)
             grid = 0.25;
 
-        std::vector<core::Note> placed;
+        std::vector<core::Note> inOpenClip;
 
-        for (const auto& n : notes)
-            placed.push_back (core::quantizeRecorded (n, quantize, grid, takeLoop));
+        for (const auto& played : notes)
+        {
+            const auto n = core::quantizeRecorded (played, quantize, grid, takeLoop);
 
-        placed = keepInsideClip (std::move (placed));
+            // Played while the song was somewhere else than the open clip: not lost.
+            if (placeInsideClip (n.startBeat).has_value())
+                inOpenClip.push_back (n);
+            else if (elsewhere != nullptr)
+                elsewhere->addNote (n);
+        }
 
-        if (! placed.empty())
-            model.addRecordedNotes (placed);
+        inOpenClip = keepInsideClip (std::move (inOpenClip));
+
+        if (! inOpenClip.empty())
+            model.addRecordedNotes (inOpenClip);
     }
 
     std::vector<core::Note> NoteInput::keepInsideClip (std::vector<core::Note> notes) const
@@ -237,7 +284,8 @@ namespace harmonia::ui
             beat = takeClipRange.start + offset;
         }
 
-        // In song mode the song plays past the clip: what is played outside it isn't the clip's.
+        // In song mode the song plays past the clip: what is played outside it isn't the clip's
+        // (and with no clip open, nothing is).
         if (beat < takeClipRange.start - 1.0e-9 || beat >= takeClipRange.end - 1.0e-9)
             return std::nullopt;
 

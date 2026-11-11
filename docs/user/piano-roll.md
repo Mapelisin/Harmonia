@@ -253,6 +253,13 @@ next one.
 - **●** (or **R**) arms recording. Then **Space**: the clip plays in a loop, and everything you play is
   written into it. Every pass adds notes. **Space** again stops. The whole take is undone with one
   **Ctrl+Z**.
+- **In Song mode** (**L**) the song plays, not just this clip. What you play while the song is inside
+  the open clip goes into it; what you play anywhere else isn't lost: it goes into the clip the track has
+  at that place, or into a **new clip** made for it (it begins at the bar of your first note and grows bar
+  by bar as you go on). No clip needs to be prepared: with none open, play on the selected track, and the
+  new clip opens here when you stop. While recording is armed, the song doesn't jump back to its start
+  at its end: it plays on, and what you play there makes the song longer. To record round a part of the
+  song instead, set a loop (**Ctrl + drag** on the ruler above the clips).
 - While a key is held, the note is shown in red; the pressed key lights up on the left.
 - The metronome icon (**Ctrl+M**) is the metronome.
 - The list to the right of Keys sets how recorded notes are placed: **As played**, **Quantize starts**

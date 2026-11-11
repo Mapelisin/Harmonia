@@ -1,6 +1,12 @@
 #include <doctest.h>
 
 #include "core/TestProject.h"
+#include "audio/Freeze.h"
+#include "audio/Instruments.h"
+#include "core/Clips.h"
+#include "core/Controllers.h"
+#include "core/NoteEditor.h"
+#include "core/Tracks.h"
 #include "ui/MainComponent.h"
 #include "ui/NoteInput.h"
 
@@ -311,16 +317,28 @@ TEST_SUITE ("note input: recording")
         CHECK (f.notes()[0].getEndBeat() == doctest::Approx (2.0));
     }
 
-    TEST_CASE ("in song mode only what is played inside the open clip goes in, cut at its end")
+    TEST_CASE ("in song mode what is played inside the open clip goes in, cut at its end; the rest gets a clip of its own")
     {
         NoteInputFixture f;
         f.clock.loop = { 0.0, 32.0 };     // the song loops, the clip is beats 0..16
+        f.project->clearUndoHistory();
+
+        juce::Array<te::MidiClip*> made;
+        f.input->onClipsMade = [&] (const juce::Array<te::MidiClip*>& clips) { made = clips; };
         f.input->setRecordArmed (true);
         f.clock.playing = true;
 
         f.play (60, 2.0, 3.0);
         f.play (62, 20.0, 21.0);
         f.play (64, 15.0, 18.0);
+
+        // Past the clip: a clip of the take's own, there at once (the song's next time round plays it).
+        auto clips = core::clips::getMidiClips (*f.track);
+        REQUIRE (clips.size() == 2);
+        CHECK (clips[0] == f.clip);
+        CHECK (core::clips::getStartBeat (*clips[1]) == doctest::Approx (20.0));
+        CHECK (core::clips::getEndBeat (*clips[1]) == doctest::Approx (24.0));
+        CHECK (made.isEmpty());             // said when the take ends
 
         // A key held on into the song's next pass shows as being recorded only inside the clip.
         f.clock.beat = 30.0;
@@ -336,6 +354,166 @@ TEST_SUITE ("note input: recording")
         CHECK (notes[0].pitch == 60);
         CHECK (notes[1].pitch == 64);
         CHECK (notes[1].getEndBeat() == doctest::Approx (16.0));
+        CHECK (core::clips::getEndBeat (*f.clip) == doctest::Approx (16.0));
+
+        // The take's clip has grown to hold the key that was still down at the stop.
+        REQUIRE (made.size() == 1);
+        CHECK (made[0] == clips[1]);
+        CHECK (core::clips::getStartBeat (*made[0]) == doctest::Approx (20.0));
+        CHECK (core::clips::getEndBeat (*made[0]) == doctest::Approx (32.0));
+
+        const auto elsewhere = test::readNotes (*made[0]);
+        REQUIRE (elsewhere.size() == 2);
+        CHECK (elsewhere[0].pitch == 62);
+        CHECK (elsewhere[0].startBeat == doctest::Approx (0.0));
+        CHECK (elsewhere[0].lengthBeats == doctest::Approx (1.0));
+        CHECK (elsewhere[1].pitch == 65);
+        CHECK (elsewhere[1].startBeat == doctest::Approx (10.0));
+
+        // The whole take, its clip too, is one step back.
+        f.project->getEdit().dispatchPendingUpdatesSynchronously();
+        f.project->undo();
+        CHECK (f.notes().empty());
+        CHECK (core::clips::getMidiClips (*f.track).size() == 1);
+        CHECK_FALSE (f.project->canUndo());
+    }
+
+    TEST_CASE ("with no clip open, what is played is recorded on the current track: a clip is made for it")
+    {
+        NoteInputFixture f;
+        f.model.setClip (nullptr);
+        f.clock.loop = {};                  // the song plays straight on
+        auto* second = f.project->addTrack ("Second");
+        REQUIRE (second != nullptr);
+        f.project->clearUndoHistory();
+
+        juce::Array<te::MidiClip*> made;
+        int reports = 0;
+        f.input->onClipsMade = [&] (const juce::Array<te::MidiClip*>& clips) { made = clips; ++reports; };
+        f.input->setRecordArmed (true);
+        f.clock.playing = true;
+
+        // No track is played: there is nowhere to record.
+        f.input->update();
+        CHECK_FALSE (f.input->isRecording());
+        f.play (60, 1.0, 2.0);
+        CHECK (f.notes().empty());
+
+        f.input->setTrack (second);
+        f.input->update();
+        CHECK (f.input->isRecording());
+
+        f.play (60, 33.0, 34.0);
+        f.play (64, 34.0, 37.5, 80);
+
+        // The mod wheel, moved after the notes.
+        f.clock.beat = 38.0;
+        f.input->handleMidiMessage (juce::MidiMessage::controllerEvent (1, 1, 127), NoteInput::now());
+
+        auto clips = core::clips::getMidiClips (*second);
+        REQUIRE (clips.size() == 1);
+        CHECK (core::clips::getStartBeat (*clips[0]) == doctest::Approx (32.0));
+        CHECK (core::clips::getEndBeat (*clips[0]) == doctest::Approx (40.0));
+        CHECK (reports == 0);
+
+        f.clock.playing = false;
+        f.input->update();
+        CHECK_FALSE (f.input->isRecording());
+        CHECK (reports == 1);
+        CHECK (made == clips);
+
+        const auto notes = test::readNotes (*clips[0]);
+        REQUIRE (notes.size() == 2);
+        CHECK (notes[0].pitch == 60);
+        CHECK (notes[0].startBeat == doctest::Approx (1.0));
+        CHECK (notes[1].pitch == 64);
+        CHECK (notes[1].velocity == 80);
+        CHECK (notes[1].startBeat == doctest::Approx (2.0));
+        CHECK (notes[1].lengthBeats == doctest::Approx (3.5));
+
+        const auto wheel = core::controllers::getPlayed (*clips[0], core::controllers::Controller::modWheel);
+        REQUIRE (wheel.size() == 1);
+        CHECK (wheel[0].beat == doctest::Approx (38.0));
+        CHECK (wheel[0].value == doctest::Approx (1.0f));
+
+        // Nothing went to the other track's clip.
+        CHECK (f.notes().empty());
+
+        // A take that made nothing says nothing.
+        f.clock.playing = true;
+        f.play (67, 35.0, 36.0);            // inside the clip that is there now
+        f.clock.playing = false;
+        f.input->update();
+        CHECK (reports == 1);
+        CHECK (test::readNotes (*clips[0]).size() == 3);
+        f.project->getEdit().dispatchPendingUpdatesSynchronously();
+        f.project->undo();
+
+        // One step back takes the first take's notes and its clip.
+        f.project->undo();
+        CHECK (core::clips::getMidiClips (*second).isEmpty());
+        CHECK_FALSE (f.project->canUndo());
+    }
+
+    TEST_CASE ("quantize puts what is played outside the open clip on the grid too")
+    {
+        NoteInputFixture f;
+        f.clock.loop = {};
+        f.input->setQuantize (InputQuantize::starts);
+        f.input->setRecordArmed (true);
+        f.clock.playing = true;
+
+        // A little early for beat 16, where the open clip ends: the note belongs after it.
+        f.play (60, 15.95, 16.9);
+        CHECK (f.notes().empty());
+
+        const auto clips = core::clips::getMidiClips (*f.track);
+        REQUIRE (clips.size() == 2);
+        CHECK (core::clips::getStartBeat (*clips[1]) == doctest::Approx (16.0));
+        CHECK (core::clips::getEndBeat (*clips[1]) == doctest::Approx (20.0));
+
+        const auto notes = test::readNotes (*clips[1]);
+        REQUIRE (notes.size() == 1);
+        CHECK (notes[0].startBeat == doctest::Approx (0.0));
+    }
+
+    TEST_CASE ("nothing is recorded where notes can't go: an audio track, a frozen track")
+    {
+        NoteInputFixture f;
+        f.model.setClip (nullptr);
+        f.clock.loop = {};
+        f.input->setRecordArmed (true);
+        f.clock.playing = true;
+
+        auto* guitar = f.project->addTrack ("Guitar");
+        REQUIRE (guitar != nullptr);
+        core::tracks::setKind (*guitar, core::tracks::Kind::audio);
+        f.input->setTrack (guitar);
+        f.input->update();
+        CHECK_FALSE (f.input->isRecording());
+        f.play (60, 1.0, 2.0);
+        CHECK (guitar->getClips().isEmpty());
+
+        // A frozen track plays a file of its sound: nothing new goes on it.
+        REQUIRE (audio::instruments::useBuiltInSynth (*f.track).isEmpty());
+        core::Note held;
+        held.lengthBeats = 4.0;
+        core::NoteEditor (*f.clip).add (held);
+        REQUIRE (audio::freeze::freeze (*f.project, *f.track).isEmpty());
+        REQUIRE (audio::freeze::isFrozen (*f.track));
+
+        f.input->setTrack (f.track);
+        f.input->update();
+        CHECK_FALSE (f.input->isRecording());
+        f.play (62, 20.0, 21.0);
+        CHECK (core::clips::getMidiClips (*f.track).size() == 1);
+
+        // Unfrozen, it takes notes again.
+        audio::freeze::unfreeze (*f.project, *f.track);
+        f.input->update();
+        CHECK (f.input->isRecording());
+        f.play (62, 20.0, 21.0);
+        CHECK (core::clips::getMidiClips (*f.track).size() == 2);
     }
 }
 
@@ -394,6 +572,89 @@ TEST_SUITE ("note input: main window")
         const auto click = project->getEdit().clickTrackEnabled.get();
         CHECK (main.keyPressed (key ('m', 0, ctrl)));
         CHECK (project->getEdit().clickTrackEnabled.get() != click);
+    }
+
+    TEST_CASE ("armed to record, the whole song isn't a loop; a loop region and the open clip still are")
+    {
+        test::ProjectWithClip song;
+        auto& project = song.project;
+        MainComponent main (test::session(), *project);
+        main.setBounds (0, 0, 1280, 800);
+
+        auto& arrangement = main.getArrangementModel();
+        auto& input = main.getNoteInput();
+        auto& transport = project->getEdit().getTransport();
+        arrangement.openClip (song.clip);
+        REQUIRE (arrangement.getOpenClip() == song.clip);
+
+        // Clip mode: the open clip goes round, armed or not.
+        REQUIRE (arrangement.getPlayMode() == arrangement::PlayMode::clip);
+        CHECK (transport.looping.get());
+        input.setRecordArmed (true);
+        CHECK (transport.looping.get());
+        input.setRecordArmed (false);
+
+        // Song mode: the song goes round, until recording is armed.
+        CHECK (main.keyPressed (key ('l')));
+        REQUIRE (arrangement.getPlayMode() == arrangement::PlayMode::song);
+        CHECK (transport.looping.get());
+        input.setRecordArmed (true);
+        CHECK_FALSE (transport.looping.get());
+        input.setRecordArmed (false);
+        CHECK (transport.looping.get());
+
+        // A loop region is a loop to record round.
+        arrangement.setLoopRegion ({ 4.0, 12.0 });
+        input.setRecordArmed (true);
+        CHECK (transport.looping.get());
+        input.setRecordArmed (false);
+    }
+
+    TEST_CASE ("a take's new clip opens in the piano roll when no clip was open, and the status bar says where it is")
+    {
+        test::ProjectWithClip song;
+        auto& project = song.project;
+        MainComponent main (test::session(), *project);
+        main.setBounds (0, 0, 1280, 800);
+
+        auto& arrangement = main.getArrangementModel();
+        auto& input = main.getNoteInput();
+        auto* first = song.clip;
+        arrangement.openClip (first);
+        REQUIRE (arrangement.getOpenClip() == first);
+        REQUIRE (input.onClipsMade != nullptr);
+
+        // A track with no clip: none is open.
+        auto* second = project->addTrack ("Second");
+        REQUIRE (second != nullptr);
+        arrangement.setCurrentTrack (second);
+        REQUIRE (arrangement.getOpenClip() == nullptr);
+        REQUIRE (main.getPianoRollModel().getClip() == nullptr);
+
+        // What a take does when notes are played there.
+        auto* made = project->addMidiClip (*second, 16.0, 16.0, "Second");
+        REQUIRE (made != nullptr);
+        input.onClipsMade ({ made });
+
+        CHECK (arrangement.getOpenClip() == made);
+        CHECK (main.getPianoRollModel().getClip() == made);
+        CHECK (main.getStatusBar().getMessage() == "Recorded into a new clip on Second: bars 5-8. Ctrl+Z takes the whole take back");
+
+        // A clip was open: it stays; two new clips are both named.
+        auto* another = project->addMidiClip (*second, 40.0, 4.0, "Second");
+        REQUIRE (another != nullptr);
+        auto* third = project->addMidiClip (*second, 48.0, 8.0, "Second");
+        REQUIRE (third != nullptr);
+        input.onClipsMade ({ another, third });
+        CHECK (arrangement.getOpenClip() == made);
+        CHECK (main.getStatusBar().getMessage() == "Recorded into 2 new clips on Second: bar 11, bars 13-14. Ctrl+Z takes the whole take back");
+
+        // The user has gone to another track since: its clip stays open.
+        arrangement.openClip (first);
+        auto* onSecond = project->addMidiClip (*second, 64.0, 4.0, "Second");
+        REQUIRE (onSecond != nullptr);
+        input.onClipsMade ({ onSecond });
+        CHECK (arrangement.getOpenClip() == first);
     }
 }
 

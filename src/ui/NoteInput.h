@@ -3,6 +3,7 @@
 #include "audio/NotePreview.h"
 #include "audio/PlaybackClock.h"
 #include "core/NoteRecorder.h"
+#include "core/TakeClips.h"
 #include "ui/ComputerKeyboard.h"
 #include "ui/pianoroll/PianoRollModel.h"
 
@@ -13,10 +14,12 @@ namespace harmonia::ui
 
         Recording follows FL Studio: Record arms it, and whenever the song plays while armed the
         played notes go into the clip open in the piano roll. In clip mode playback loops the
-        clip, so every pass adds to what is there (overdub); in song mode only notes played while
-        the song is inside the clip go in. A whole take, from Play to Stop, is one undo step. Notes are placed where the
-        player heard the song when they pressed the key (see audio::PlaybackClock), then
-        quantized if asked. Keys being held are shown in the piano roll before they are
+        clip, so every pass adds to what is there (overdub). In song mode the song plays on past
+        the clip: what is played there isn't lost, it goes into the clip the track has at that
+        place or into a clip made for the take (core::TakeClips), and so does everything played
+        while no clip is open at all. A whole take, from Play to Stop, is one undo step. Notes are
+        placed where the player heard the song when they pressed the key (see
+        audio::PlaybackClock), then quantized if asked. Keys being held are shown in the piano roll before they are
         released and become notes. The pitch-bend and mod wheels are recorded into the clip
         as they move (core::controllers); the sustain pedal makes the notes longer instead. */
     class NoteInput final : private juce::Timer
@@ -40,6 +43,10 @@ namespace harmonia::ui
         /** A message from a MIDI keyboard (notes, the sustain pedal and the wheels are used). */
         void handleMidiMessage (const juce::MidiMessage&, double wallMs);
 
+        /** The track that is played (the current one): what is played while no clip is open in
+            the piano roll is recorded on it. With a clip open, that clip's track is the one. */
+        void setTrack (te::AudioTrack*);
+
         void setRecordArmed (bool);
         bool isRecordArmed() const noexcept                 { return armed; }
         bool isRecording() const noexcept                   { return recorder.isActive(); }
@@ -60,6 +67,10 @@ namespace harmonia::ui
         /** Armed, recording or quantize changed (for buttons). */
         std::function<void()> onStateChanged;
 
+        /** A take has ended that made clips of its own, for what was played where the track had
+            none: those clips, in the order they were made. */
+        std::function<void (const juce::Array<te::MidiClip*>&)> onClipsMade;
+
     private:
         pianoroll::PianoRollModel& model;
         audio::NotePreview& preview;
@@ -70,6 +81,8 @@ namespace harmonia::ui
         std::optional<te::Edit::UndoTransactionInhibitor> keepOneUndoStep;
         core::note_ops::BeatRange takeLoop, takeClipRange, takeWholeClip;   // the clip's loop, the whole clip
         juce::ReferenceCountedObjectPtr<te::MidiClip> takeClip;
+        juce::ReferenceCountedObjectPtr<te::AudioTrack> track;
+        std::unique_ptr<core::TakeClips> elsewhere;     // what is played outside the open clip goes there
         double lastHeardBeat = 0.0;
 
         bool armed = false;
@@ -78,6 +91,7 @@ namespace harmonia::ui
         std::array<int, 128> held {};       // how many sources hold each pitch (for the keys on screen)
 
         void startTake();
+        te::AudioTrack* getRecordedTrack() const;
         std::optional<double> heardBeat (double wallMs);
         void commit (const std::vector<core::Note>&);
         void commit (const std::optional<core::Note>&);

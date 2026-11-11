@@ -23,6 +23,7 @@ add_executable(harmonia_tests
     core/SnapTests.cpp
     core/NoteOpsTests.cpp
     core/NoteRecorderTests.cpp
+    core/TakeClipsTests.cpp
     core/ClipsTests.cpp
     core/TempoTests.cpp
     core/MidiFilesTests.cpp
