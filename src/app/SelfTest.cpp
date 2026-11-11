@@ -8,6 +8,7 @@
 #include "audio/Effects.h"
 #include "audio/Instruments.h"
 #include "audio/Export.h"
+#include "audio/ExportTail.h"
 #include "audio/FilePreview.h"
 #include "audio/Groups.h"
 #include "audio/NotePreview.h"
@@ -1021,12 +1022,14 @@ namespace harmonia::app
                     return;
 
                 const auto stats = analyse (file);
-                const auto expected = project.getEdit().getLength().inSeconds() + audio::exportTailSeconds;
+                const auto songSeconds = project.getEdit().getLength().inSeconds();
 
                 report.check (stats.peak > 0.01f, "Exported audio is not silent (peak "
                                                       + juce::String (juce::Decibels::gainToDecibels (stats.peak), 1) + " dBFS)");
-                report.check (std::abs (stats.seconds - expected) < 0.1, "Exported length " + juce::String (stats.seconds, 2)
-                                                                             + " s = song + tail (" + juce::String (expected, 2) + " s)");
+                report.check (stats.seconds > songSeconds + audio::export_tail::keptSeconds - 0.05
+                                  && stats.seconds < songSeconds + audio::export_tail::longestSeconds + 0.1,
+                              "Exported length " + juce::String (stats.seconds, 2) + " s = song (" + juce::String (songSeconds, 2)
+                                  + " s) + what rings after it");
             }
 
             void checkExternalInstrument (core::Project& project, te::AudioTrack& track,

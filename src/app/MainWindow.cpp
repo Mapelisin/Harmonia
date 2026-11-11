@@ -5,6 +5,7 @@
 #include "core/Clips.h"
 #include "core/SongFiles.h"
 #include "ui/ExportOptions.h"
+#include "ui/StemsOptions.h"
 #include "ui/MainComponent.h"
 #include "ui/RenderingPolicy.h"
 #include "ui/Theme.h"
@@ -460,12 +461,28 @@ namespace harmonia::app
 
     void MainWindow::exportStems()
     {
+        // Which tracks, what the files are called and their format first; then where they go.
+        ui::StemsOptions::show (session, project->getEdit(), getProjectName(),
+                                [safe = juce::Component::SafePointer<MainWindow> (this)] (const audio::StemsOptions& options)
+                                {
+                                    if (safe != nullptr)
+                                        safe->exportStemsInto (options);
+                                },
+                                [safe = juce::Component::SafePointer<MainWindow> (this)] (const juce::String& reason)
+                                {
+                                    if (safe != nullptr)
+                                        safe->showError ("Export stems", reason);
+                                });
+    }
+
+    void MainWindow::exportStemsInto (const audio::StemsOptions& options)
+    {
         const auto folder = file != juce::File() ? file.getParentDirectory() : getDefaultFolder();
         folder.createDirectory();
 
         chooser = std::make_unique<juce::FileChooser> ("Export stems into folder", folder);
         chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
-                              [this] (const juce::FileChooser& fc)
+                              [this, options] (const juce::FileChooser& fc)
         {
             const auto target = fc.getResult();
 
@@ -480,7 +497,7 @@ namespace harmonia::app
             // Rendering holds the window up: say how far it got.
             juce::MouseCursor::showWaitCursor();
 
-            const auto result = audio::exportStems (project->getEdit(), target, getProjectName(), [this] (int done, int total)
+            const auto result = audio::exportStems (project->getEdit(), target, options, [this] (int done, int total)
             {
                 if (done < total)
                     if (auto* c = getMainComponent())

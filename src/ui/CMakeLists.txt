@@ -49,6 +49,8 @@ add_library(harmonia_ui STATIC
     RecentProjects.cpp
     ExportOptions.h
     ExportOptions.cpp
+    StemsOptions.h
+    StemsOptions.cpp
     AudioClipHandles.h
     AudioClipHandles.cpp
     settings/AudioSettingsTab.h

@@ -68,7 +68,8 @@ route them into a **group** (other programs call it a "bus" or a "subgroup").
   go back straight to the master. Everything can be undone with **Ctrl+Z**.
 - You can add, delete and reorder tracks: a track does not lose its group (also after saving).
 - The stem of a track in a group (File → Export stems) comes with the effects and volume of the group, the
-  way it sounds in the song. **Render to audio track** gives the sound of the track itself, and the new audio
+  way it sounds in the song, and without the group's other tracks. The group itself can be a stem too: all
+  its tracks in one file. **Render to audio track** gives the sound of the track itself, and the new audio
   track goes into the same group.
 
 ## Sidechain: the bass "ducks" under the kick

@@ -154,7 +154,8 @@ TEST_SUITE ("audio::loudness")
         CHECK (before->lufs < -3.0);
         CHECK (before->lufs > -50.0);
         CHECK (before->peakDb < -0.5f);
-        CHECK (before->seconds == doctest::Approx (8.0 + 2.0).epsilon (0.02));     // with the export's tail
+        CHECK (before->seconds > 8.0 + 0.25);      // with what rings after the clip, as the export has it
+        CHECK (before->seconds < 8.0 + 3.0);
 
         // 6 dB down on the master: 6 LU quieter.
         CHECK (loudness::addToMasterVolume (project->getEdit(), -6.0f) == doctest::Approx (-6.0f).epsilon (0.01));

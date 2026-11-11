@@ -978,7 +978,7 @@ namespace harmonia::ui
         menu.addSeparator();
         menu.addItem ("Import audio or MIDI...", [safe] { if (safe != nullptr) safe->chooseFilesToImport(); });
         menu.addItem ("Export song (WAV, FLAC, MP3)...  (Ctrl+R)", hasCommands, false, run (&FileCommands::exportSong));
-        menu.addItem ("Export stems (WAV per track)...", hasCommands, false, run (&FileCommands::exportStems));
+        menu.addItem ("Export stems (a file per track or group)...", hasCommands, false, run (&FileCommands::exportStems));
 
         const auto loop = arrangementModel.getLoopRegion();
         menu.addItem (loop.has_value() ? "Export the loop region as WAV (" + describeBars (*loop, arrangementModel.getBeatsPerBar()) + ")..."

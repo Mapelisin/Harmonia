@@ -148,6 +148,9 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   плагина показывает его процесс (`ui::RemotePluginWindow`), у такого плагина не звать `createEditor`. Тесты
   плагинов — тестовые плагины формата HarmoniaTest (`tests/sandbox/TestPlugins.h`, умеют падать и зависать;
   песня с ними — `TestPluginSong.h`). Свои папки скана — `PluginScanner::addFolder` (настройки).
+- Экспорт песни и стемов идёт до тишины (`audio::export_tail`, решение 51): длину файла не считать как «песня +
+  хвост». `exportTailSeconds` — только для рендера дорожки в аудио и заморозки. Стемы — `audio::exportStems` с
+  `audio::StemsOptions` (дорожки и группы из `getStemChoices`, шаблон имён, формат), окно — `ui::StemsOptions`.
 - Экспорт песни — `audio::exportSong` с `audio::ExportFormat` (WAV 16/24/32, FLAC, MP3; `exportWav` — WAV 24).
   MP3 — `audio::mp3` (Windows: Media Foundation, `Mp3EncoderWindows.cpp`; решение 24). Окно формата —
   `ui::ExportOptions`, последний формат — `getLastExportFormat`.

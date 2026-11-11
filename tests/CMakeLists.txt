@@ -61,6 +61,7 @@ add_executable(harmonia_tests
     audio/EffectChainTests.cpp
     audio/AudioLoopTests.cpp
     audio/ConsolidateTests.cpp
+    audio/ExportTailTests.cpp
     audio/SlicesTests.cpp
     audio/FreezeTests.cpp
     ui/PianoRollTests.cpp
@@ -105,6 +106,7 @@ add_executable(harmonia_tests
     ui/ChordNameTests.cpp
     ui/LoopExportTests.cpp
     ui/ExportOptionsTests.cpp
+    ui/StemsOptionsTests.cpp
     ui/SettingsTests.cpp
     ui/MainMenuTests.cpp
     ui/MixDoctorMenuTests.cpp

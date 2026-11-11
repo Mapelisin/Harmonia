@@ -291,7 +291,9 @@ TEST_SUITE ("audio::exportWav")
         CHECK (reader->getFormatName().containsIgnoreCase ("wav"));
 
         const auto seconds = (double) reader->lengthInSamples / reader->sampleRate;
-        CHECK (seconds == doctest::Approx (4.0 + audio::exportTailSeconds).epsilon (0.02));
+        // Until the chord has rung out after the clip's end: no fixed tail.
+        CHECK (seconds > 4.0 + 0.25);
+        CHECK (seconds < 4.0 + 3.0);
 
         juce::AudioBuffer<float> buffer ((int) reader->numChannels, (int) reader->lengthInSamples);
         reader->read (&buffer, 0, (int) reader->lengthInSamples, 0, true, true);

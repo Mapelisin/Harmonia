@@ -526,10 +526,10 @@ The **File** menu (it also has **Settings...** for the sound card, MIDI keyboard
 | — | Earlier versions: the song as it was before each of the last saves (see below) |
 | — | Collect all files into the song's folder: copy the sounds the song uses next to it (see below) |
 | — | Find missing files...: sounds that were moved or deleted (see below) |
-| Ctrl+R | Export the song (the whole song + 2 seconds for the tail), as in FL: first choose the format (see below), then where to save. It sounds as it does in playback: muted (M) tracks are left out; with solo (S), only the soloed ones are included |
+| Ctrl+R | Export the song (the whole song, until its reverbs and delays have died away), as in FL: first choose the format (see below), then where to save. It sounds as it does in playback: muted (M) tracks are left out; with solo (S), only the soloed ones are included |
 | Ctrl+, | Settings: sound card and buffer, MIDI keyboards, plugin folders |
 | — | Import audio or MIDI...: add audio or MIDI files (see "Audio clips", "MIDI files") |
-| — | Export stems (WAV per track)...: every track into a WAV of its own (see below) |
+| — | Export stems (a file per track or group)...: the tracks you tick, each into a file of its own (see below) |
 | — | Export the loop region as WAV...: only the loop (Ctrl + drag on the ruler), exactly on its borders: a ready-made sample loop |
 | — | Export MIDI...: the notes of the whole song into a `.mid` |
 
@@ -549,12 +549,22 @@ in "N" editions: the Media Feature Pack from Windows Settings will help).
 By default files go to "Documents\Harmonia". An asterisk in the window title means there are unsaved
 changes; when you close, start a new project or open another one, Harmonia asks whether to save them.
 
-**Stems** (File → Export stems): choose a folder, and it gets one WAV for every track that can be heard and
-has clips: "Song - 01 Bass.wav", "Song - 02 Drums.wav"… (the number is the track's place from top to
-bottom). Each one holds the track with its own effects and its own reverb/delay (sends), but without the
-effects and volume of the master. All the files are as long as the whole song: in another program you put
-them at the start and they line up, and together they sound like the mix. Muted (M) tracks are left out;
-with solo (S), only the soloed ones are included. The folder opens by itself.
+**How long the exported file is.** The export doesn't stop at the last clip: it goes on while the song
+still rings (a long reverb, a delay that repeats), and ends half a second after the sound has died away,
+fading to nothing. It waits 30 seconds at the most. There is nothing to set.
+
+**Stems** (File → Export stems). A window asks what to export:
+- **which tracks**: a tick for every track that can be heard and has clips (all ticked), and for every
+  group. A group's stem is all its tracks together in one file ("the drums as one file");
+- **file names**: a pattern, with an example under it. `{song}`, `{n}` (the track's place from top to
+  bottom), `{track}`, `{bpm}` and `{date}` are filled in. The usual one gives "Song - 01 Bass.wav";
+- **format**: WAV, FLAC or MP3, as for the song.
+
+Then choose a folder. Each file holds the track with its own effects and its own reverb/delay (sends), but
+without the effects and volume of the master. All the files are as long as each other: in another program
+you put them at the start and they line up, and the tracks' stems together sound like the mix. Muted (M)
+tracks are left out; with solo (S), only the soloed ones are included. The pattern and the format are
+remembered. The folder opens by itself.
 
 **A loop as WAV** (File → Export the loop region as WAV): first mark a loop: **Ctrl + drag** on the ruler
 above the clips (or *Loop this section* in a marker's menu). Exactly this piece goes into the file, with

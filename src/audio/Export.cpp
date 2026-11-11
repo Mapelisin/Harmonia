@@ -1,4 +1,5 @@
 #include "audio/Export.h"
+#include "audio/ExportTail.h"
 #include "audio/Groups.h"
 #include "audio/Mp3Encoder.h"
 #include "audio/Sidechain.h"
@@ -162,11 +163,10 @@ namespace harmonia::audio
             return sources;
         }
 
-        te::TimeRange getRange (te::Edit& edit)
+        /** Where the song's last clip ends (core::clips knows which clips count). */
+        te::TimePosition getSongEnd (te::Edit& edit)
         {
-            // To the end of the last clip (core::clips knows which clips count), and a moment more.
-            const auto end = edit.tempoSequence.toTime (te::BeatPosition::fromBeats (core::clips::getSongEndBeat (edit)));
-            return { te::TimePosition(), end + te::TimeDuration::fromSeconds (exportTailSeconds) };
+            return edit.tempoSequence.toTime (te::BeatPosition::fromBeats (core::clips::getSongEndBeat (edit)));
         }
 
         juce::String prepare (const juce::File& file)
@@ -254,6 +254,78 @@ namespace harmonia::audio
         }
     }
 
+    namespace
+    {
+        /** Tracks rendered from the song's start to well past its end, to be cut where their sound
+            has died away (audio::export_tail). */
+        struct RungOut
+        {
+            std::unique_ptr<juce::TemporaryFile> wav;       // gone with this
+            double lastSoundSeconds = 0.0;
+            juce::String error;
+        };
+
+        RungOut renderPastEnd (te::Edit& edit, const juce::File& target, const juce::Array<te::Track*>& tracks, bool withMaster,
+                               const juce::Array<te::AudioTrack*>& silentSources, const ExportFormat& format)
+        {
+            RungOut result;
+
+            if (result.error = prepare (target); result.error.isNotEmpty())
+                return result;
+
+            // A WAV of the bit depth wanted, its samples then written as they are; for an MP3 a
+            // float one, at a rate an MP3 can have.
+            ExportFormat rendered { ExportFormat::Type::wav, format.bitDepth };
+            auto sampleRate = edit.engine.getDeviceManager().getSampleRate();
+
+            if (format.type == ExportFormat::Type::mp3)
+            {
+                if (! mp3::isAvailable (format.kbps))
+                {
+                    result.error = "This computer has no MP3 encoder for " + juce::String (format.kbps) + " kbps: export WAV or FLAC";
+                    return result;
+                }
+
+                rendered.bitDepth = 32;
+                sampleRate = mp3::canUseSampleRate (sampleRate) ? sampleRate : 44100.0;
+            }
+
+            const auto songEnd = getSongEnd (edit);
+            result.wav = std::make_unique<juce::TemporaryFile> (target.withFileExtension (".wav"));
+            result.error = render (edit, result.wav->getFile(), tracks,
+                                   { te::TimePosition(), songEnd + te::TimeDuration::fromSeconds (export_tail::longestSeconds) },
+                                   withMaster, silentSources, rendered, sampleRate);
+
+            if (result.error.isEmpty())
+                result.lastSoundSeconds = export_tail::findLastSound (edit.engine, result.wav->getFile(), songEnd.inSeconds())
+                                              .value_or (songEnd.inSeconds());
+
+            return result;
+        }
+
+        /** The file of what was rendered, `seconds` long. */
+        juce::String writeRungOut (te::Edit& edit, const RungOut& rungOut, const juce::File& target, const ExportFormat& format, double seconds)
+        {
+            const auto error = export_tail::writeCut (edit.engine, rungOut.wav->getFile(), target, format, seconds);
+
+            // The engine may still hold the WAV it wrote; it goes with the temporary file.
+            edit.engine.getAudioFileManager().releaseFile (te::AudioFile (edit.engine, rungOut.wav->getFile()));
+            return error;
+        }
+
+        /** The song tracks, or the groups, top to bottom. */
+        juce::Array<te::AudioTrack*> getTracks (te::Edit& edit, bool groups)
+        {
+            juce::Array<te::AudioTrack*> found;
+
+            for (auto* track : te::getAudioTracks (edit))
+                if (groups ? core::tracks::isGroup (*track) : ! core::tracks::isBus (*track))
+                    found.add (track);
+
+            return found;
+        }
+    }
+
     juce::String renderTrack (te::AudioTrack& track, const juce::File& file, te::TimeRange range, bool beforeFader)
     {
         TemporaryState temporary (track.edit);
@@ -308,7 +380,18 @@ namespace harmonia::audio
         // A muted kick still ducks the bass, as it does while playing.
         TemporaryState temporary (edit);
         const auto sources = keepSources (temporary, heard, tracks);
-        return render (edit, file, tracks, part.value_or (getRange (edit)), true, sources, format);
+
+        // A part of the song: exactly that.
+        if (part.has_value())
+            return render (edit, file, tracks, *part, true, sources, format);
+
+        // The song: until it has rung out.
+        const auto rungOut = renderPastEnd (edit, file, tracks, true, sources, format);
+
+        if (rungOut.error.isNotEmpty())
+            return rungOut.error;
+
+        return writeRungOut (edit, rungOut, file, format, export_tail::getLength (getSongEnd (edit).inSeconds(), rungOut.lastSoundSeconds));
     }
 
     juce::String exportWav (te::Edit& edit, const juce::File& file, std::optional<te::TimeRange> part)
@@ -316,13 +399,54 @@ namespace harmonia::audio
         return exportSong (edit, file, {}, part);
     }
 
-    juce::String getStemFileName (const juce::String& prefix, int number, const juce::String& trackName)
+    juce::String getStemFileName (const juce::String& pattern, const juce::String& songName, int number,
+                                  const juce::String& trackName, double bpm, const ExportFormat& format)
     {
-        const auto name = trackName.trim().isNotEmpty() ? trackName.trim() : juce::String ("Track");
-        return juce::File::createLegalFileName (prefix + " - " + juce::String (number).paddedLeft ('0', 2) + " " + name + ".wav");
+        const auto track = trackName.trim().isNotEmpty() ? trackName.trim() : juce::String ("Track");
+        const auto song = songName.trim().isNotEmpty() ? songName.trim() : juce::String ("Song");
+        const auto roundedBpm = std::round (bpm * 10.0) / 10.0;
+
+        const auto name = (pattern.trim().isNotEmpty() ? pattern.trim() : juce::String (defaultStemPattern))
+                              .replace ("{song}", song)
+                              .replace ("{n}", juce::String (number).paddedLeft ('0', 2))
+                              .replace ("{track}", track)
+                              .replace ("{bpm}", std::abs (roundedBpm - std::round (roundedBpm)) < 0.05 ? juce::String (juce::roundToInt (roundedBpm))
+                                                                                                        : juce::String (roundedBpm, 1))
+                              .replace ("{date}", juce::Time::getCurrentTime().formatted ("%Y-%m-%d"));
+
+        return juce::File::createLegalFileName (name + format.getExtension());
     }
 
-    StemsResult exportStems (te::Edit& edit, const juce::File& folder, const juce::String& prefix,
+    juce::String getStemFileName (const juce::String& prefix, int number, const juce::String& trackName)
+    {
+        return getStemFileName (defaultStemPattern, prefix, number, trackName, 120.0);
+    }
+
+    juce::Array<te::AudioTrack*> getStemChoices (te::Edit& edit)
+    {
+        const auto audible = findAudible (edit);
+        juce::Array<te::AudioTrack*> choices, groupsHeard;
+
+        for (auto* track : audible.songTracks)
+        {
+            if (track->getClips().isEmpty())
+                continue;
+
+            choices.add (track);
+
+            if (auto* group = groups::getGroup (*track); group != nullptr && audible.groupTracks.contains (group))
+                groupsHeard.addIfNotAlreadyThere (group);
+        }
+
+        // The groups in the order they are in the song.
+        for (auto* track : te::getAudioTracks (edit))
+            if (groupsHeard.contains (track))
+                choices.add (track);
+
+        return choices;
+    }
+
+    StemsResult exportStems (te::Edit& edit, const juce::File& folder, const StemsOptions& options,
                              const std::function<void (int, int)>& progress)
     {
         StemsResult result;
@@ -334,42 +458,67 @@ namespace harmonia::audio
         }
 
         const auto audible = findAudible (edit);
-        juce::Array<te::AudioTrack*> withClips;
+        const auto choices = getStemChoices (edit);
 
-        for (auto* track : audible.songTracks)
-            if (! track->getClips().isEmpty())
-                withClips.add (track);
-
-        if (withClips.isEmpty())
+        if (choices.isEmpty())
         {
             result.error = "Nothing to export: no track that is heard has clips";
             return result;
         }
 
-        const auto range = getRange (edit);
-        const auto allSongTracks = [&]
+        // Those chosen, of what there is; all the song tracks if nothing was chosen.
+        juce::Array<te::AudioTrack*> stems;
+
+        for (auto* track : choices)
+            if (options.tracks.isEmpty() ? ! core::tracks::isGroup (*track) : options.tracks.contains (track))
+                stems.add (track);
+
+        if (stems.isEmpty())
         {
-            juce::Array<te::AudioTrack*> all;
+            result.error = "Nothing to export: none of the tracks chosen is heard and has clips";
+            return result;
+        }
 
-            for (auto* track : te::getAudioTracks (edit))
-                if (! core::tracks::isBus (*track))
-                    all.add (track);
+        const auto songTracks = getTracks (edit, false);
+        const auto groupTracks = getTracks (edit, true);
+        const auto bpm = edit.tempoSequence.getBpmAt (te::TimePosition());
 
-            return all;
-        }();
+        struct Stem
+        {
+            juce::File file;
+            RungOut rungOut;
+        };
 
-        for (int i = 0; i < withClips.size(); ++i)
+        std::vector<Stem> rendered;
+        auto lastSound = 0.0;
+
+        for (int i = 0; i < stems.size(); ++i)
         {
             if (progress != nullptr)
-                progress (i, withClips.size());
+                progress (i, stems.size());
 
-            auto* track = withClips[i];
+            auto* stem = stems[i];
+            const auto isGroup = core::tracks::isGroup (*stem);
 
-            // The track, its group and the return tracks: only this track plays into them here.
-            juce::Array<te::AudioTrack*> heard { track };
+            // A song track: the track, its group and the return tracks, only this track playing
+            // into them here. A group: the same with every track that plays through it.
+            juce::Array<te::AudioTrack*> heard;
 
-            if (auto* group = groups::getGroup (*track))
-                heard.add (group);
+            if (isGroup)
+            {
+                for (auto* track : audible.songTracks)
+                    if (groups::getGroup (*track) == stem)
+                        heard.add (track);
+
+                heard.add (stem);
+            }
+            else
+            {
+                heard.add (stem);
+
+                if (auto* group = groups::getGroup (*stem))
+                    heard.add (group);
+            }
 
             heard.addArray (audible.returnTracks);
 
@@ -378,22 +527,71 @@ namespace harmonia::audio
             for (auto* t : heard)
                 tracks.add (t);
 
+            // Numbered as the song has them: its tracks top to bottom, then its groups.
+            const auto number = isGroup ? songTracks.size() + groupTracks.indexOf (stem) + 1 : songTracks.indexOf (stem) + 1;
+            const auto file = folder.getChildFile (getStemFileName (options.namePattern, options.songName, number, stem->getName(), bpm, options.format));
+
             TemporaryState temporary (edit);
             const auto sources = keepSources (temporary, heard, tracks);
-            const auto file = folder.getChildFile (getStemFileName (prefix, allSongTracks.indexOf (track) + 1, track->getName()));
 
-            if (const auto error = render (edit, file, tracks, range, false, sources); error.isNotEmpty())
+            // The other tracks of its group play into the group whether they are rendered or not:
+            // silent for this stem, or it would have them all.
+            if (! isGroup)
+                if (auto* group = groups::getGroup (*stem))
+                    for (auto* other : audible.songTracks)
+                        if (other != stem && groups::getGroup (*other) == group)
+                            temporary.keepAsSource (*other);
+
+            auto rungOut = renderPastEnd (edit, file, tracks, false, sources, options.format);
+
+            if (rungOut.error.isNotEmpty())
+            {
+                result.error = rungOut.error;
+                return result;
+            }
+
+            lastSound = std::max (lastSound, rungOut.lastSoundSeconds);
+            rendered.push_back ({ file, std::move (rungOut) });
+        }
+
+        // All as long as the one that rings longest.
+        const auto seconds = export_tail::getLength (getSongEnd (edit).inSeconds(), lastSound);
+
+        for (const auto& stem : rendered)
+        {
+            if (const auto error = writeRungOut (edit, stem.rungOut, stem.file, options.format, seconds); error.isNotEmpty())
             {
                 result.error = error;
                 return result;
             }
 
-            result.files.add (file);
+            result.files.add (stem.file);
         }
 
         if (progress != nullptr)
-            progress (withClips.size(), withClips.size());
+            progress (stems.size(), stems.size());
 
         return result;
+    }
+
+    StemsResult exportStems (te::Edit& edit, const juce::File& folder, const juce::String& prefix,
+                             const std::function<void (int, int)>& progress)
+    {
+        StemsOptions options;
+        options.songName = prefix;
+        return exportStems (edit, folder, options, progress);
+    }
+
+    juce::String getLastStemPattern (core::Session& session)
+    {
+        const auto pattern = session.getEngine().getPropertyStorage().getPropertiesFile().getValue ("stemNamePattern").trim();
+        return pattern.isNotEmpty() ? pattern : juce::String (defaultStemPattern);
+    }
+
+    void setLastStemPattern (core::Session& session, const juce::String& pattern)
+    {
+        auto& settings = session.getEngine().getPropertyStorage().getPropertiesFile();
+        settings.setValue ("stemNamePattern", pattern.trim());
+        settings.saveIfNeeded();
     }
 }

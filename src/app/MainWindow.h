@@ -1,6 +1,6 @@
 #pragma once
 
-#include "audio/ExportFormat.h"
+#include "audio/Export.h"
 #include "core/Autosave.h"
 #include "core/Project.h"
 #include "core/ProjectFiles.h"
@@ -48,6 +48,7 @@ namespace harmonia::app
         void saveProjectAs() override;
         void exportSong() override;
         void exportStems() override;
+        void exportStemsInto (const audio::StemsOptions&);
         void exportLoopWav() override;
         juce::String getProjectName() const override;
         juce::File getProjectFile() const override                      { return file; }

@@ -94,7 +94,8 @@ expect bugs.
 - Mix Doctor: a report on the mix and a fix for the levels; loudness for streaming (LUFS) with one button.
 
 **Files and reliability**
-- Export to WAV, FLAC and MP3; stems per track.
+- Export to WAV, FLAC and MP3, until the song has rung out; stems of the tracks and groups you choose,
+  named by your own pattern.
 - Autosave and recovery after a crash; undo and redo (Ctrl+Z / Ctrl+Y).
 - Earlier versions of a song kept at every save; all of a song's sounds collected into its folder, to move it
   to another computer; missing files found again.
