@@ -5,6 +5,7 @@
 #include "audio/SampleData.h"
 #include "audio/Sends.h"
 #include "audio/Sidechain.h"
+#include "audio/TrackDelay.h"
 #include "audio/Freeze.h"
 #include "core/AudioTempo.h"
 #include "core/ClipLinks.h"
@@ -1301,6 +1302,35 @@ namespace harmonia::ui::arrangement
         core::clip_links::unlink (clip);
         clipsDirty = true;
         changed();
+    }
+
+    void ArrangementModel::setTrackDelay (te::AudioTrack& track, double ms)
+    {
+        namespace track_delay = audio::track_delay;
+        ms = juce::jlimit (-track_delay::maxMs, track_delay::maxMs, ms);
+
+        if (! isTrackInEdit (track) || std::abs (track_delay::getMs (track) - ms) < 0.05)
+            return;
+
+        project.beginGesture ("Track delay");
+        track_delay::setMs (track, ms);
+        changed();
+    }
+
+    juce::String ArrangementModel::setTrackDelayFromText (te::AudioTrack& track, const juce::String& text)
+    {
+        namespace track_delay = audio::track_delay;
+        const auto ms = track_delay::parse (text);
+        const auto limit = juce::String (juce::roundToInt (track_delay::maxMs));
+
+        if (! ms.has_value())
+            return "A track's delay is a number of milliseconds: 12 (later) or -12 (earlier)";
+
+        if (std::abs (*ms) > track_delay::maxMs)
+            return "A track's delay is between -" + limit + " and " + limit + " ms";
+
+        setTrackDelay (track, *ms);
+        return {};
     }
 
     void ArrangementModel::setTrackColour (te::AudioTrack& track, std::optional<juce::Colour> colour)

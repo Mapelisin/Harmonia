@@ -4,8 +4,9 @@
 
 /** Effect chains (inserts) of tracks and of the master.
 
-    A track's plugin list is [instrument, effects..., volume/pan, level meter]: effects sit after the
-    instrument and before the fader, so the track's meter shows what the effects made of the sound.
+    A track's plugin list is [instrument, effects..., (track delay,) volume/pan, level meter]: effects
+    sit after the instrument and before the fader, so the track's meter shows what the effects made
+    of the sound.
     The master list holds only effects (the master volume is a separate plugin, after them).
     Every change is one undo step. */
 namespace harmonia::audio::effects
@@ -27,8 +28,13 @@ namespace harmonia::audio::effects
     juce::Array<EffectType> getExternal (core::Session&);
 
     /** The effects of a chain in processing order: the list without the instrument, the volume/pan,
-        the level meter, sends and a return track's input. */
+        the level meter, sends, a track's delay and a return track's input. */
     juce::Array<te::Plugin*> get (te::PluginList&);
+
+    /** Where the fader end of a list starts (the track's delay, its volume and pan, sends, the
+        meter): what makes and shapes the sound goes before it. -1 if the list has none (the
+        master's). */
+    int getFaderIndex (te::PluginList&);
 
     /** The chain a plugin is in (a track's or the master's), or nullptr. */
     te::PluginList* getChain (te::Plugin&);

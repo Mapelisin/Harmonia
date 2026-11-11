@@ -1,6 +1,7 @@
 #pragma once
 
 #include "TestAudioFiles.h"
+#include "audio/BuiltInPlugins.h"
 #include "audio/DrumKit.h"
 #include "audio/Sampler.h"
 #include "audio/Limiter.h"
@@ -17,10 +18,7 @@ namespace harmonia::test
     {
         explicit AudioRig (int numInputs = 1)
         {
-            audio::limiter::registerType (engine());
-            audio::pump::registerType (engine());
-            audio::drum_kit::registerType (engine());
-            audio::sampler::registerType (engine());
+            audio::registerPluginTypes (engine());
             params.sampleRate = 44100.0;
             params.blockSize = 512;
             params.inputChannels = numInputs;

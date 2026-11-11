@@ -72,6 +72,10 @@ add_library(harmonia_audio STATIC
     Sidechain.cpp
     Sends.h
     Sends.cpp
+    TrackDelay.h
+    TrackDelay.cpp
+    BuiltInPlugins.h
+    BuiltInPlugins.cpp
     Transport.h
     Transport.cpp)
 

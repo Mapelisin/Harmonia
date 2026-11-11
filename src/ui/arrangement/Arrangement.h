@@ -96,6 +96,9 @@ namespace harmonia::ui::arrangement
         void askToRenameMarker (const core::markers::Marker&);
         void askToRenameFolder (const core::folders::Folder&);
 
+        /** Asks how many milliseconds later or earlier the track plays. */
+        void askForTrackDelay (te::AudioTrack&);
+
         /** Asks for the tempo of a change at `beat`: a new one, or that of `index`. */
         void askForTempo (double beat, std::optional<int> index);
 

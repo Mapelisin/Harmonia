@@ -5,10 +5,7 @@
 #include <iostream>
 
 #include "TestSession.h"
-#include "audio/DrumKit.h"
-#include "audio/Sampler.h"
-#include "audio/Limiter.h"
-#include "audio/Pump.h"
+#include "audio/BuiltInPlugins.h"
 #include "sandbox/Host.h"
 #include "sandbox/Platform.h"
 #include "sandbox/TestPlugins.h"
@@ -117,10 +114,7 @@ int main (int argc, char** argv)
         // test plugins can load here too (for the tests that turn that off).
         session.setPluginSandboxOn (true);
         session.getEngine().getPluginManager().pluginFormatManager.addFormat (harmonia::test::plugins::createFormat());
-        harmonia::audio::limiter::registerType (session.getEngine());
-        harmonia::audio::pump::registerType (session.getEngine());
-        harmonia::audio::drum_kit::registerType (session.getEngine());
-        harmonia::audio::sampler::registerType (session.getEngine());
+        harmonia::audio::registerPluginTypes (session.getEngine());
         harmonia::test::sharedSession = &session;
 
         doctest::Context context (argc, argv);

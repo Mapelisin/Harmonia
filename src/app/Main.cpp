@@ -1,10 +1,7 @@
 #include "app/MainWindow.h"
 #include "app/SelfTest.h"
 #include "audio/DeviceSetup.h"
-#include "audio/DrumKit.h"
-#include "audio/Sampler.h"
-#include "audio/Limiter.h"
-#include "audio/Pump.h"
+#include "audio/BuiltInPlugins.h"
 #include "core/ProjectFiles.h"
 #include "sandbox/Host.h"
 #include "sandbox/Platform.h"
@@ -35,10 +32,7 @@ namespace harmonia::app
             options.scanPluginsOutOfProcess = true;
             options.pluginHost = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
             auto session = std::make_unique<core::Session> (std::move (options));
-            audio::limiter::registerType (session->getEngine());
-            audio::pump::registerType (session->getEngine());
-            audio::drum_kit::registerType (session->getEngine());
-            audio::sampler::registerType (session->getEngine());
+            audio::registerPluginTypes (session->getEngine());
             return session;
         }
     }

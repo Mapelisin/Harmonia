@@ -343,6 +343,14 @@ namespace harmonia::ui::arrangement
             so the song sounds as before. One undo step (the file stays). Returns what went wrong. */
         juce::String renderToAudio (te::AudioTrack&);
 
+        /** How much later (above zero) or earlier (below) the track plays than the rest of the
+            song, in milliseconds (audio::track_delay). One undo step. */
+        void setTrackDelay (te::AudioTrack&, double ms);
+
+        /** The same from what was typed ("12", "-3,5 ms"). Returns what to tell the user if it
+            isn't a delay the track can have (then nothing changes); empty if it was set. */
+        juce::String setTrackDelayFromText (te::AudioTrack&, const juce::String&);
+
         /** The name for a copy of a track called `name`: "Bass" -> "Bass 2", "Bass 2" -> "Bass 3",
             skipping names the song's tracks already have. */
         juce::String makeCopyName (const juce::String& name) const;

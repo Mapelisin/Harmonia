@@ -3,6 +3,7 @@
 #include "audio/Groups.h"
 #include "audio/Mp3Encoder.h"
 #include "audio/Sidechain.h"
+#include "audio/TrackDelay.h"
 #include "core/Clips.h"
 #include "core/Tracks.h"
 
@@ -114,6 +115,11 @@ namespace harmonia::audio
             {
                 if (auto* fader = track.getVolumePlugin())
                     set (fader->state, te::IDs::enabled, false);
+
+                // The track's delay is at the fader end too: it goes on working after a freeze.
+                for (auto* plugin : track.pluginList)
+                    if (dynamic_cast<track_delay::Plugin*> (plugin) != nullptr)
+                        set (plugin->state, te::IDs::enabled, false);
             }
 
             /** Its clips alone: none of its plugins (effects, sends, volume and pan). */

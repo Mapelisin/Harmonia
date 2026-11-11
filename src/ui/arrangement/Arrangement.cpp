@@ -1,6 +1,7 @@
 #include "ui/arrangement/Arrangement.h"
 #include "ui/TrackColours.h"
 #include "audio/AudioInputs.h"
+#include "audio/TrackDelay.h"
 #include "core/AudioTempo.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
@@ -58,6 +59,7 @@ namespace harmonia::ui::arrangement
         addAndMakeVisible (addMarkerButton);
         ruler.onRenameMarker = [this] (const core::markers::Marker& marker) { askToRenameMarker (marker); };
         headers.onRenameFolder = [this] (const core::folders::Folder& folder) { askToRenameFolder (folder); };
+        headers.onAskTrackDelay = [this] (te::AudioTrack& track) { askForTrackDelay (track); };
         ruler.onAskTempo = [this] (double beat, std::optional<int> index) { askForTempo (beat, index); };
 
         ruler.onPositionChosen = [this] (double beat)
@@ -907,6 +909,43 @@ namespace harmonia::ui::arrangement
         {
             if (result == 1 && safeThis != nullptr && safeWindow != nullptr)
                 safeThis->model.renameFolder (id, safeWindow->getTextEditorContents ("name"));
+        }), true);
+    }
+
+    void Arrangement::askForTrackDelay (te::AudioTrack& track)
+    {
+        namespace track_delay = audio::track_delay;
+        const auto limit = juce::String (juce::roundToInt (track_delay::maxMs));
+        auto* window = new juce::AlertWindow ("Track delay",
+                                              "How many milliseconds later than the rest of the song \"" + track.getName()
+                                                  + "\" plays. Below zero: earlier. From -" + limit + " to " + limit + "; 0 is no delay.",
+                                              juce::MessageBoxIconType::NoIcon, this);
+        const auto current = track_delay::getMs (track);
+        window->addTextEditor ("ms", std::abs (current - std::round (current)) < 0.05 ? juce::String (juce::roundToInt (current))
+                                                                                      : juce::String (current, 1));
+        window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
+        window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+        const te::Track::Ptr target (&track);
+        juce::Component::SafePointer<juce::AlertWindow> safeWindow (window);
+        juce::Component::SafePointer<Arrangement> safeThis (this);
+
+        window->enterModalState (true, juce::ModalCallbackFunction::create ([safeThis, target, safeWindow] (int result)
+        {
+            auto* t = dynamic_cast<te::AudioTrack*> (target.get());
+
+            if (result != 1 || safeThis == nullptr || safeWindow == nullptr || t == nullptr)
+                return;
+
+            const auto problem = safeThis->model.setTrackDelayFromText (*t, safeWindow->getTextEditorContents ("ms"));
+
+            if (problem.isNotEmpty())
+                safeThis->tell (problem, true);
+            else if (const auto ms = audio::track_delay::getMs (*t); ms != 0.0)
+                safeThis->tell ("\"" + t->getName() + "\" plays " + juce::String (std::abs (ms), std::abs (ms - std::round (ms)) < 0.05 ? 0 : 1)
+                                    + " ms " + (ms > 0.0 ? "later" : "earlier") + " than the rest of the song", false);
+            else
+                safeThis->tell ("\"" + t->getName() + "\" plays in time with the rest of the song", false);
         }), true);
     }
 

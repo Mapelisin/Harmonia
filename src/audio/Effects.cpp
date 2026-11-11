@@ -3,6 +3,7 @@
 #include "audio/Limiter.h"
 #include "audio/PluginSafety.h"
 #include "audio/Pump.h"
+#include "audio/TrackDelay.h"
 #include "core/PluginState.h"
 
 namespace harmonia::audio::effects
@@ -15,7 +16,8 @@ namespace harmonia::audio::effects
             return dynamic_cast<te::VolumeAndPanPlugin*> (&plugin) != nullptr
                 || dynamic_cast<te::LevelMeterPlugin*> (&plugin) != nullptr
                 || dynamic_cast<te::VCAPlugin*> (&plugin) != nullptr
-                || dynamic_cast<te::AuxSendPlugin*> (&plugin) != nullptr;
+                || dynamic_cast<te::AuxSendPlugin*> (&plugin) != nullptr
+                || dynamic_cast<track_delay::Plugin*> (&plugin) != nullptr;
         }
 
         /** Never an insert effect: the fader end, and a return track's input (at the start). */
@@ -41,11 +43,7 @@ namespace harmonia::audio::effects
                 return chain.indexOf (effects.getLast()) + 1;
 
             // The first effect: right before the fader (after the instrument or the return's input).
-            for (int i = 0; i < chain.size(); ++i)
-                if (isFaderStage (*chain[i]))
-                    return i;
-
-            return -1;
+            return getFaderIndex (chain);
         }
 
         juce::UndoManager& getUndoManager (te::Plugin& plugin)
@@ -86,6 +84,15 @@ namespace harmonia::audio::effects
         });
 
         return result;
+    }
+
+    int getFaderIndex (te::PluginList& chain)
+    {
+        for (int i = 0; i < chain.size(); ++i)
+            if (isFaderStage (*chain[i]))
+                return i;
+
+        return -1;
     }
 
     juce::Array<te::Plugin*> get (te::PluginList& chain)

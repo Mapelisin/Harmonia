@@ -6,6 +6,7 @@
 #include "audio/Export.h"
 #include "audio/Instruments.h"
 #include "audio/Sends.h"
+#include "audio/TrackDelay.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
 #include "core/NoteEditor.h"
@@ -388,5 +389,90 @@ TEST_SUITE ("ui: freezing tracks")
         CHECK (model.isFrozen (&lead));
         project->undo();
         CHECK_FALSE (model.isFrozen (&lead));
+    }
+}
+
+TEST_SUITE ("ui: track delay")
+{
+    TEST_CASE ("a track's delay is set from its header's menu, shown under its name, undone in one step and copied with the track")
+    {
+        namespace track_delay = audio::track_delay;
+        ThreeTracks t;
+        ArrangementView view;
+        TrackHeaders headers (t.model, view);
+        auto& a = *t.model.getTracks()[0];
+        auto& b = *t.model.getTracks()[1];
+
+        const auto findItem = [] (const juce::PopupMenu& m, const juce::String& text) -> std::optional<juce::PopupMenu::Item>
+        {
+            for (juce::PopupMenu::MenuItemIterator it (m, true); it.next();)
+                if (it.getItem().text.startsWith (text))
+                    return it.getItem();
+
+            return std::nullopt;
+        };
+
+        // The menu says what the delay is, and asks for another.
+        te::AudioTrack* asked = nullptr;
+        headers.onAskTrackDelay = [&] (te::AudioTrack& track) { asked = &track; };
+        auto item = findItem (headers.createTrackMenu (b), "Track delay");
+        REQUIRE (item.has_value());
+        CHECK (item->text == "Track delay: 0 ms...");
+        REQUIRE (item->action != nullptr);
+        item->action();
+        CHECK (asked == &b);
+
+        // What is typed.
+        CHECK (t.model.setTrackDelayFromText (b, "12").isEmpty());
+        CHECK (track_delay::getMs (b) == 12.0);
+        CHECK (track_delay::getMs (a) == 0.0);
+        CHECK (t.project->getUndoDescription() == "Track delay");
+        CHECK (findItem (headers.createTrackMenu (b), "Track delay")->text == "Track delay: +12 ms...");
+        CHECK (findItem (headers.createTrackMenu (a), "Track delay")->text == "Track delay: 0 ms...");
+
+        dispatch();
+        headers.refresh();
+        CHECK (headers.getShownInstrument (1).startsWith ("+12 ms"));
+        CHECK_FALSE (headers.getShownInstrument (0).contains ("ms"));
+
+        CHECK (t.model.setTrackDelayFromText (b, "-7,5 ms").isEmpty());
+        CHECK (track_delay::getMs (b) == -7.5);
+        dispatch();
+        headers.refresh();
+        CHECK (headers.getShownInstrument (1).startsWith ("-7.5 ms"));
+
+        // Not a delay: said, and nothing changes.
+        CHECK (t.model.setTrackDelayFromText (b, "a bit").isNotEmpty());
+        CHECK (t.model.setTrackDelayFromText (b, "").isNotEmpty());
+        CHECK (t.model.setTrackDelayFromText (b, "250").contains ("-100 and 100"));
+        CHECK (track_delay::getMs (b) == -7.5);
+
+        // The same again isn't a step.
+        t.project->clearUndoHistory();
+        CHECK (t.model.setTrackDelayFromText (b, "-7.5").isEmpty());
+        CHECK_FALSE (t.project->canUndo());
+
+        // One step each.
+        t.model.setTrackDelay (b, 20.0);
+        t.model.setTrackDelay (b, 0.0);
+        CHECK (track_delay::getMs (b) == 0.0);
+        t.project->undo();
+        CHECK (track_delay::getMs (b) == 20.0);
+        t.project->undo();
+        CHECK (track_delay::getMs (b) == -7.5);
+        CHECK_FALSE (t.project->canUndo());
+        t.project->redo();
+        CHECK (track_delay::getMs (b) == 20.0);
+
+        // A copy of the track plays as late as it does.
+        auto* copy = t.model.duplicateTrack (b);
+        REQUIRE (copy != nullptr);
+        CHECK (track_delay::getMs (*copy) == 20.0);
+        CHECK (track_delay::getMs (b) == 20.0);
+
+        // Of several selected tracks the menu has only what is done to them all.
+        t.model.clickTrack (a, false, false);
+        t.model.clickTrack (b, true, false);
+        CHECK_FALSE (findItem (headers.createTrackMenu (b), "Track delay").has_value());
     }
 }

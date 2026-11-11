@@ -266,6 +266,13 @@ Not possible yet: takes for notes, seeing all the takes at once under the clip.
     The volume, pan, sends and group keep working. While a track is frozen, its clips and notes cannot be
     edited; **Unfreeze** in the same menu puts everything back. Unlike Render to audio track, no new track
     appears.
+  - **Track delay: 0 ms...**: make the track play a little **later** or **earlier** than the rest of the
+    song. Type a number of milliseconds: `12` is 12 ms later, `-12` is 12 ms earlier (up to 100 either
+    way), `0` is no delay. For a part that drags or rushes, or a sound with a slow attack (strings, a pad)
+    that should land on the beat. While a track has a delay it is written under its name ("+12 ms"). The
+    track's sends (reverb, delay) move with it. One thing to know about "earlier": a sound cannot come
+    before it is asked for, so the rest of the song waits for this track instead; in the song and in the
+    export everything is in its place, but what you play live is heard that many milliseconds later.
   - **Folder**: track folders, see below.
   - **Render to audio track**: "freeze" into audio: the track (instrument + effects + volume) is written to
     a WAV next to the project and placed on a new audio track "… (audio)" below it, at the same place; the

@@ -3,6 +3,7 @@
 #include "audio/AudioInputs.h"
 #include "audio/Groups.h"
 #include "audio/Instruments.h"
+#include "audio/TrackDelay.h"
 #include "core/Clips.h"
 #include "core/Tracks.h"
 #include "ui/Theme.h"
@@ -269,6 +270,7 @@ namespace harmonia::ui::arrangement
         juce::Button& getMuteButton() noexcept     { return mute; }
         juce::Button& getSoloButton() noexcept     { return solo; }
         juce::String getShownName() const          { return name.getText(); }
+        juce::String getShownInstrument() const    { return instrument.getText(); }
 
         /** The folder this row stands for (collapsed), if it does. */
         std::optional<core::folders::Folder> getFoldedFolder() const
@@ -340,12 +342,14 @@ namespace harmonia::ui::arrangement
             auto* input = isAudio ? audio::AudioInputs::getInput (*track) : nullptr;
             const auto armed = isAudio && audio::AudioInputs::isArmed (*track);
 
-            if (model.isFrozen (track.get()))
-                instrument.setText ("Frozen", juce::dontSendNotification);
-            else if (! isAudio)
-                instrument.setText (audio::instruments::getName (*track), juce::dontSendNotification);
-            else
-                instrument.setText (input != nullptr ? "In: " + input->getAliasOrName() : juce::String ("Audio"), juce::dontSendNotification);
+            auto what = model.isFrozen (track.get()) ? juce::String ("Frozen")
+                      : ! isAudio ? audio::instruments::getName (*track)
+                      : input != nullptr ? "In: " + input->getAliasOrName() : juce::String ("Audio");
+
+            if (const auto delayMs = audio::track_delay::getMs (*track); delayMs != 0.0)
+                what = audio::track_delay::describe (delayMs) + "  " + what;
+
+            instrument.setText (what, juce::dontSendNotification);
 
             instrument.setTooltip (model.isFrozen (track.get()) ? juce::String ("Frozen: it plays a file of its sound, its instrument and effects are off. "
                                                                                  "Unfreeze it (right-click) to change it.")
@@ -669,6 +673,11 @@ namespace harmonia::ui::arrangement
             if (safe != nullptr)
                 safe->toggleFrozen (*t);
         });
+        menu.addItem ("Track delay: " + audio::track_delay::describe (audio::track_delay::getMs (*track)) + "...", [safe, t = track]
+        {
+            if (safe != nullptr && safe->onAskTrackDelay != nullptr)
+                safe->onAskTrackDelay (*t);
+        });
         menu.addSubMenu ("Output (master or a group)", makeOutputMenu (model, *track));
         menu.addSubMenu ("Folder", createFolderMenu (*track));
         menu.addSeparator();
@@ -756,6 +765,12 @@ namespace harmonia::ui::arrangement
     {
         auto* header = headers[index];
         return header != nullptr ? header->getShownName() : juce::String();
+    }
+
+    juce::String TrackHeaders::getShownInstrument (int index) const
+    {
+        auto* header = headers[index];
+        return header != nullptr ? header->getShownInstrument() : juce::String();
     }
 
     void TrackHeaders::refresh()

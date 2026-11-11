@@ -1,0 +1,24 @@
+diff --git a/modules/tracktion_engine/playback/graph/tracktion_PluginNode.cpp b/modules/tracktion_engine/playback/graph/tracktion_PluginNode.cpp
+index 2f55d8c12e1..208b2faa730 100644
+--- a/modules/tracktion_engine/playback/graph/tracktion_PluginNode.cpp
++++ b/modules/tracktion_engine/playback/graph/tracktion_PluginNode.cpp
+@@ -120,11 +120,14 @@ void PluginNode::prepareToPlay (const tracktion::graph::PlaybackInitialisationIn
+     if (shouldUseFineGrainAutomation (*plugin))
+         subBlockSizeToUse = std::max (128, 128 * juce::roundToInt (info.sampleRate / 44100.0));
+ 
+-    canProcessBypassed = balanceLatency
+-                            && dynamic_cast<ExternalPlugin*> (plugin.get()) != nullptr
+-                            && latencyNumSamples > 0;
+-
+-    if (canProcessBypassed)
++    // Harmonia: a switched-off plugin's latency is balanced whatever the plugin, not only for an
++    // external one. A built-in one with a latency was left out of the sound but still counted as
++    // late, so its track played early while it was off. Only an external one is run while off.
++    const bool balancesBypassed = balanceLatency && latencyNumSamples > 0;
++    canProcessBypassed = balancesBypassed
++                            && dynamic_cast<ExternalPlugin*> (plugin.get()) != nullptr;
++
++    if (balancesBypassed)
+     {
+         replaceLatencyProcessorIfPossible (info.nodeGraphToReplace);
+ 

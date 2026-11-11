@@ -88,8 +88,15 @@ namespace harmonia::ui::arrangement
         juce::Button* getSoloButton (int index) const;
         juce::String getShownName (int index) const;
 
+        /** The line under a header's name (for tests): the instrument or the input, and the
+            track's delay if it has one. */
+        juce::String getShownInstrument (int index) const;
+
         /** The user wants to rename this folder (the owner asks for the name). */
         std::function<void (const core::folders::Folder&)> onRenameFolder;
+
+        /** The user wants to set this track's delay (the owner asks for the milliseconds). */
+        std::function<void (te::AudioTrack&)> onAskTrackDelay;
 
     private:
         class Header;
