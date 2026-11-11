@@ -197,6 +197,47 @@ TEST_SUITE ("ui: midi learn")
         CHECK (strip.getFader().getTooltip().contains ("moved by CC 7"));
     }
 
+    TEST_CASE ("what a MIDI keyboard sends reaches MIDI Learn: its knob is learned, then moves the setting")
+    {
+        MainFixture f;
+        auto& inputs = f.main->getMidiInputs();
+        auto& controls = f.main->getMidiControls();
+        auto& volume = *f.track().getVolumePlugin()->volParam;
+
+        const auto letMessagesThrough = []
+        {
+            for (int i = 0; i < 10; ++i)
+                juce::MessageManager::getInstance()->runDispatchLoopUntil (10);
+        };
+
+        // Not a control: the setting goes on waiting.
+        controls.learn (volume);
+        inputs.post (juce::MidiMessage::midiClock());
+        inputs.post (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100));
+        inputs.post (juce::MidiMessage::noteOff (1, 60));
+        letMessagesThrough();
+        CHECK (controls.getWaitingParameter() == &volume);
+
+        // The knob, as the keyboard sends it.
+        inputs.post (juce::MidiMessage::controllerEvent (2, 21, 64));
+        letMessagesThrough();
+        CHECK (learn::getControl (volume).number == 21);
+        CHECK (learn::getControl (volume).channel == 2);
+        CHECK (controls.getWaitingParameter() == nullptr);
+
+        // It moves the fader now.
+        inputs.post (juce::MidiMessage::controllerEvent (2, 21, 0));
+        letMessagesThrough();
+        CHECK (volume.getCurrentNormalisedValue() < 0.02f);
+        inputs.post (juce::MidiMessage::controllerEvent (2, 21, 127));
+        letMessagesThrough();
+        CHECK (volume.getCurrentNormalisedValue() > 0.98f);
+
+        // Let the knob's turn end before the window goes.
+        for (int i = 0; i < 50; ++i)
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (10);
+    }
+
     TEST_CASE ("main window: Write and Ctrl+Shift+A write automation, Ctrl+Shift+L and Edit learn, controls listed to forget")
     {
         MainFixture f;

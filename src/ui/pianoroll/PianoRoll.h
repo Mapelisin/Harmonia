@@ -61,6 +61,14 @@ namespace harmonia::ui::pianoroll
         std::function<void()> onShowSteps;
         juce::TextButton& getStepsButton() noexcept         { return stepsButton; }
 
+        /** The list of what the lower panel shows: the note values, the common controllers, the
+            other controllers the clip has (those with events are marked), and "Other controllers"
+            with the rest. */
+        juce::ComboBox& getLaneBox() noexcept               { return laneBox; }
+
+        /** A controller's id in that list. */
+        static int getLaneBoxId (core::controllers::Controller);
+
         /** Off while the computer keyboard plays notes: letters, digits and punctuation are left
             to it (keyPressed returns false for them). */
         void setLetterShortcutsEnabled (bool shouldBeEnabled) noexcept   { letterShortcutsEnabled = shouldBeEnabled; }
@@ -78,6 +86,7 @@ namespace harmonia::ui::pianoroll
         juce::OwnedArray<juce::TextButton> toolButtons;
         juce::ComboBox snapBox, laneBox;
         static constexpr int firstControllerId = 101;     // laneBox: the controllers after the note values
+        std::optional<std::vector<core::controllers::Controller>> listedControllers;    // those the list marks as the clip's
         juce::TextButton toolsButton { "Tools" }, scaleButton, chordButton;
         juce::ToggleButton ghostsButton { "Ghost notes" };
         juce::TextButton stepsButton { "Steps" };
@@ -96,6 +105,7 @@ namespace harmonia::ui::pianoroll
         void updateContentLength();
         void updateScrollBars();
         void updateControls();
+        void updateLaneBox();
         void updatePlayhead();
         void repaintAll();
         void zoomAroundMouse (double factor);

@@ -111,11 +111,21 @@ namespace harmonia::audio
     }
 
     //==============================================================================
+    bool MidiInputs::isForwarded (const juce::MidiMessage& message) noexcept
+    {
+        return message.isNoteOnOrOff() || message.isController() || message.isPitchWheel() || message.isChannelPressure();
+    }
+
     void MidiInputs::handleIncomingMidiMessage (const juce::MidiMessage& message)
+    {
+        post (message);
+    }
+
+    void MidiInputs::post (const juce::MidiMessage& message)
     {
         const auto now = juce::Time::getMillisecondCounterHiRes();
 
-        if (! (message.isNoteOnOrOff() || message.isSustainPedalOn() || message.isSustainPedalOff()))
+        if (! isForwarded (message))
             return;
 
         {

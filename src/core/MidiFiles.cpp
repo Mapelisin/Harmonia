@@ -116,7 +116,7 @@ namespace harmonia::core::midi_files
 
         void addPlayedControllers (SongControllers& moves, const te::MidiClip& clip)
         {
-            for (auto c : controllers::getAll())
+            for (auto c : controllers::getUsed (clip))
                 for (const auto& p : controllers::getPlayed (clip, c))
                     moves[c].push_back (p);
         }

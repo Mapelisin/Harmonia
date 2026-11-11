@@ -44,7 +44,8 @@ TEST_SUITE ("core::controllers")
 {
     TEST_CASE ("defaults, names and how values read")
     {
-        CHECK (controllers::getAll().size() == 3);
+        CHECK (controllers::getCommon().size() == 7);
+        CHECK (controllers::getAll().size() == 114);        // the bend, the aftertouch and 112 numbered controllers
         CHECK (controllers::getName (Controller::pitchBend) == "Pitch bend");
         CHECK (controllers::getDefault (Controller::pitchBend) == doctest::Approx (0.5f).epsilon (0.001));
         CHECK (controllers::getDefault (Controller::modWheel) == 0.0f);
@@ -63,8 +64,234 @@ TEST_SUITE ("core::controllers")
         CHECK (bend->second == doctest::Approx (1.0f));
         CHECK (controllers::fromMidi (juce::MidiMessage::controllerEvent (1, 1, 64))->second == doctest::Approx (64.0f / 127.0f));
         CHECK (controllers::fromMidi (juce::MidiMessage::controllerEvent (1, 64, 100))->second == 1.0f);
-        CHECK_FALSE (controllers::fromMidi (juce::MidiMessage::controllerEvent (1, 7, 100)).has_value());
+        CHECK (controllers::fromMidi (juce::MidiMessage::controllerEvent (1, 7, 100))->first == Controller::volume);
         CHECK_FALSE (controllers::fromMidi (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100)).has_value());
+    }
+
+    TEST_CASE ("every controller has a name, a rest and a way to read; the numbers MIDI keeps for other jobs aren't offered")
+    {
+        // Each one once, the common ones first.
+        const auto& all = controllers::getAll();
+        const auto& common = controllers::getCommon();
+        CHECK (std::set<Controller> (all.begin(), all.end()).size() == all.size());
+        CHECK (std::equal (common.begin(), common.end(), all.begin()));
+
+        for (int number : { 0, 6, 32, 38, 98, 99, 100, 101, 120, 123, 127 })
+        {
+            CHECK_FALSE (controllers::isPlainNumber (number));
+            CHECK (std::find (all.begin(), all.end(), Controller::cc (number)) == all.end());
+            CHECK_FALSE (controllers::fromMidi (juce::MidiMessage::controllerEvent (1, number, 100)).has_value());
+        }
+
+        CHECK (Controller::cc (1) == Controller::modWheel);
+        CHECK (Controller::cc (11) == Controller::expression);
+        CHECK (Controller::expression.isCc());
+        CHECK_FALSE (Controller::pitchBend.isCc());
+        CHECK_FALSE (Controller::aftertouch.isCc());
+
+        CHECK (controllers::getName (Controller::expression) == "Expression");
+        CHECK (controllers::getLongName (Controller::expression) == "Expression (CC 11)");
+        CHECK (controllers::getLongName (Controller::modWheel) == "Mod wheel (CC 1)");
+        CHECK (controllers::getLongName (Controller::pitchBend) == "Pitch bend");
+        CHECK (controllers::getLongName (Controller::aftertouch) == "Aftertouch");
+        CHECK (controllers::getName (Controller::cc (74)) == "CC 74 Brightness");
+        CHECK (controllers::getLongName (Controller::cc (21)) == "CC 21");
+
+        // Where each rests.
+        CHECK (controllers::getDefault (Controller::expression) == 1.0f);
+        CHECK (controllers::describe (Controller::volume, controllers::getDefault (Controller::volume)) == "100");
+        CHECK (controllers::describe (Controller::pan, controllers::getDefault (Controller::pan)) == "Centre");
+        CHECK (controllers::getDefault (Controller::aftertouch) == 0.0f);
+        CHECK (controllers::getDefault (Controller::cc (74)) == 0.0f);
+
+        CHECK (controllers::isBipolar (Controller::pan));
+        CHECK_FALSE (controllers::isBipolar (Controller::expression));
+        CHECK (controllers::describe (Controller::pan, 0.0f) == "L64");
+        CHECK (controllers::describe (Controller::pan, 1.0f) == "R63");
+        CHECK (controllers::describe (Controller::expression, 100.0f / 127.0f) == "100");
+        CHECK (controllers::describe (Controller::aftertouch, 1.0f) == "127");
+
+        // The pedals and the other switches.
+        CHECK (controllers::isSwitch (Controller::cc (66)));
+        CHECK (controllers::isSwitch (Controller::cc (67)));
+        CHECK_FALSE (controllers::isSwitch (Controller::cc (70)));
+        CHECK (controllers::describe (Controller::cc (66), 1.0f) == "Down");
+        CHECK (controllers::describe (Controller::cc (68), 1.0f) == "On");
+        CHECK (controllers::describe (Controller::cc (68), 0.0f) == "Off");
+
+        // From MIDI and back.
+        const auto pressure = controllers::fromMidi (juce::MidiMessage::channelPressureChange (3, 127));
+        REQUIRE (pressure.has_value());
+        CHECK (pressure->first == Controller::aftertouch);
+        CHECK (pressure->second == doctest::Approx (1.0f));
+
+        const auto knob = controllers::fromMidi (juce::MidiMessage::controllerEvent (2, 21, 127));
+        REQUIRE (knob.has_value());
+        CHECK (knob->first == Controller::cc (21));
+        CHECK (knob->second == doctest::Approx (1.0f));
+        CHECK (controllers::fromMidi (juce::MidiMessage::controllerEvent (1, 66, 80))->second == 1.0f);
+
+        // The pressure on one key isn't the clip's (only the pressure on the keys as a whole).
+        CHECK_FALSE (controllers::fromMidi (juce::MidiMessage::aftertouchChange (1, 60, 100)).has_value());
+
+        const auto sent = controllers::toMidi (Controller::aftertouch, 100.0f / 127.0f, 4);
+        CHECK (sent.isChannelPressure());
+        CHECK (sent.getChannel() == 4);
+        CHECK (sent.getChannelPressureValue() == 100);
+        const auto expression = controllers::toMidi (Controller::expression, 1.0f, 2);
+        CHECK (expression.isControllerOfType (11));
+        CHECK (expression.getControllerValue() == 127);
+    }
+
+    TEST_CASE ("expression, a numbered knob and aftertouch play as their own MIDI; the clip tells which controllers it has")
+    {
+        ClipFixture f;
+        CHECK (controllers::getUsed (*f.clip).empty());
+
+        controllers::drawLine (*f.clip, Controller::expression, 0.0, 1.0f, 2.0, 0.0f);
+        controllers::drawLine (*f.clip, Controller::aftertouch, 1.0, 0.0f, 2.0, 1.0f);
+        controllers::add (*f.clip, Controller::cc (74), 3.0, 64.0f / 127.0f);
+        controllers::add (*f.clip, Controller::cc (21), 3.0, 32.0f / 127.0f);
+        controllers::add (*f.clip, Controller::modWheel, 3.0, 1.0f);
+
+        // The common ones first, then by number.
+        const std::vector<Controller> expected { Controller::modWheel, Controller::expression, Controller::aftertouch,
+                                                 Controller::cc (21), Controller::cc (74) };
+        CHECK (controllers::getUsed (*f.clip) == expected);
+
+        // Expression rests full: the line goes down from there.
+        CHECK (controllers::getPoints (*f.clip, Controller::expression).front().beat > 0.0);
+        CHECK (controllers::getValueAt (*f.clip, Controller::expression, 1.0) == doctest::Approx (0.5f).epsilon (0.04));
+        CHECK (controllers::getValueAt (*f.clip, Controller::expression, 8.0) == 0.0f);
+        CHECK (controllers::getValueAt (*f.clip, Controller::aftertouch, 0.5) == 0.0f);
+        CHECK (controllers::getValueAt (*f.clip, Controller::aftertouch, 2.0) == doctest::Approx (1.0f));
+        CHECK (controllers::getValueAt (*f.clip, Controller::cc (21), 3.5) == doctest::Approx (32.0f / 127.0f).epsilon (0.001));
+        CHECK_FALSE (controllers::hasPoints (*f.clip, Controller::volume));
+
+        const auto midi = playedMidi (*f.clip);
+        int expressions = 0, pressures = 0, highestPressure = 0, knob = -1, brightness = -1;
+
+        for (const auto* e : midi)
+        {
+            const auto& m = e->message;
+
+            if (m.isControllerOfType (11))      ++expressions;
+            if (m.isControllerOfType (21))      knob = m.getControllerValue();
+            if (m.isControllerOfType (74))      brightness = m.getControllerValue();
+
+            if (m.isChannelPressure())
+            {
+                ++pressures;
+                highestPressure = std::max (highestPressure, m.getChannelPressureValue());
+            }
+        }
+
+        CHECK (expressions >= 30);
+        CHECK (pressures >= 30);
+        CHECK (highestPressure == 127);
+        CHECK (knob == 32);
+        CHECK (brightness == 64);
+
+        // Erased: the clip no longer has it.
+        controllers::erase (*f.clip, Controller::cc (21), 0.0, 16.0);
+        CHECK (controllers::getUsed (*f.clip).size() == 4);
+
+        // Saved with the song.
+        juce::TemporaryFile file (".harmonia");
+        REQUIRE (f.project->save (file.getFile()).isEmpty());
+        juce::String error;
+        auto loaded = core::Project::load (test::session(), file.getFile(), error);
+        REQUIRE (loaded != nullptr);
+        auto* clip = dynamic_cast<te::MidiClip*> (loaded->getTracks().getFirst()->getClips().getFirst());
+        REQUIRE (clip != nullptr);
+        CHECK (controllers::getUsed (*clip) == controllers::getUsed (*f.clip));
+        CHECK (controllers::getPoints (*clip, Controller::aftertouch) == controllers::getPoints (*f.clip, Controller::aftertouch));
+        CHECK (controllers::getPoints (*clip, Controller::cc (74)) == controllers::getPoints (*f.clip, Controller::cc (74)));
+    }
+
+    TEST_CASE ("baking a loop keeps every controller the clip has; a linked copy gets a numbered one too")
+    {
+        ClipFixture f;
+        controllers::set (*f.clip, Controller::cc (74), { { 1.0, 1.0f }, { 2.0, 0.0f } });
+        controllers::set (*f.clip, Controller::aftertouch, { { 3.0, 1.0f }, { 3.5, 0.25f } });
+
+        auto* copy = core::clip_links::duplicate (*f.clip, 16.0, true);
+        REQUIRE (copy != nullptr);
+        controllers::add (*f.clip, Controller::cc (21), 0.5, 1.0f);
+        CHECK (controllers::getPoints (*copy, Controller::cc (21)) == controllers::getPoints (*f.clip, Controller::cc (21)));
+        CHECK (controllers::getUsed (*copy) == controllers::getUsed (*f.clip));
+
+        // A loop of beats 0..4, three times round.
+        core::clips::setEnd (*f.clip, 4.0, 0.25);
+        core::clips::setLooping (*f.clip, true);
+        core::clips::setEnd (*f.clip, 12.0, 0.25);
+        const auto knob = controllers::getPlayed (*f.clip, Controller::cc (74));
+        const auto pressure = controllers::getPlayed (*f.clip, Controller::aftertouch);
+        CHECK (knob.size() >= 6);
+        CHECK (pressure.size() >= 6);
+
+        core::clips::bakeLoop (*f.clip);
+        CHECK_FALSE (core::clips::isLooping (*f.clip));
+        CHECK (controllers::getPlayed (*f.clip, Controller::cc (74)) == knob);
+        CHECK (controllers::getPlayed (*f.clip, Controller::aftertouch) == pressure);
+        CHECK (controllers::getUsed (*f.clip).size() == 3);
+    }
+
+    TEST_CASE ("a MIDI file of the clip has every controller of it; bank select and \"all notes off\" in a file aren't read")
+    {
+        test::TempFolder temp;
+        ClipFixture f;
+        f.clip->getSequence().addNote (60, te::BeatPosition(), te::BeatDuration::fromBeats (4.0), 100, 0, nullptr);
+        controllers::add (*f.clip, Controller::expression, 1.0, 64.0f / 127.0f);
+        controllers::add (*f.clip, Controller::cc (74), 2.0, 1.0f);
+        controllers::add (*f.clip, Controller::aftertouch, 3.0, 1.0f);
+
+        const auto file = temp.getFile ("Knobs.mid");
+        REQUIRE (core::midi_files::writeClip (*f.clip, file).isEmpty());
+
+        juce::String error;
+        const auto written = core::midi_files::read (file, error);
+        REQUIRE (written.has_value());
+        REQUIRE (written->parts.size() == 1);
+        const auto& events = written->parts[0].controllerEvents;
+        CHECK (events.size() == 3);
+        REQUIRE (events.count (Controller::expression) == 1);
+        REQUIRE (events.count (Controller::cc (74)) == 1);
+        REQUIRE (events.count (Controller::aftertouch) == 1);
+        CHECK (events.at (Controller::expression).front().beat == doctest::Approx (1.0));
+        CHECK (events.at (Controller::expression).front().value == doctest::Approx (64.0f / 127.0f));
+        CHECK (events.at (Controller::cc (74)).front().value == doctest::Approx (1.0f));
+        CHECK (events.at (Controller::aftertouch).front().beat == doctest::Approx (3.0));
+
+        // A file from elsewhere: its volume is the clip's, its bank select, program and "all notes off" aren't.
+        juce::MidiMessageSequence track;
+        track.addEvent (juce::MidiMessage::controllerEvent (1, 0, 5), 0.0);
+        track.addEvent (juce::MidiMessage::controllerEvent (1, 32, 1), 0.0);
+        track.addEvent (juce::MidiMessage::programChange (1, 10), 0.0);
+        track.addEvent (juce::MidiMessage::controllerEvent (1, 7, 90), 0.0);
+        track.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100), 0.0);
+        track.addEvent (juce::MidiMessage::noteOff (1, 60), 480.0);
+        track.addEvent (juce::MidiMessage::controllerEvent (1, 123, 0), 960.0);
+        track.updateMatchedPairs();
+
+        juce::MidiFile midi;
+        midi.setTicksPerQuarterNote (480);
+        midi.addTrack (track);
+        const auto other = temp.getFile ("Elsewhere.mid");
+
+        {
+            juce::FileOutputStream out (other);
+            REQUIRE (out.openedOk());
+            REQUIRE (midi.writeTo (out));
+        }
+
+        const auto elsewhere = core::midi_files::read (other, error);
+        REQUIRE_MESSAGE (elsewhere.has_value(), error.toStdString());
+        REQUIRE (elsewhere->parts.size() == 1);
+        const auto& read = elsewhere->parts[0].controllerEvents;
+        CHECK (read.size() == 1);
+        REQUIRE (read.count (Controller::volume) == 1);
+        CHECK (read.at (Controller::volume).front().value == doctest::Approx (90.0f / 127.0f));
     }
 
     TEST_CASE ("a drawn line becomes small steps that play as MIDI; drawing again replaces what was there")

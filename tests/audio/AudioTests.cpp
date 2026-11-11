@@ -262,6 +262,43 @@ TEST_SUITE ("audio::MidiInputs")
         inputs.setTrack (nullptr);
         CHECK (inputs.getDeviceNames().isEmpty());
     }
+
+    TEST_CASE ("notes, pedals, wheels, knobs and key pressure reach the program in the order sent; clocks and sysex don't")
+    {
+        using audio::MidiInputs;
+        CHECK (MidiInputs::isForwarded (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100)));
+        CHECK (MidiInputs::isForwarded (juce::MidiMessage::noteOff (1, 60)));
+        CHECK (MidiInputs::isForwarded (juce::MidiMessage::controllerEvent (1, 64, 127)));      // the pedal
+        CHECK (MidiInputs::isForwarded (juce::MidiMessage::controllerEvent (1, 1, 50)));        // the mod wheel
+        CHECK (MidiInputs::isForwarded (juce::MidiMessage::controllerEvent (3, 21, 50)));       // a knob: MIDI Learn needs it
+        CHECK (MidiInputs::isForwarded (juce::MidiMessage::pitchWheel (1, 9000)));
+        CHECK (MidiInputs::isForwarded (juce::MidiMessage::channelPressureChange (1, 90)));
+        CHECK_FALSE (MidiInputs::isForwarded (juce::MidiMessage::midiClock()));
+        CHECK_FALSE (MidiInputs::isForwarded (juce::MidiMessage (0xfe)));                        // active sensing
+        CHECK_FALSE (MidiInputs::isForwarded (juce::MidiMessage::programChange (1, 5)));
+
+        auto project = core::Project::createEmpty (test::session());
+        MidiInputs inputs (project->getEdit());
+        std::vector<juce::MidiMessage> received;
+        inputs.onMessage = [&received] (const juce::MidiMessage& m, double) { received.push_back (m); };
+
+        inputs.post (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100));
+        inputs.post (juce::MidiMessage::midiClock());
+        inputs.post (juce::MidiMessage::controllerEvent (2, 21, 64));
+        inputs.post (juce::MidiMessage::pitchWheel (1, 9000));
+        inputs.post (juce::MidiMessage::channelPressureChange (1, 90));
+        CHECK (received.empty());       // handed over on the message thread, not on the keyboard's
+
+        for (int i = 0; i < 20 && received.size() < 4; ++i)
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (10);
+
+        REQUIRE (received.size() == 4);
+        CHECK (received[0].isNoteOn());
+        CHECK (received[1].isControllerOfType (21));
+        CHECK (received[1].getChannel() == 2);
+        CHECK (received[2].isPitchWheel());
+        CHECK (received[3].isChannelPressure());
+    }
 }
 
 TEST_SUITE ("audio::exportWav")

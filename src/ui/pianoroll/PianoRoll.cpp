@@ -56,28 +56,20 @@ namespace harmonia::ui::pianoroll
         };
         addAndMakeVisible (snapBox);
 
-        // The note values (ids from 1), then the clip's controllers (ids from firstControllerId).
-        const auto& laneProperties = property::getAll();
-        const auto& laneControllers = core::controllers::getAll();
-
-        for (size_t i = 0; i < laneProperties.size(); ++i)
-            laneBox.addItem (property::getName (laneProperties[i]), (int) i + 1);
-
-        laneBox.addSeparator();
-
-        for (size_t i = 0; i < laneControllers.size(); ++i)
-            laneBox.addItem (core::controllers::getName (laneControllers[i]), firstControllerId + (int) i);
-
+        // The note values (ids from 1), then the clip's controllers (ids from firstControllerId):
+        // filled by updateLaneBox.
         laneBox.setWantsKeyboardFocus (false);
-        laneBox.setTooltip ("Shown in the lower panel: a value of each note, or the pitch bend, mod wheel or "
-                            "sustain pedal of the clip (F / Shift+F)");
-        laneBox.onChange = [this, &laneProperties, &laneControllers]
+        laneBox.setTooltip ("Shown in the lower panel: a value of each note, or what else the clip plays: pitch bend, "
+                            "mod wheel, pedal, expression, aftertouch, any MIDI controller (F / Shift+F)");
+        laneBox.onChange = [this]
         {
+            const auto& laneProperties = property::getAll();
+            const auto& laneControllers = core::controllers::getAll();
             const auto id = laneBox.getSelectedId();
 
-            if (id >= firstControllerId)
+            if (id >= firstControllerId && id < firstControllerId + (int) laneControllers.size())
                 model.setLaneController (laneControllers[(size_t) (id - firstControllerId)]);
-            else if (id > 0)
+            else if (id > 0 && id <= (int) laneProperties.size())
                 model.setLaneProperty (laneProperties[(size_t) (id - 1)]);
         };
         addAndMakeVisible (laneBox);
@@ -584,6 +576,56 @@ namespace harmonia::ui::pianoroll
         verticalScroll.setSingleStepSize (1.0);
     }
 
+    int PianoRoll::getLaneBoxId (core::controllers::Controller c)
+    {
+        const auto& all = core::controllers::getAll();
+        return firstControllerId + (int) (std::find (all.begin(), all.end(), c) - all.begin());
+    }
+
+    void PianoRoll::updateLaneBox()
+    {
+        namespace controllers = core::controllers;
+
+        // Rebuilt only when the clip gets or loses a controller: the list marks those it has.
+        auto used = model.getClip() != nullptr ? controllers::getUsed (*model.getClip()) : std::vector<controllers::Controller>();
+
+        if (listedControllers == used)
+            return;
+
+        const auto isUsed = [&used] (controllers::Controller c) { return std::find (used.begin(), used.end(), c) != used.end(); };
+        const auto mark = juce::String::fromUTF8 ("  \xe2\x80\xa2");
+        const auto textOf = [&] (controllers::Controller c) { return controllers::getLongName (c) + (isUsed (c) ? mark : juce::String()); };
+
+        laneBox.clear (juce::dontSendNotification);
+        const auto& laneProperties = property::getAll();
+
+        for (size_t i = 0; i < laneProperties.size(); ++i)
+            laneBox.addItem (property::getName (laneProperties[i]), (int) i + 1);
+
+        laneBox.addSeparator();
+        const auto& common = controllers::getCommon();
+
+        for (auto c : common)
+            laneBox.addItem (textOf (c), getLaneBoxId (c));
+
+        // The others: those the clip has right here, the rest one level down.
+        juce::PopupMenu others;
+
+        for (auto c : controllers::getAll())
+        {
+            if (std::find (common.begin(), common.end(), c) != common.end())
+                continue;
+
+            if (isUsed (c))
+                laneBox.addItem (textOf (c), getLaneBoxId (c));
+            else
+                others.addItem (getLaneBoxId (c), controllers::getLongName (c));
+        }
+
+        laneBox.getRootMenu()->addSubMenu ("Other controllers", others);
+        listedControllers = std::move (used);
+    }
+
     void PianoRoll::updateControls()
     {
         const auto& tools = getAllTools();
@@ -595,11 +637,11 @@ namespace harmonia::ui::pianoroll
         const auto modeIndex = std::find (modes.begin(), modes.end(), model.getSnap()) - modes.begin();
         snapBox.setSelectedId ((int) modeIndex + 1, juce::dontSendNotification);
 
+        updateLaneBox();
+
         if (const auto controller = model.getLaneController())
         {
-            const auto& laneControllers = core::controllers::getAll();
-            const auto index = std::find (laneControllers.begin(), laneControllers.end(), *controller) - laneControllers.begin();
-            laneBox.setSelectedId (firstControllerId + (int) index, juce::dontSendNotification);
+            laneBox.setSelectedId (getLaneBoxId (*controller), juce::dontSendNotification);
         }
         else
         {

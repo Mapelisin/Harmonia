@@ -38,7 +38,8 @@ Mouse:
 - **The bottom panel**: drag the mouse across it to set velocity (or another property). If there is a
   selection, only the selected notes change (this is how you edit one note of a chord). **Alt** resets.
   **Alt+wheel over a note** does the same with the wheel (**Ctrl+Alt** for fine steps).
-  The same panel holds the clip's **pitch bend, mod wheel and sustain pedal** (see "Controllers" below).
+  The same panel holds the clip's **pitch bend, mod wheel, pedals, expression and any other MIDI
+  controller** (see "Controllers" below).
 
 Keys:
 
@@ -62,7 +63,7 @@ Keys:
 | Alt+M / Alt+Shift+M | Mute / unmute notes |
 | Shift+I | Invert the selection |
 | Ctrl+Insert / Ctrl+Delete | Insert / cut out empty time the size of the time selected on the ruler (moves all notes) |
-| F / Shift+F | Bottom panel: next / previous note property, then pitch bend, mod wheel, sustain pedal |
+| F / Shift+F | Bottom panel: next / previous note property, then pitch bend, mod wheel, pedal, expression and the other controllers |
 | PgUp / PgDn | Zoom in / zoom out |
 | Z | Show everything: the whole clip and its notes (or, if there is a selection, only the selected notes) |
 | Alt+V | Show / hide the notes of other tracks |
@@ -215,23 +216,37 @@ The note properties window (double click) now works the same way: all changes ma
   chord, it is not counted), and neither do passing notes shorter than half a beat. To turn it off: the
   **Scale** menu → *Chord names on the ruler*.
 
-## Controllers: pitch bend, mod wheel, sustain pedal
+## Controllers: pitch bend, mod wheel, pedals, expression, any MIDI controller
 
-Besides notes, a clip stores how the wheels and the pedal of a MIDI keyboard moved. In the list above the
-bottom panel (where Velocity is) choose **Pitch bend**, **Mod wheel** or **Sustain pedal**, or press **F**
-until you get there. The panel shows a line: every value holds until the next one.
+Besides notes, a clip stores how the wheels, the pedals and the knobs of a MIDI keyboard moved, and how
+hard the keys were pressed after the hit (aftertouch). In the list above the bottom panel (where Velocity
+is) choose one, or press **F** until you get there. The panel shows a line: every value holds until the
+next one.
 
+- The list has the ones needed most: **Pitch bend**, **Mod wheel (CC 1)**, **Sustain pedal (CC 64)**,
+  **Expression (CC 11)**, **Volume (CC 7)**, **Pan (CC 10)**, **Aftertouch**. Every other MIDI controller
+  is one level down, under **Other controllers** (CC 2 Breath, CC 74 Brightness, CC 21…). What a number
+  does is up to the instrument: look in its manual. Orchestral libraries, for example, usually take how
+  loud and bright they play from the mod wheel or from expression.
+- A dot `•` after a name: the clip already has a line for it. A controller from "Other controllers" that
+  the clip has is shown in the list itself, and **F** stops at it too.
 - **Drag with the left button** to draw a line (a diagonal drag gives a smooth rise). **Alt** draws the
-  rest position: bend to the middle, wheel and pedal to zero. **The right button** erases.
+  rest position: bend and pan to the middle, expression to full, volume to 100, the others to zero.
+  **The right button** erases.
 - **Pitch bend** goes up and down from the middle (on the built-in synth this is ±2 semitones; for plugins,
   whatever is set in the plugin). **Mod wheel** is 0…127: what it does is up to the instrument (usually
   vibrato or a filter; the built-in synth does not respond to it yet, Surge XT and most plugins do).
-  **Sustain pedal** is pressed (above the middle) or released.
-- The hint at the top right shows which value a click will set (+50%, 64, Down).
+  **Sustain pedal** (and the sostenuto and soft pedals, CC 66 and 67) is pressed (above the middle) or
+  released. **Expression**, **Volume** and the numbered controllers are 0…127; **Pan** goes left and right
+  from the centre. **Aftertouch** is the pressure on the keys as a whole (the pressure on each key
+  separately is not recorded yet). Whether an instrument responds to a controller is up to the instrument.
+- The hint at the top right shows which value a click will set (+50%, 64, Down, L20).
 - You can write only inside the clip; in a looping clip, into the loop. Copies of the clip (linked ones)
   get the same.
 - Controllers are saved in the project, go into the exported MIDI file and are read from other people's
-  MIDI files (the pedal from files, as before, makes the notes longer).
+  MIDI files, whichever they have (the pedal from files, as before, makes the notes longer). Many MIDI
+  files set volume and pan at their start: if a plugin plays quietly or to one side after an import, look
+  at the clip's **Volume** and **Pan** lines and erase them.
 
 ## Recording notes
 
@@ -243,9 +258,10 @@ until you get there. The panel shows a line: every value holds until the next on
 - The list to the right of Keys sets how recorded notes are placed: **As played**, **Quantize starts**
   (starts on the grid), **Quantize starts and ends** (starts and ends). The grid is the one chosen in Snap.
 - A **MIDI keyboard** connects by itself and plays the instrument of the selected track. The sustain pedal
-  is recorded too: the notes hold while it is pressed. **Pitch bend and the mod wheel** are written into the
-  clip while you move them (you can see them in the bottom panel, see "Controllers"). Which keyboard was
-  found is shown at the bottom, in the status bar.
+  is recorded too: the notes hold while it is pressed. **Pitch bend, the mod wheel, the keyboard's knobs,
+  its other pedals and aftertouch** are written into the clip while you move them (you can see them in the
+  bottom panel, see "Controllers"). A knob linked to a setting with MIDI Learn moves that setting instead.
+  Which keyboard was found is shown at the bottom, in the status bar.
 
 ## The computer keyboard as a piano
 

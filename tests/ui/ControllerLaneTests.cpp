@@ -3,6 +3,7 @@
 #include "core/Clips.h"
 #include "core/Controllers.h"
 #include "core/TestProject.h"
+#include "ui/MainComponent.h"
 #include "ui/NoteInput.h"
 #include "ui/pianoroll/ControlLane.h"
 
@@ -57,7 +58,7 @@ namespace
 
 TEST_SUITE ("piano roll: controller lanes")
 {
-    TEST_CASE ("F goes through the note values, then pitch bend, mod wheel and the pedal")
+    TEST_CASE ("F goes through the note values, then the common controllers and the others the clip has")
     {
         LaneFixture f;
         const auto numProperties = (int) core::note_property::getAll().size();
@@ -74,12 +75,39 @@ TEST_SUITE ("piano roll: controller lanes")
         f.model.cycleLaneProperty (1);
         CHECK (f.model.getLaneController() == Controller::sustain);
         f.model.cycleLaneProperty (1);
+        CHECK (f.model.getLaneController() == Controller::expression);
+        f.model.cycleLaneProperty (1);
+        CHECK (f.model.getLaneController() == Controller::volume);
+        f.model.cycleLaneProperty (1);
+        CHECK (f.model.getLaneController() == Controller::pan);
+        f.model.cycleLaneProperty (1);
+        CHECK (f.model.getLaneController() == Controller::aftertouch);
+        f.model.cycleLaneProperty (1);
         CHECK_FALSE (f.model.getLaneController().has_value());
         CHECK (f.model.getLaneProperty() == core::note_property::getAll().front());
 
-        // Shift+F back: from the first note value to the pedal.
+        // Shift+F back: from the first note value to the last controller.
         f.model.cycleLaneProperty (-1);
-        CHECK (f.model.getLaneController() == Controller::sustain);
+        CHECK (f.model.getLaneController() == Controller::aftertouch);
+
+        // A knob the clip has events of joins the round, after the common ones.
+        CHECK (f.model.getLaneControllers().size() == controllers::getCommon().size());
+        controllers::add (*f.clip, Controller::cc (74), 1.0, 0.5f);
+        CHECK (f.model.getLaneControllers().back() == Controller::cc (74));
+        f.model.cycleLaneProperty (1);
+        CHECK (f.model.getLaneController() == Controller::cc (74));
+        f.model.cycleLaneProperty (1);
+        CHECK_FALSE (f.model.getLaneController().has_value());
+
+        // One chosen from "Other controllers" that the clip has nothing of: F goes on to the note
+        // values, Shift+F back to the last controller of the round.
+        f.model.setLaneController (Controller::cc (21));
+        f.model.cycleLaneProperty (1);
+        CHECK_FALSE (f.model.getLaneController().has_value());
+        CHECK (f.model.getLaneProperty() == core::note_property::getAll().front());
+        f.model.setLaneController (Controller::cc (21));
+        f.model.cycleLaneProperty (-1);
+        CHECK (f.model.getLaneController() == Controller::cc (74));
 
         // Choosing a note value leaves the controllers.
         f.model.setLaneProperty (core::NoteProperty::pan);
@@ -176,6 +204,162 @@ TEST_SUITE ("piano roll: controller lanes")
 
         f.project->undo();
         CHECK (controllers::getPoints (*f.clip, Controller::modWheel).size() == drawn);
+    }
+
+    TEST_CASE ("the list above the lower panel: the common controllers, those the clip has, the rest under Other controllers")
+    {
+        using pianoroll::PianoRoll;
+        auto project = core::Project::createEmpty (test::session());
+        auto* clip = project->addMidiClip (*project->getTracks().getFirst(), 0.0, 16.0, "Main");
+        REQUIRE (clip != nullptr);
+        project->clearUndoHistory();
+        ui::MainComponent main (test::session(), *project);
+        main.setBounds (0, 0, 1280, 800);
+
+        auto& model = main.getPianoRollModel();
+        REQUIRE (model.getClip() == clip);
+        auto& box = main.getPianoRoll().getLaneBox();
+        const auto mark = juce::String::fromUTF8 ("  \xe2\x80\xa2");
+
+        const auto letMessagesThrough = []
+        {
+            for (int i = 0; i < 5; ++i)
+                juce::MessageManager::getInstance()->runDispatchLoopUntil (10);
+        };
+
+        // The controllers in the list itself, and those one level down.
+        struct Listed
+        {
+            juce::StringArray top, others;
+        };
+
+        const auto read = [&box]
+        {
+            Listed listed;
+
+            for (juce::PopupMenu::MenuItemIterator it (*box.getRootMenu()); it.next();)
+            {
+                const auto& item = it.getItem();
+
+                if (item.subMenu != nullptr)
+                {
+                    CHECK (item.text == "Other controllers");
+
+                    for (juce::PopupMenu::MenuItemIterator sub (*item.subMenu); sub.next();)
+                        listed.others.add (sub.getItem().text);
+                }
+                else if (item.itemID >= PianoRoll::getLaneBoxId (Controller::pitchBend))
+                {
+                    listed.top.add (item.text);
+                }
+            }
+
+            return listed;
+        };
+
+        auto listed = read();
+        CHECK (listed.top == juce::StringArray ("Pitch bend", "Mod wheel (CC 1)", "Sustain pedal (CC 64)", "Expression (CC 11)",
+                                                "Volume (CC 7)", "Pan (CC 10)", "Aftertouch"));
+        CHECK (listed.others.size() == (int) (controllers::getAll().size() - controllers::getCommon().size()));
+        CHECK (listed.others.contains ("CC 74 Brightness"));
+        CHECK (listed.others.contains ("CC 21"));
+
+        // Choosing one under "Other controllers" shows it in the lower panel.
+        box.setSelectedId (PianoRoll::getLaneBoxId (Controller::cc (74)), juce::sendNotificationSync);
+        CHECK (model.getLaneController() == Controller::cc (74));
+        CHECK (box.getText() == "CC 74 Brightness");
+
+        // Drawn: the clip has it now, so it is in the list itself, with a mark.
+        model.beginGesture ("Draw cc 74 brightness");
+        model.drawControllerLine (0.0, 0.0f, 2.0, 1.0f);
+        letMessagesThrough();
+        listed = read();
+        CHECK (listed.top.contains ("CC 74 Brightness" + mark));
+        CHECK_FALSE (listed.others.contains ("CC 74 Brightness"));
+        CHECK (box.getSelectedId() == PianoRoll::getLaneBoxId (Controller::cc (74)));
+        CHECK (box.getText() == "CC 74 Brightness" + mark);
+
+        // A common one drawn is marked where it stands.
+        model.setLaneController (Controller::expression);
+        model.beginGesture ("Draw expression");
+        model.drawControllerLine (0.0, 1.0f, 2.0, 0.0f);
+        letMessagesThrough();
+        listed = read();
+        CHECK (listed.top[3] == "Expression (CC 11)" + mark);
+        CHECK (box.getText() == "Expression (CC 11)" + mark);
+
+        // Undo both: nothing is marked, CC 74 is back under "Other controllers".
+        project->undo();
+        project->undo();
+        letMessagesThrough();
+        CHECK_FALSE (controllers::hasPoints (*clip, Controller::cc (74)));
+        listed = read();
+        CHECK (listed.top.size() == 7);
+        CHECK (listed.top[3] == "Expression (CC 11)");
+        CHECK (listed.others.contains ("CC 74 Brightness"));
+
+        // A note value again.
+        box.setSelectedId (1, juce::sendNotificationSync);
+        CHECK_FALSE (model.getLaneController().has_value());
+
+        // The window paints with a controller of "Other controllers" shown.
+        model.setLaneController (Controller::cc (21));
+        letMessagesThrough();
+        CHECK (box.getText() == "CC 21");
+        juce::Image image (juce::Image::RGB, 1280, 800, true);
+        juce::Graphics g (image);
+        main.paintEntireComponent (g, true);
+    }
+
+    TEST_CASE ("expression, a knob and aftertouch from a MIDI keyboard are recorded into the clip; \"all notes off\" isn't")
+    {
+        LaneFixture f;
+        f.clock.loop = { 0.0, 64.0 };
+        f.input->setRecordArmed (true);
+        f.clock.playing = true;
+        f.clock.beat = 4.0;
+        f.input->update();
+        REQUIRE (f.input->isRecording());
+
+        f.clock.beat = 5.0;
+        f.input->handleMidiMessage (juce::MidiMessage::controllerEvent (1, 11, 64), NoteInput::now());
+        f.clock.beat = 6.0;
+        f.input->handleMidiMessage (juce::MidiMessage::controllerEvent (1, 21, 127), NoteInput::now());
+        f.clock.beat = 7.0;
+        f.input->handleMidiMessage (juce::MidiMessage::channelPressureChange (1, 127), NoteInput::now());
+        f.clock.beat = 7.5;
+        f.input->handleMidiMessage (juce::MidiMessage::channelPressureChange (1, 0), NoteInput::now());
+        f.clock.beat = 8.0;
+        f.input->handleMidiMessage (juce::MidiMessage::controllerEvent (1, 123, 0), NoteInput::now());
+        f.input->handleMidiMessage (juce::MidiMessage::controllerEvent (1, 0, 3), NoteInput::now());
+
+        f.clock.playing = false;
+        f.input->update();
+        CHECK_FALSE (f.input->isRecording());
+
+        const auto expression = f.model.getControllerPoints (Controller::expression);
+        REQUIRE (expression.size() == 1);
+        CHECK (expression[0].beat == doctest::Approx (5.0));
+        CHECK (expression[0].value == doctest::Approx (64.0f / 127.0f));
+
+        const auto knob = f.model.getControllerPoints (Controller::cc (21));
+        REQUIRE (knob.size() == 1);
+        CHECK (knob[0] == controllers::Point { 6.0, 1.0f });
+
+        const auto pressure = f.model.getControllerPoints (Controller::aftertouch);
+        REQUIRE (pressure.size() == 2);
+        CHECK (pressure[0] == controllers::Point { 7.0, 1.0f });
+        CHECK (pressure[1] == controllers::Point { 7.5, 0.0f });
+
+        const std::vector<Controller> expected { Controller::expression, Controller::aftertouch, Controller::cc (21) };
+        CHECK (controllers::getUsed (*f.clip) == expected);
+
+        // The knob is in F's round now.
+        CHECK (f.model.getLaneControllers().back() == Controller::cc (21));
+
+        // The take is one undo step.
+        f.project->undo();
+        CHECK (controllers::getUsed (*f.clip).empty());
     }
 
     TEST_CASE ("a looping clip records the wheels into its loop")

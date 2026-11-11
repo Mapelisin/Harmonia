@@ -649,18 +649,17 @@ namespace harmonia::core::clips
         const auto played = getPlayedNotes (clip);
         const auto start = getStartBeat (clip);
 
-        // The wheels and the pedal as well.
+        // The wheels, the pedals and whatever else the clip plays as well.
         std::vector<std::pair<controllers::Controller, std::vector<controllers::Point>>> moves;
 
-        for (auto c : controllers::getAll())
+        for (auto c : controllers::getUsed (clip))
         {
             auto points = controllers::getPlayed (clip, c);
 
             for (auto& p : points)
                 p.beat -= start;
 
-            if (controllers::hasPoints (clip, c))
-                moves.emplace_back (c, std::move (points));
+            moves.emplace_back (c, std::move (points));
         }
 
         // Each note written where it plays, from the clip's start (one cut by the clip's start

@@ -8,19 +8,10 @@ namespace harmonia::core::controllers
     {
         constexpr int maxBend = 16383;
 
-        int getType (Controller c)
-        {
-            switch (c)
-            {
-                case Controller::pitchBend:     return te::MidiControllerEvent::pitchWheelType;
-                case Controller::modWheel:      return 1;
-                case Controller::sustain:       return 64;
-            }
+        /** The on/off controllers: the pedals, portamento, legato. */
+        bool isSwitchNumber (int number)    { return number >= 64 && number <= 69; }
 
-            return 1;
-        }
-
-        /** Tracktion keeps controller values as 14 bits: the wheel's own, a CC's 7 bits shifted up. */
+        /** Tracktion keeps controller values as 14 bits: the wheel's own, the others' 7 bits shifted up. */
         int toStored (Controller c, float value)
         {
             value = juce::jlimit (0.0f, 1.0f, value);
@@ -28,7 +19,7 @@ namespace harmonia::core::controllers
             if (c == Controller::pitchBend)
                 return juce::roundToInt (value * (float) maxBend);
 
-            if (c == Controller::sustain)
+            if (isSwitch (c))
                 return value >= 0.5f ? 127 << 7 : 0;
 
             return juce::roundToInt (value * 127.0f) << 7;
@@ -42,6 +33,30 @@ namespace harmonia::core::controllers
             return juce::jlimit (0.0f, 1.0f, (float) (stored >> 7) / 127.0f);
         }
 
+        /** The names musicians know the other numbers by. */
+        juce::String getNumberName (int number)
+        {
+            switch (number)
+            {
+                case 2:     return "Breath";
+                case 4:     return "Foot pedal";
+                case 5:     return "Portamento time";
+                case 8:     return "Balance";
+                case 65:    return "Portamento";
+                case 66:    return "Sostenuto pedal";
+                case 67:    return "Soft pedal";
+                case 68:    return "Legato";
+                case 69:    return "Hold 2 pedal";
+                case 71:    return "Resonance";
+                case 72:    return "Release";
+                case 73:    return "Attack";
+                case 74:    return "Brightness";
+                case 91:    return "Reverb";
+                case 93:    return "Chorus";
+                default:    return {};
+            }
+        }
+
         juce::UndoManager* undoManagerFor (te::MidiClip& clip)
         {
             return &clip.edit.getUndoManager();
@@ -49,58 +64,120 @@ namespace harmonia::core::controllers
 
         void removeBetween (te::MidiClip& clip, Controller c, double fromBeat, double toBeat)
         {
-            clip.getSequence().removeControllersBetween (getType (c), te::BeatPosition::fromBeats (fromBeat),
+            clip.getSequence().removeControllersBetween (c.type, te::BeatPosition::fromBeats (fromBeat),
                                                          te::BeatPosition::fromBeats (toBeat), undoManagerFor (clip));
         }
 
         void addEvent (te::MidiClip& clip, Controller c, double beat, int stored)
         {
-            clip.getSequence().addControllerEvent (te::BeatPosition::fromBeats (std::max (0.0, beat)), getType (c), stored,
+            clip.getSequence().addControllerEvent (te::BeatPosition::fromBeats (std::max (0.0, beat)), c.type, stored,
                                                    undoManagerFor (clip));
         }
     }
 
+    const std::vector<Controller>& getCommon()
+    {
+        static const std::vector<Controller> common { Controller::pitchBend, Controller::modWheel, Controller::sustain,
+                                                      Controller::expression, Controller::volume, Controller::pan,
+                                                      Controller::aftertouch };
+        return common;
+    }
+
     const std::vector<Controller>& getAll()
     {
-        static const std::vector<Controller> all { Controller::pitchBend, Controller::modWheel, Controller::sustain };
+        static const std::vector<Controller> all = []
+        {
+            auto result = getCommon();
+
+            for (int number = 0; number < 128; ++number)
+                if (isPlainNumber (number) && std::find (result.begin(), result.end(), Controller::cc (number)) == result.end())
+                    result.push_back (Controller::cc (number));
+
+            return result;
+        }();
+
         return all;
+    }
+
+    bool isPlainNumber (int number)
+    {
+        // Bank select, data entry, (N)RPN numbers and the channel-mode messages mean something else.
+        return number > 0 && number < 120 && number != 32 && number != 6 && number != 38 && ! (number >= 98 && number <= 101);
+    }
+
+    std::vector<Controller> getUsed (const te::MidiClip& clip)
+    {
+        std::set<int> types;
+
+        for (auto* e : clip.getSequence().getControllerEvents())
+            types.insert (e->getType());
+
+        std::vector<Controller> used;
+
+        for (auto c : getAll())
+            if (types.count (c.type) > 0)
+                used.push_back (c);
+
+        return used;
     }
 
     juce::String getName (Controller c)
     {
-        switch (c)
-        {
-            case Controller::pitchBend:     return "Pitch bend";
-            case Controller::modWheel:      return "Mod wheel";
-            case Controller::sustain:       return "Sustain pedal";
-        }
+        if (c == Controller::pitchBend)     return "Pitch bend";
+        if (c == Controller::aftertouch)    return "Aftertouch";
+        if (c == Controller::modWheel)      return "Mod wheel";
+        if (c == Controller::sustain)       return "Sustain pedal";
+        if (c == Controller::expression)    return "Expression";
+        if (c == Controller::volume)        return "Volume";
+        if (c == Controller::pan)           return "Pan";
 
-        return {};
+        const auto name = getNumberName (c.type);
+        return "CC " + juce::String (c.type) + (name.isNotEmpty() ? " " + name : juce::String());
+    }
+
+    juce::String getLongName (Controller c)
+    {
+        const auto& common = getCommon();
+
+        if (c.isCc() && std::find (common.begin(), common.end(), c) != common.end())
+            return getName (c) + " (CC " + juce::String (c.type) + ")";
+
+        return getName (c);
     }
 
     float getDefault (Controller c)
     {
-        return c == Controller::pitchBend ? fromStored (c, 8192) : 0.0f;
+        if (c == Controller::pitchBend)                         return fromStored (c, 8192);
+        if (c == Controller::pan || c == Controller::cc (8))    return 64.0f / 127.0f;
+        if (c == Controller::volume)                            return 100.0f / 127.0f;
+        if (c == Controller::expression)                        return 1.0f;
+
+        return 0.0f;
     }
 
-    bool isBipolar (Controller c)   { return c == Controller::pitchBend; }
-    bool isSwitch (Controller c)    { return c == Controller::sustain; }
+    bool isBipolar (Controller c)   { return c == Controller::pitchBend || c == Controller::pan || c == Controller::cc (8); }
+    bool isSwitch (Controller c)    { return c.isCc() && isSwitchNumber (c.type); }
 
     juce::String describe (Controller c, float value)
     {
-        switch (c)
+        if (c == Controller::pitchBend)
         {
-            case Controller::pitchBend:
-            {
-                const auto percent = juce::roundToInt ((toStored (c, value) - 8192) * 100.0 / 8192.0);
-                return percent == 0 ? juce::String ("0% (no bend)") : (percent > 0 ? "+" : "") + juce::String (percent) + "%";
-            }
-
-            case Controller::modWheel:      return juce::String (toStored (c, value) >> 7);
-            case Controller::sustain:       return value >= 0.5f ? "Down" : "Up";
+            const auto percent = juce::roundToInt ((toStored (c, value) - 8192) * 100.0 / 8192.0);
+            return percent == 0 ? juce::String ("0% (no bend)") : (percent > 0 ? "+" : "") + juce::String (percent) + "%";
         }
 
-        return {};
+        const auto number = toStored (c, value) >> 7;
+
+        if (isSwitch (c))
+        {
+            const auto isPedal = c.type != 65 && c.type != 68;
+            return number >= 64 ? (isPedal ? "Down" : "On") : (isPedal ? "Up" : "Off");
+        }
+
+        if (isBipolar (c))
+            return number == 64 ? juce::String ("Centre") : (number < 64 ? "L" + juce::String (64 - number) : "R" + juce::String (number - 64));
+
+        return juce::String (number);
     }
 
     std::optional<std::pair<Controller, float>> fromMidi (const juce::MidiMessage& message)
@@ -108,11 +185,15 @@ namespace harmonia::core::controllers
         if (message.isPitchWheel())
             return std::pair { Controller::pitchBend, fromStored (Controller::pitchBend, message.getPitchWheelValue()) };
 
-        if (message.isControllerOfType (1))
-            return std::pair { Controller::modWheel, (float) message.getControllerValue() / 127.0f };
+        if (message.isChannelPressure())
+            return std::pair { Controller::aftertouch, (float) message.getChannelPressureValue() / 127.0f };
 
-        if (message.isControllerOfType (64))
-            return std::pair { Controller::sustain, message.getControllerValue() >= 64 ? 1.0f : 0.0f };
+        if (message.isController() && isPlainNumber (message.getControllerNumber()))
+        {
+            const auto c = Controller::cc (message.getControllerNumber());
+            const auto value = message.getControllerValue();
+            return std::pair { c, isSwitch (c) ? (value >= 64 ? 1.0f : 0.0f) : (float) value / 127.0f };
+        }
 
         return std::nullopt;
     }
@@ -124,13 +205,16 @@ namespace harmonia::core::controllers
         if (c == Controller::pitchBend)
             return juce::MidiMessage::pitchWheel (channel, toStored (c, value));
 
-        return juce::MidiMessage::controllerEvent (channel, getType (c), toStored (c, value) >> 7);
+        if (c == Controller::aftertouch)
+            return juce::MidiMessage::channelPressureChange (channel, toStored (c, value) >> 7);
+
+        return juce::MidiMessage::controllerEvent (channel, c.type, toStored (c, value) >> 7);
     }
 
     std::vector<Point> getPoints (const te::MidiClip& clip, Controller c)
     {
         std::vector<Point> points;
-        const auto type = getType (c);
+        const auto type = c.type;
 
         for (auto* e : clip.getSequence().getControllerEvents())
             if (e->getType() == type)
@@ -142,7 +226,7 @@ namespace harmonia::core::controllers
 
     bool hasPoints (const te::MidiClip& clip, Controller c)
     {
-        return clip.getSequence().containsController (getType (c));
+        return clip.getSequence().containsController (c.type);
     }
 
     float getValueAt (const te::MidiClip& clip, Controller c, double beat)

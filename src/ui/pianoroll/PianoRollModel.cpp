@@ -511,17 +511,38 @@ namespace harmonia::ui::pianoroll
         }
     }
 
+    std::vector<core::controllers::Controller> PianoRollModel::getLaneControllers() const
+    {
+        auto offered = core::controllers::getCommon();
+
+        if (clip != nullptr)
+            for (auto c : core::controllers::getUsed (*clip))
+                if (std::find (offered.begin(), offered.end(), c) == offered.end())
+                    offered.push_back (c);
+
+        return offered;
+    }
+
     void PianoRollModel::cycleLaneProperty (int direction)
     {
         // The note values, then the controllers, round and round.
         const auto& properties = core::note_property::getAll();
-        const auto& controllers = core::controllers::getAll();
+        const auto controllers = getLaneControllers();
         const auto numProperties = (int) properties.size();
-        const auto count = numProperties + (int) controllers.size();
+        const auto numControllers = (int) controllers.size();
+        const auto count = numProperties + numControllers;
 
-        const auto current = laneController.has_value()
-                               ? numProperties + (int) (std::find (controllers.begin(), controllers.end(), *laneController) - controllers.begin())
-                               : (int) (std::find (properties.begin(), properties.end(), laneProperty) - properties.begin());
+        auto current = (int) (std::find (properties.begin(), properties.end(), laneProperty) - properties.begin());
+
+        if (laneController.has_value())
+        {
+            const auto index = (int) (std::find (controllers.begin(), controllers.end(), *laneController) - controllers.begin());
+
+            // One chosen from "Other controllers" that the clip has nothing of isn't in the round:
+            // forward goes on to the note values, back to the last controller.
+            current = numProperties + (index < numControllers ? index : (direction > 0 ? numControllers - 1 : numControllers));
+        }
+
         const auto next = ((current + direction) % count + count) % count;
 
         if (next < numProperties)

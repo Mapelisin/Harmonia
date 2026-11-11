@@ -1,6 +1,7 @@
 #include "audio/MidiLearn.h"
 #include "audio/Automation.h"
 #include "audio/AutomationWriter.h"
+#include "core/Controllers.h"
 
 namespace harmonia::audio::midi_learn
 {
@@ -65,8 +66,8 @@ namespace harmonia::audio::midi_learn
 
         const auto number = message.getControllerNumber();
 
-        // Bank select, data entry, (N)RPN numbers and the channel mode messages mean something else.
-        if (number == 0 || number == 32 || number == 6 || number == 38 || (number >= 98 && number <= 101) || number >= 120)
+        // Bank select, data entry and the like mean something else.
+        if (! core::controllers::isPlainNumber (number))
             return {};
 
         return { message.getChannel(), number };

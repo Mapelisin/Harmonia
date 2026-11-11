@@ -109,6 +109,7 @@ namespace harmonia::ui
         void setStepsShown (bool);
         bool areStepsShown() const noexcept                             { return stepsShown; }
         NoteInput& getNoteInput() noexcept                              { return noteInput; }
+        audio::MidiInputs& getMidiInputs() noexcept                     { return midiInputs; }
         audio::Transport& getTransport() noexcept                       { return transport; }
         TransportBar& getTransportBar() noexcept                        { return transportBar; }
         mixer::Mixer& getMixer() noexcept                               { return mixer; }

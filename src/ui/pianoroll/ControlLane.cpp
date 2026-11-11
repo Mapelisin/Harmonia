@@ -117,7 +117,7 @@ namespace harmonia::ui::pianoroll
 
     void ControlLane::paintController (juce::Graphics& g, controllers::Controller c, juce::Rectangle<int> area)
     {
-        const auto baseline = valueToY (controllers::isBipolar (c) ? 0.5f : 0.0f);
+        const auto baseline = valueToY (controllers::isBipolar (c) ? controllers::getDefault (c) : 0.0f);
 
         if (controllers::isBipolar (c))
         {

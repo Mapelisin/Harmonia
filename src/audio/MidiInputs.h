@@ -26,9 +26,17 @@ namespace harmonia::audio
         /** Names of the keyboards in use. */
         juce::StringArray getDeviceNames() const;
 
-        /** Notes, pedal and other messages from any keyboard, with the time they arrived
-            (juce::Time::getMillisecondCounterHiRes()). Called on the message thread. */
+        /** Notes, pedals, wheels, knobs and key pressure from any keyboard, with the time they
+            arrived (juce::Time::getMillisecondCounterHiRes()). Called on the message thread. */
         std::function<void (const juce::MidiMessage&, double wallMs)> onMessage;
+
+        /** True for a message that goes to onMessage: a note, a controller (pedals, wheels,
+            knobs), the pitch bend, the pressure on the keys. Not clocks, sysex and the like. */
+        static bool isForwarded (const juce::MidiMessage&) noexcept;
+
+        /** A message as a keyboard sends it (any thread): one that isForwarded reaches onMessage
+            on the message thread. Every keyboard's messages come through here. */
+        void post (const juce::MidiMessage&);
 
         /** Called when keyboards are plugged in or out. */
         std::function<void()> onDevicesChanged;

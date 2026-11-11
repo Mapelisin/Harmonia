@@ -119,7 +119,7 @@ namespace harmonia::ui
                 { "Alt+M / Alt+Shift+M", "Mute / unmute" },
                 { "Shift+I", "Invert the selection" },
                 { "Ctrl+Insert / Ctrl+Delete", "Insert / delete the selected time" },
-                { "F / Shift+F", "Lower panel: next / previous note value, then pitch bend, mod wheel, pedal" },
+                { "F / Shift+F", "Lower panel: next / previous note value, then pitch bend, mod wheel, pedal, expression, other controllers" },
                 { "PgUp / PgDn", "Zoom in / out" },
                 { "Z", "Zoom to fit: the selected notes, or the whole clip" },
                 { "Alt+V", "Show / hide the other tracks' notes" },

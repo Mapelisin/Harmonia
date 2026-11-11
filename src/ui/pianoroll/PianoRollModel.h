@@ -185,7 +185,11 @@ namespace harmonia::ui::pianoroll
         std::optional<core::controllers::Controller> getLaneController() const noexcept  { return laneController; }
         void setLaneController (std::optional<core::controllers::Controller>);
 
-        /** F / Shift+F: the next or previous note value, then pitch bend, mod wheel and the pedal. */
+        /** The controllers offered for the lower panel: the common ones (pitch bend, mod wheel,
+            pedal, expression, volume, pan, aftertouch), then the others the clip has events of. */
+        std::vector<core::controllers::Controller> getLaneControllers() const;
+
+        /** F / Shift+F: the next or previous note value, then the controllers of getLaneControllers. */
         void cycleLaneProperty (int direction);
 
         bool areGhostsVisible() const noexcept          { return ghostsVisible; }
