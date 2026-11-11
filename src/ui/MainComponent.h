@@ -185,6 +185,12 @@ namespace harmonia::ui
         /** Help → About: the version, and what Harmonia is made with. */
         void showAbout();
 
+        /** Closes every plugin window of the song (F12, View menu) and says how many. */
+        void closePluginWindows();
+
+        /** Which plugin takes how much of the sound's time: a bubble at the CPU meter. */
+        void showPluginLoad();
+
         /** What the lower part of the window shows. `pianoRoll` is the editor of the current
             track: the piano roll, or on an audio track the audio clip editor. */
         enum class LowerPanel { pianoRoll, automation, mixer, sounds };

@@ -1,5 +1,6 @@
 #include "audio/Effects.h"
 
+#include "audio/Instruments.h"
 #include "audio/Limiter.h"
 #include "audio/PluginSafety.h"
 #include "audio/Pump.h"
@@ -344,6 +345,30 @@ namespace harmonia::audio::effects
             return "EQ";
 
         return plugin.getName();
+    }
+
+    juce::String getOwnerName (te::Plugin& plugin)
+    {
+        if (auto* track = plugin.getOwnerTrack())
+            return track->getName();
+
+        return plugin.getOwnerList() == &plugin.edit.getMasterPluginList() ? juce::String ("Master") : juce::String();
+    }
+
+    juce::Array<te::Plugin*> getAllOfSong (te::Edit& edit)
+    {
+        juce::Array<te::Plugin*> result;
+
+        for (auto* track : te::getAudioTracks (edit))
+        {
+            if (auto* instrument = instruments::get (*track))
+                result.add (instrument);
+
+            result.addArray (get (track->pluginList));
+        }
+
+        result.addArray (get (edit.getMasterPluginList()));
+        return result;
     }
 
     void showEditor (te::Plugin& plugin)

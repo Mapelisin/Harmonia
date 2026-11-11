@@ -33,6 +33,8 @@ namespace harmonia::ui
                 { "Ctrl+S / Ctrl+Shift+S", "Save / save as" },
                 { "Ctrl+R", "Export the song: WAV, FLAC or MP3 (the File menu also exports the loop region)" },
                 { "F6 / F7 / F8 / F9", "Sounds / piano roll (audio clip on an audio track) / automation / mixer below" },
+                { "F12", "Close all plugin windows (View > Plugin windows: the open ones, and keeping them on top)" },
+                { "Click the CPU meter", "Which plugin takes how much of the audio time, the heaviest first" },
                 { "Ctrl+Left / Ctrl+Right", "Play from the previous / next marker" },
                 { "Bar numbers: right button > Tempo change here", "The song plays at another tempo from there (an orange flag: drag it, double-click to set it)" },
                 { "F1", "This list" },

@@ -13,6 +13,8 @@
 #include "audio/MixCheck.h"
 #include "ui/ComputerKeyboard.h"
 #include "ui/Icons.h"
+#include "ui/PluginLoadPanel.h"
+#include "ui/PluginWindows.h"
 #include "ui/Theme.h"
 #include "ui/settings/SettingsPanel.h"
 
@@ -38,6 +40,7 @@ namespace harmonia::ui
         // Clicks on widgets that don't take focus land here, so Space and the editing
         // shortcuts keep working wherever the user clicked.
         setWantsKeyboardFocus (true);
+        cpuMeter.onClick = [this] { showPluginLoad(); };
 
         pianoRollModel.setAuditioner (&auditioner);
         pianoRollModel.addListener (this);
@@ -504,6 +507,12 @@ namespace harmonia::ui
         if (key == juce::KeyPress::spaceKey)
         {
             transport.togglePlayStop();
+            return true;
+        }
+
+        if (key == juce::KeyPress::F12Key)
+        {
+            closePluginWindows();
             return true;
         }
 
@@ -1230,6 +1239,19 @@ namespace harmonia::ui
 
         // A warning about the sound card is being dealt with.
         statusBar.setWarning ({});
+    }
+
+    void MainComponent::closePluginWindows()
+    {
+        const auto closed = plugin_windows::closeAll (project.getEdit());
+        showMessage (closed == 0 ? juce::String ("No plugin windows are open")
+                     : closed == 1 ? juce::String ("Closed 1 plugin window")
+                                   : "Closed " + juce::String (closed) + " plugin windows");
+    }
+
+    void MainComponent::showPluginLoad()
+    {
+        PluginLoadPanel::show (project.getEdit(), cpuMeter);
     }
 
     void MainComponent::showAbout()

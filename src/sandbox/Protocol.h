@@ -149,6 +149,7 @@ namespace harmonia::sandbox::protocol
                                       program ("program"), index ("index"), name ("name"), text ("text"),
                                       value ("value"), begin ("begin"), colour ("colour"),
                                       x ("x"), y ("y"), width ("width"), height ("height"), toFront ("toFront"),
+                                      onTop ("onTop"),
                                       input ("input"), channels ("channels"), enabled ("enabled"),
                                       label ("label"), defaultValue ("default"), steps ("steps"),
                                       discrete ("discrete"), boolean ("boolean"), automatable ("automatable"),

@@ -4,6 +4,7 @@
 #include "sandbox/RemotePlugin.h"
 #include "ui/DrumPadsPanel.h"
 #include "ui/ParameterPanel.h"
+#include "ui/PluginWindows.h"
 #include "ui/SamplerPanel.h"
 #include "ui/Theme.h"
 
@@ -39,6 +40,7 @@ namespace harmonia::ui
         }
 
         setTopLeftPosition (plugin.windowState->choosePositionForPluginWindow());
+        setAlwaysOnTop (plugin_windows::staysOnTop (plugin.engine));
         setVisible (true);
         toFront (true);
     }
@@ -65,6 +67,9 @@ namespace harmonia::ui
     std::unique_ptr<RemotePluginWindow> RemotePluginWindow::open (te::Plugin& plugin)
     {
         auto* remote = audio::plugin_safety::getRemote (plugin);
+
+        if (remote != nullptr)
+            remote->setEditorAlwaysOnTop (plugin_windows::staysOnTop (plugin.engine));
 
         if (remote == nullptr || ! remote->hasEditor()
              || ! remote->showEditor (plugin.windowState->choosePositionForPluginWindow(),

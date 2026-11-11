@@ -37,6 +37,10 @@ add_library(harmonia_ui STATIC
     TakeMenu.cpp
     PluginWindow.h
     PluginWindow.cpp
+    PluginWindows.h
+    PluginWindows.cpp
+    PluginLoadPanel.h
+    PluginLoadPanel.cpp
     PhysicalKeys.h
     PhysicalKeys.cpp
     ComputerKeyboard.h

@@ -68,7 +68,7 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   нет, ноты меняет только через `PianoRollModel`. Показан ли он — `MainComponent::areStepsShown`.
 - Проверка интерфейса без окна: тесты «the main window paints…» рисуют главное окно в картинку; с переменной
   `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png`, `main-arrangement.png`, `main-mixer.png`,
-  `main-automation.png`, `main-audio.png`, `main-audio-recording.png` и `main-tracks-selected.png`
+  `main-automation.png`, `main-audio.png`, `main-audio-recording.png`, `main-tracks-selected.png` и `plugin-load.png`
   (`harmonia_tests.exe -tc="*paints*"`). Живая проверка мышью (скрипт
   кликает по окну) захватывает настоящий курсор — только если пользователь не за компьютером или разрешил.
 - Самопроверка без звука в динамиках: `--selftest --quiet` (громкость мастера в ноль, уровни меряются на дорожке).
@@ -151,6 +151,9 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Группы — только через `audio::groups` (выход дорожки в группу — `setGroup`; хранится по ID, патч 0002),
   сайдчейн — через `audio::sidechain` (удаляешь дорожку — `forgetSource`). Рендер части песни берёт источники
   сайдчейна беззвучно (`sidechain::getSourcesFor`).
+- Окна плагинов все вместе (список открытых, закрыть все, «поверх всех») — `ui::plugin_windows`; новое место,
+  где появляется окно плагина, спрашивает `staysOnTop`. Нагрузка по плагинам — `audio::plugin_load::measure`;
+  все инструменты и эффекты песни по порядку — `audio::effects::getAllOfSong`, чей плагин — `getOwnerName`.
 - Внешние плагины работают в своих процессах (`src/sandbox`, решение 23): `Session` подменяет
   `PluginManager::createPluginInstance`, процесс — тот же exe с `--harmonia-plugin-host` (и тестовая программа
   тоже: `main` проверяет ключ первым). Упавшие плагины, перезапуск, окно поверх — `audio::plugin_safety`; окно

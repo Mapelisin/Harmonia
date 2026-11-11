@@ -9,7 +9,8 @@
   now: with clips, if your last click was in the arrangement (or the mixer is open at the bottom), otherwise
   with the notes of the piano roll. **Undo** says what exactly it will undo ("Undo "Change tempo"").
 - On the right in the same row is **CPU**: how loaded the audio is. Near 100 % the sound starts to crackle.
-  A bigger buffer (File → Settings → Audio) or fewer heavy plugins will help.
+  A bigger buffer (File → Settings → Audio) or fewer heavy plugins will help. **Click it** to see which
+  plugin takes how much (see [plugins](plugins.md)).
 - **The transport** (the second row): **|◀** goes to the start (**Home**), **■** is stop (if already
   stopped, go to the start), **▶** is play (Space), **●** is record (**R**; dim means armed, bright means
   recording). Next is a large **counter**: bar.beat.sixteenth (for example, `5.2.3`) with the time

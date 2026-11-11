@@ -43,6 +43,12 @@ namespace harmonia::sandbox
 
         bool isEditorShowing() const noexcept    { return editorShowing; }
 
+        /** Its window stays above every other window (now, if it is open, and when it is shown). */
+        void setEditorAlwaysOnTop (bool);
+
+        /** Its window is open and its process said it is above the others. */
+        bool isEditorAlwaysOnTop() const noexcept    { return editorShowing && editorOnTop; }
+
         /** The window was closed from its own close button, or by a crash (message thread). */
         std::function<void (juce::Rectangle<int> lastBounds)> onEditorClosed;
 
@@ -134,6 +140,7 @@ namespace harmonia::sandbox
         double preparedRate = 0;
         int preparedBlockSize = 0;
         bool editorShowing = false;
+        bool editorWantedOnTop = false, editorOnTop = false;
         std::optional<TrackProperties> trackProperties;
 
         juce::CriticalSection stateLock;

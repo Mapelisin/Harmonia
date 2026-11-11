@@ -7,7 +7,9 @@ namespace harmonia::ui
         : readLoad (std::move (read))
     {
         setTooltip ("Audio load: how much of the time between two audio buffers working out the sound takes.\n"
-                    "Near 100% it starts to crackle: a larger buffer in File > Settings > Audio, or fewer heavy plugins.");
+                    "Near 100% it starts to crackle: a larger buffer in File > Settings > Audio, or fewer heavy plugins.\n"
+                    "Click: which plugin takes how much.");
+        setMouseCursor (juce::MouseCursor::PointingHandCursor);
         refresh();
         startTimerHz (4);
     }
@@ -37,6 +39,12 @@ namespace harmonia::ui
             load = now;
             repaint();
         }
+    }
+
+    void CpuMeter::mouseUp (const juce::MouseEvent& event)
+    {
+        if (onClick != nullptr && ! event.mods.isPopupMenu() && getLocalBounds().contains (event.getPosition()))
+            onClick();
     }
 
     juce::Colour CpuMeter::getColour (float value)

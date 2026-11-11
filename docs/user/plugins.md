@@ -64,6 +64,26 @@ effects (the button at the top).
 - It works with all the built-in ones (4OSC, Drums, all the effects) and with VST3 plugins: for a VST, the
   preset holds everything the plugin itself saves into the song (like its own "Save preset").
 
+## Plugin windows: all of them at once
+
+- **F12** closes every open plugin window (while Harmonia's main window is the active one). The same is in
+  **View → Plugin windows → Close all plugin windows**.
+- **View → Plugin windows** lists the open windows, each as "track: plugin" ("Lead: Surge XT", "Master:
+  EQ"). Click one and its window comes to the front.
+- **View → Plugin windows → Keep plugin windows on top of everything**: with the tick, plugin windows stay
+  above every other window, Harmonia's and other programs' too, so a plugin never hides behind the
+  arrangement. It is a setting of the program (kept between songs), off at first. Untick it when the
+  windows are in the way.
+
+## Which plugin is heavy
+
+Click the **CPU** meter at the top right (or **View → Plugin load**). A list opens: every instrument and
+effect of the song with the share of the audio time it takes, the heaviest first, and the total above. It
+is read anew a few times a second, so play the song and watch. Click a line to open that plugin's window.
+
+If the sound crackles: freeze the track of the heaviest plugin (right-click the track header → **Freeze**),
+or make the buffer bigger (File → Settings → Audio).
+
 ## If a plugin crashes or hangs
 
 Every plugin runs in **a separate program of its own**. If a plugin crashes, Harmonia does not close and the

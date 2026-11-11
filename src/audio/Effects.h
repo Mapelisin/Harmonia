@@ -74,6 +74,13 @@ namespace harmonia::audio::effects
     /** Short name for a mixer slot ("EQ", "Low-pass"...). */
     juce::String getDisplayName (te::Plugin&);
 
+    /** Whose chain a plugin is in, for the user: its track's name, or "Master". */
+    juce::String getOwnerName (te::Plugin&);
+
+    /** Every instrument and effect of the song in its order: track by track (return tracks and
+        groups among them), then the master's effects. */
+    juce::Array<te::Plugin*> getAllOfSong (te::Edit&);
+
     /** Opens the effect's window: its own editor or, if it has none, Harmonia's knobs. */
     void showEditor (te::Plugin&);
 }

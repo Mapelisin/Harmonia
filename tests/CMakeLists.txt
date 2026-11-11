@@ -81,6 +81,8 @@ add_executable(harmonia_tests
     ui/TrackFolderUiTests.cpp
     ui/AudioLoopUiTests.cpp
     ui/PluginWindowTests.cpp
+    ui/PluginWindowsTests.cpp
+    audio/PluginLoadTests.cpp
     ui/AudioClipTests.cpp
     ui/ClipEditTests.cpp
     ui/AutomationPanelTests.cpp

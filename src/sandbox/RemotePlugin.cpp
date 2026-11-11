@@ -1019,10 +1019,21 @@ namespace harmonia::sandbox
 
         const auto reply = call (juce::ValueTree (message::showEditor, { { property::x, topLeft.x }, { property::y, topLeft.y },
                                                                          { property::name, title },
-                                                                         { property::toFront, bringToFront } }),
+                                                                         { property::toFront, bringToFront },
+                                                                         { property::onTop, editorWantedOnTop } }),
                                  askTimeoutMs * 2);
         editorShowing = reply[property::ok];
+        editorOnTop = reply[property::onTop];
         return editorShowing;
+    }
+
+    void RemotePlugin::setEditorAlwaysOnTop (bool shouldBeOnTop)
+    {
+        editorWantedOnTop = shouldBeOnTop;
+
+        // An open window is told now (asked to show again it stays where it is).
+        if (editorShowing && ! crashed)
+            showEditor ({}, {}, false);
     }
 
     juce::Rectangle<int> RemotePlugin::hideEditor()

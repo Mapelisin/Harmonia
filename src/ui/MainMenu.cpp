@@ -1,5 +1,6 @@
 #include "ui/MainMenu.h"
 #include "ui/MainComponent.h"
+#include "ui/PluginWindows.h"
 
 namespace harmonia::ui
 {
@@ -179,7 +180,40 @@ namespace harmonia::ui
             model.setGhostsVisible (! model.areGhostsVisible());
         }), main.getPianoRollModel().areGhostsVisible()));
         menu.addSeparator();
+        menu.addSubMenu ("Plugin windows", createPluginWindowsMenu());
+        menu.addItem (makeItem ("Plugin load: which plugin takes how much", {}, true,
+                                on (main, [] (MainComponent& m) { m.showPluginLoad(); })));
+        menu.addSeparator();
         menu.addItem (makeItem ("Keyboard shortcuts", "F1", true, on (main, [] (MainComponent& m) { m.showShortcuts (true); })));
+        return menu;
+    }
+
+    juce::PopupMenu MainMenu::createPluginWindowsMenu()
+    {
+        auto& edit = main.getArrangementModel().getProject().getEdit();
+        const auto open = plugin_windows::getOpen (edit);
+        juce::PopupMenu menu;
+
+        for (auto* plugin : open)
+            menu.addItem (makeItem (plugin_windows::describe (*plugin), {}, true, [p = te::Plugin::Ptr (plugin)]
+            {
+                plugin_windows::bringToFront (*p);
+            }));
+
+        if (open.isEmpty())
+            menu.addItem ("None are open", false, false, nullptr);
+
+        menu.addSeparator();
+        menu.addItem (makeItem ("Close all plugin windows", "F12", ! open.isEmpty(),
+                                on (main, [] (MainComponent& m) { m.closePluginWindows(); })));
+
+        const auto onTop = plugin_windows::staysOnTop (edit.engine);
+        menu.addItem (makeItem ("Keep plugin windows on top of everything", {}, true, on (main, [onTop] (MainComponent& m)
+        {
+            plugin_windows::setStaysOnTop (m.getArrangementModel().getProject().getEdit().engine, ! onTop);
+            m.showMessage (! onTop ? "Plugin windows now stay above every other window"
+                                   : "Plugin windows no longer stay above the other windows");
+        }), onTop));
         return menu;
     }
 

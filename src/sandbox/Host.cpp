@@ -443,7 +443,8 @@ namespace harmonia::sandbox
         {
             const auto bounds = window != nullptr ? window->getBounds() : juce::Rectangle<int>();
             return replyWith ({ { property::ok, window != nullptr }, { property::x, bounds.getX() }, { property::y, bounds.getY() },
-                                { property::width, bounds.getWidth() }, { property::height, bounds.getHeight() } });
+                                { property::width, bounds.getWidth() }, { property::height, bounds.getHeight() },
+                                { property::onTop, window != nullptr && window->isAlwaysOnTop() } });
         }
 
         juce::ValueTree showEditor (const juce::ValueTree& request)
@@ -460,6 +461,10 @@ namespace harmonia::sandbox
                 window->setTopLeftPosition (request[property::x], request[property::y]);
                 window->setVisible (true);
             }
+
+            // Above every other window, or among them: as Harmonia's setting says now.
+            if (window->isAlwaysOnTop() != (bool) request[property::onTop])
+                window->setAlwaysOnTop (request[property::onTop]);
 
             if (request[property::toFront])
                 window->toFront (true);

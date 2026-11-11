@@ -21,6 +21,10 @@ namespace harmonia::ui
         std::optional<float> getLoad() const noexcept        { return load; }
 
         void paint (juce::Graphics&) override;
+        void mouseUp (const juce::MouseEvent&) override;
+
+        /** A click on the meter (the owner shows which plugin takes how much). */
+        std::function<void()> onClick;
 
         /** The bar's colour for a load: calm, then a warning, then a problem. */
         static juce::Colour getColour (float load);

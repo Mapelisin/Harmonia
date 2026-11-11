@@ -26,6 +26,10 @@ namespace harmonia::ui
         void addMidiLearnItems (juce::PopupMenu&);
 
         juce::PopupMenu createViewMenu();
+
+        /** View > Plugin windows: the open ones (each to bring to the front), closing them all,
+            keeping them above everything. */
+        juce::PopupMenu createPluginWindowsMenu();
         juce::PopupMenu createTrackMenu();
         juce::PopupMenu createTransportMenu();
         juce::PopupMenu createHelpMenu();
