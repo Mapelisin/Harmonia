@@ -360,6 +360,47 @@ TEST_SUITE ("automation writer")
         CHECK (changes == 2);
     }
 
+    TEST_CASE ("the master's fader moved while the song plays is written into the master's line")
+    {
+        test::AudioRig rig;
+        auto& edit = rig.project->getEdit();
+        auto& volume = *edit.getMasterVolumePlugin()->volParam;
+        const auto zeroDb = te::decibelsToVolumeFaderPosition (0.0f);
+
+        automation::addPoint (volume, 0.0, zeroDb);
+        automation::addPoint (volume, 16.0, zeroDb);
+        rig.project->clearUndoHistory();
+
+        automation::Writer writer (edit);
+        writer.setOn (true);
+        CHECK_FALSE (rig.project->hasUnsavedChanges());
+
+        audio::Transport transport (edit);
+        transport.play();
+        rig.process (1.0, 0.0f);     // to beat 2 (120 BPM)
+
+        edit.getUndoManager().beginNewTransaction ("Write");
+        automation::beginTouch (volume);
+
+        for (int i = 0; i < 10; ++i)
+        {
+            volume.setParameter (0.2f, juce::sendNotification);
+            rig.process (0.1, 0.0f);
+            pump (5);
+        }
+
+        automation::endTouch (volume);
+        rig.process (1.0, 0.0f);
+        pump (50);
+        transport.stop();
+        pump (50);
+
+        CHECK (automation::getValueAt (volume, 3.0) == doctest::Approx (0.2f).epsilon (0.02));
+        CHECK (automation::getValueAt (volume, 1.0) == doctest::Approx (zeroDb).epsilon (0.02));
+        CHECK (automation::getValueAt (volume, 8.0) == doctest::Approx (zeroDb).epsilon (0.02));
+        writer.setOn (false);
+    }
+
     TEST_CASE ("a MIDI control's turn is written too, as one undo step")
     {
         test::AudioRig rig;

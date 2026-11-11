@@ -27,6 +27,9 @@ namespace harmonia::audio::automation
         the sends (to the return tracks they go to), then the effects' and the instrument's. */
     juce::Array<te::AutomatableParameter*> getParameters (te::AudioTrack&);
 
+    /** The master's: its volume and pan, then its effects'. */
+    juce::Array<te::AutomatableParameter*> getMasterParameters (te::Edit&);
+
     /** "Volume", "Pan", "Send: Reverb", "Low-pass: Frequency"... */
     juce::String getDisplayName (te::AutomatableParameter&);
 

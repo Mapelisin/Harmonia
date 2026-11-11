@@ -152,6 +152,10 @@ namespace harmonia::audio::automation
         // Not undo steps: a way of working, not a change to the song.
         for (auto* track : te::getAudioTracks (edit))
             track->state.setProperty (te::IDs::automationMode, modeFor (on), nullptr);
+
+        // The master's fader and pan go by the master track's.
+        if (auto* master = edit.getMasterTrack())
+            master->state.setProperty (te::IDs::automationMode, modeFor (on), nullptr);
     }
 
     void Writer::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree& child)

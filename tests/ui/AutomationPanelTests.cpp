@@ -3,7 +3,9 @@
 #include "TestSession.h"
 #include "audio/Automation.h"
 #include "audio/Effects.h"
+#include "audio/Groups.h"
 #include "audio/Instruments.h"
+#include "audio/Sends.h"
 #include "core/Project.h"
 #include "ui/MainComponent.h"
 #include "ui/automation/AutomationPanel.h"
@@ -551,6 +553,90 @@ TEST_SUITE ("automation: panel")
         CHECK (f.main->keyPressed (ctrlKey ('z')));
         CHECK (automation::getPoints (volume).size() == 2);
         CHECK_FALSE (f.project->canUndo());
+    }
+
+    TEST_CASE ("the master's, a return track's and a group's lines are chosen in the panel; a click on another track takes it back")
+    {
+        MainFixture f;
+        CHECK (f.main->keyPressed (juce::KeyPress (juce::KeyPress::F8Key)));
+        auto& panel = f.panel();
+        auto& arrangement = f.main->getArrangementModel();
+        auto& edit = f.project->getEdit();
+        auto& first = *f.project->getTracks().getFirst();
+        auto* second = f.project->addTrack ("Second");
+        REQUIRE (second != nullptr);
+
+        juce::String error;
+        auto* reverb = audio::sends::addReturnTrack (*f.project, audio::sends::Preset::reverb, error);
+        auto* group = audio::groups::addGroup (*f.project, { &first }, "Drums");
+        REQUIRE (reverb != nullptr);
+        REQUIRE (group != nullptr);
+        dispatch();
+
+        arrangement.setCurrentTrack (&first);
+        dispatch();
+        CHECK (panel.getShownTrack() == &first);
+        CHECK (panel.getTargetButton().getButtonText() == first.getName());
+        CHECK_FALSE (panel.showsMaster());
+
+        // The master: its volume first; a click in the lane draws the master's line.
+        panel.showMaster();
+        CHECK (panel.showsMaster());
+        CHECK (panel.getShownTrack() == nullptr);
+        CHECK (panel.getTargetButton().getButtonText() == "Master");
+        auto& masterVolume = *edit.getMasterVolumePlugin()->volParam;
+        CHECK (panel.getParameter() == &masterVolume);
+        CHECK (panel.getParameterButton().getButtonText() == "Volume");
+
+        auto& gestures = panel.getLane().getGestures();
+        gestures.down ({ { 100.0f, 40.0f }, {}, 1 });
+        gestures.up ({ { 100.0f, 40.0f }, {}, 1 });
+        CHECK (automation::getPoints (masterVolume).size() == 1);
+        CHECK_FALSE (automation::hasPoints (*first.getVolumePlugin()->volParam));
+
+        // It stays the master's while the song changes under it...
+        dispatch();
+        CHECK (panel.showsMaster());
+
+        // ...the master's pan is remembered like any track's choice...
+        panel.setParameter (edit.getMasterVolumePlugin()->panParam.get());
+        CHECK (panel.getParameterButton().getButtonText() == "Pan");
+        panel.setParameter (first.getVolumePlugin()->volParam.get());       // not the master's: ignored
+        CHECK (panel.getParameterButton().getButtonText() == "Pan");
+
+        // ...until another track is clicked in the arrangement.
+        arrangement.setCurrentTrack (second);
+        dispatch();
+        CHECK_FALSE (panel.showsMaster());
+        CHECK (panel.getShownTrack() == second);
+
+        panel.showMaster();
+        CHECK (panel.getParameterButton().getButtonText() == "Pan");
+        panel.followCurrentTrack();
+        CHECK (panel.getShownTrack() == second);
+
+        // A return track and a group; a song track isn't chosen this way.
+        panel.showBus (*reverb);
+        CHECK (panel.getShownTrack() == reverb);
+        CHECK (panel.getTargetButton().getButtonText() == reverb->getName());
+        CHECK (panel.getParameter() == reverb->getVolumePlugin()->volParam.get());
+
+        panel.showBus (*group);
+        CHECK (panel.getShownTrack() == group);
+        CHECK (panel.getTargetButton().getButtonText() == "Drums");
+        panel.showBus (first);
+        CHECK (panel.getShownTrack() == group);
+
+        // The group goes: the panel is the current track's again.
+        audio::groups::removeGroup (*f.project, *group);
+        dispatch();
+        CHECK (panel.getShownTrack() == second);
+
+        // The window paints with the master's line shown.
+        panel.showMaster();
+        juce::Image image (juce::Image::RGB, 1280, 800, true);
+        juce::Graphics g (image);
+        f.main->paintEntireComponent (g, true);
     }
 
     TEST_CASE ("each track remembers its parameter; a track with a line starts on it")

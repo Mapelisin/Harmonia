@@ -10,7 +10,8 @@ The panel opens in place of the piano roll: the **Automation** button on the rig
 
 ## How to draw a line
 
-1. Click a track in the arrangement: the panel shows that track.
+1. Click a track in the arrangement: the panel shows that track. (For the master, a return track or a
+   group, see below.)
 2. On the left there is a button with the name of the knob (**Volume** at first). Click it and choose what to
    move:
    - **Volume**, **Pan**: the volume and pan of the track;
@@ -76,6 +77,20 @@ point of the line.
 The keys work after a click in the automation lane. A plain click (without Ctrl) works as before and
 drops the selection.
 
+## The master, return tracks and groups
+
+The master, the return tracks and the groups are not rows of the arrangement, so you cannot click them
+there. Their lines are chosen in the panel itself: the button at the top left (it shows the name of the
+track) opens a list with the current track, **Master**, every return track and every group. A dot `•`
+means there are lines already.
+
+Choose **Master**, and the panel shows the master's knobs: draw a line for **Volume** to fade the whole
+song out, or for a knob of an effect on the master. A return track's volume line gives more reverb in the
+chorus; a group's line makes all the drums quieter in the verse.
+
+The panel stays there until you click another track in the arrangement (or choose **Track: …** in the
+same list).
+
 ## How it works
 
 - Before the first point the knob stays at the value of the first point; after the last point, at the value of
@@ -101,5 +116,6 @@ What you recorded appears in the line of this knob (F8) as ordinary points: you 
 One movement is one **Ctrl+Z** step. Turn **Write** off when you are done: otherwise any knob movement during
 playback will be recorded again.
 
-Not possible yet: drawing and recording a line on return tracks and the master, S-shaped curves (a line
-bends one way only), seeing the lines right on the clips in the arrangement.
+Not possible yet: recording the movement of a knob of an effect on the master (draw its line with the
+mouse; the master's fader is recorded), S-shaped curves (a line bends one way only), seeing the lines right
+on the clips in the arrangement.

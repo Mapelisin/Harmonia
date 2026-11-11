@@ -24,8 +24,8 @@ namespace harmonia::ui::automation
         model.addListener (this);
         edit.state.addListener (this);
 
-        trackLabel.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
-        trackLabel.setColour (juce::Label::textColourId, theme::colour::textPrimary);
+        targetButton.setTooltip ("Whose lines: the track clicked in the arrangement, the master, a return track or a group");
+        targetButton.onClick = [this] { showTargetMenu(); };
         infoLabel.setFont (juce::FontOptions (theme::size::smallFontSize));
         infoLabel.setColour (juce::Label::textColourId, theme::colour::textSecondary);
         infoLabel.setJustificationType (juce::Justification::topLeft);
@@ -36,10 +36,10 @@ namespace harmonia::ui::automation
         clearButton.onClick = [this] { clearLine(); };
         lane.onEdited = [this] { updateControls(); };
 
-        for (auto* c : std::initializer_list<juce::Component*> { &parameterButton, &clearButton })
+        for (auto* c : std::initializer_list<juce::Component*> { &targetButton, &parameterButton, &clearButton })
             c->setWantsKeyboardFocus (false);
 
-        for (auto* c : std::initializer_list<juce::Component*> { &trackLabel, &parameterButton, &clearButton, &infoLabel, &lane })
+        for (auto* c : std::initializer_list<juce::Component*> { &targetButton, &parameterButton, &clearButton, &infoLabel, &lane })
             addAndMakeVisible (c);
 
         refresh();
@@ -58,9 +58,9 @@ namespace harmonia::ui::automation
         g.setColour (theme::colour::border);
         g.fillRect (leftMargin - 1, 0, 1, getHeight());
 
-        if (track != nullptr)
+        if (track != nullptr || master)
         {
-            g.setColour (track_colours::getTrackColour (*track, model.indexOf (track.get())));
+            g.setColour (getTargetColour());
             g.fillRect (0, 0, 4, getHeight());
         }
     }
@@ -73,7 +73,7 @@ namespace harmonia::ui::automation
         lane.setBounds (area);
 
         left.removeFromLeft (2);
-        trackLabel.setBounds (left.removeFromTop (20));
+        targetButton.setBounds (left.removeFromTop (theme::size::buttonHeight));
         left.removeFromTop (4);
         parameterButton.setBounds (left.removeFromTop (theme::size::buttonHeight));
         left.removeFromTop (4);
@@ -94,35 +94,94 @@ namespace harmonia::ui::automation
     void AutomationPanel::refresh()
     {
         auto* current = model.getCurrentTrack();
-        track = current;
+        const auto currentID = current != nullptr ? current->itemID : te::EditItemID();
+
+        // Another track clicked in the arrangement: the panel is that track's again.
+        if (currentID != lastCurrentTrack)
+        {
+            lastCurrentTrack = currentID;
+            master = false;
+            bus = nullptr;
+        }
+
+        // The return track or group shown was deleted.
+        if (bus != nullptr && ! model.getProject().getReturnTracks().contains (bus.get())
+            && ! model.getProject().getGroupTracks().contains (bus.get()))
+            bus = nullptr;
+
+        track = master ? nullptr : bus != nullptr ? bus.get() : current;
+        const auto parameters = getParameters();
         te::AutomatableParameter* parameter = nullptr;
 
-        if (current != nullptr)
+        if (! parameters.isEmpty())
         {
-            const auto parameters = automation::getParameters (*current);
+            const auto it = chosen.find (track != nullptr ? track->itemID : te::EditItemID());
+            const auto withLine = std::find_if (parameters.begin(), parameters.end(),
+                                                [] (te::AutomatableParameter* p) { return automation::hasPoints (*p); });
 
-            if (const auto it = chosen.find (current->itemID); it != chosen.end() && parameters.contains (it->second.get()))
+            if (it != chosen.end() && parameters.contains (it->second.get()))
                 parameter = it->second.get();
-            else if (const auto automated = automation::getAutomated (*current); ! automated.isEmpty())
-                parameter = automated.getFirst();
+            else if (withLine != parameters.end())
+                parameter = *withLine;
             else
                 parameter = parameters.getFirst();
         }
 
         lane.setParameter (parameter);
-        lane.setLineColour (current != nullptr ? track_colours::getTrackColour (*current, model.indexOf (current))
-                                               : theme::colour::accent);
+        lane.setLineColour (getTargetColour());
         updateControls();
         lane.repaint();
         repaint();
     }
 
-    void AutomationPanel::setParameter (te::AutomatableParameter* parameter)
+    juce::Array<te::AutomatableParameter*> AutomationPanel::getParameters() const
     {
-        if (track == nullptr || parameter == nullptr || ! automation::getParameters (*track).contains (parameter))
+        if (master)
+            return automation::getMasterParameters (edit);
+
+        return track != nullptr ? automation::getParameters (*track) : juce::Array<te::AutomatableParameter*>();
+    }
+
+    juce::String AutomationPanel::getTargetName() const
+    {
+        return master ? juce::String ("Master") : track != nullptr ? track->getName() : juce::String ("No track");
+    }
+
+    juce::Colour AutomationPanel::getTargetColour() const
+    {
+        return track != nullptr ? track_colours::getTrackColour (*track, model.indexOf (track.get())) : theme::colour::accent;
+    }
+
+    void AutomationPanel::showMaster()
+    {
+        master = true;
+        bus = nullptr;
+        refresh();
+    }
+
+    void AutomationPanel::showBus (te::AudioTrack& returnOrGroup)
+    {
+        if (! core::tracks::isBus (returnOrGroup))
             return;
 
-        chosen[track->itemID] = parameter;
+        master = false;
+        bus = &returnOrGroup;
+        refresh();
+    }
+
+    void AutomationPanel::followCurrentTrack()
+    {
+        master = false;
+        bus = nullptr;
+        refresh();
+    }
+
+    void AutomationPanel::setParameter (te::AutomatableParameter* parameter)
+    {
+        if (parameter == nullptr || ! getParameters().contains (parameter))
+            return;
+
+        chosen[track != nullptr ? track->itemID : te::EditItemID()] = parameter;
         lane.setParameter (parameter);
         updateControls();
     }
@@ -187,7 +246,7 @@ namespace harmonia::ui::automation
     void AutomationPanel::updateControls()
     {
         auto* parameter = lane.getParameter();
-        trackLabel.setText (track != nullptr ? track->getName() : juce::String ("No track"), juce::dontSendNotification);
+        targetButton.setButtonText (getTargetName());
         parameterButton.setButtonText (parameter != nullptr ? automation::getDisplayName (*parameter) : juce::String ("-"));
         parameterButton.setEnabled (parameter != nullptr);
         clearButton.setEnabled (parameter != nullptr && automation::hasPoints (*parameter));
@@ -199,7 +258,9 @@ namespace harmonia::ui::automation
         }
 
         const auto numPoints = (int) automation::getPoints (*parameter).size();
-        const auto numLines = track != nullptr ? automation::getAutomated (*track).size() : 0;
+        const auto parameters = getParameters();
+        const auto numLines = (int) std::count_if (parameters.begin(), parameters.end(),
+                                                   [] (te::AutomatableParameter* p) { return automation::hasPoints (*p); });
 
         auto text = numPoints == 0 ? "No line: stays at " + automation::valueToText (*parameter, automation::getValueAt (*parameter, 0.0))
                                    : juce::String (numPoints) + (numPoints == 1 ? " point" : " points");
@@ -210,17 +271,63 @@ namespace harmonia::ui::automation
             text << "\n" << "Ctrl+drag selects points";
 
         if (numLines > 0)
-            text << "\n" << "Lines on this track: " << numLines;
+            text << "\n" << (master ? "Lines on the master: " : "Lines on this track: ") << numLines;
 
         infoLabel.setText (text, juce::dontSendNotification);
     }
 
+    void AutomationPanel::showTargetMenu()
+    {
+        juce::Component::SafePointer<AutomationPanel> safe (this);
+
+        const auto hasLines = [] (const juce::Array<te::AutomatableParameter*>& parameters)
+        {
+            return std::any_of (parameters.begin(), parameters.end(), [] (te::AutomatableParameter* p) { return automation::hasPoints (*p); });
+        };
+
+        const auto busItem = [&] (te::AudioTrack* busTrack, const juce::String& kind, juce::PopupMenu& menu)
+        {
+            const auto name = kind + busTrack->getName() + (hasLines (automation::getParameters (*busTrack)) ? lineMark : juce::String());
+
+            menu.addItem (name, true, busTrack == bus.get(), [safe, ptr = te::AudioTrack::Ptr (busTrack)]
+            {
+                if (safe != nullptr)
+                    safe->showBus (*ptr);
+            });
+        };
+
+        juce::PopupMenu menu;
+        menu.addSectionHeader ("Whose lines");
+
+        if (auto* current = model.getCurrentTrack())
+            menu.addItem ("Track: " + current->getName() + (hasLines (automation::getParameters (*current)) ? lineMark : juce::String()),
+                          true, ! master && bus == nullptr, [safe] { if (safe != nullptr) safe->followCurrentTrack(); });
+
+        menu.addItem ("Master" + (hasLines (automation::getMasterParameters (edit)) ? lineMark : juce::String()), true, master,
+                      [safe] { if (safe != nullptr) safe->showMaster(); });
+
+        const auto returns = model.getProject().getReturnTracks();
+        const auto groups = model.getProject().getGroupTracks();
+
+        if (! returns.isEmpty() || ! groups.isEmpty())
+            menu.addSeparator();
+
+        for (auto* returnTrack : returns)
+            busItem (returnTrack, "Return: ", menu);
+
+        for (auto* group : groups)
+            busItem (group, "Group: ", menu);
+
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&targetButton));
+    }
+
     void AutomationPanel::showParameterMenu()
     {
-        if (track == nullptr)
+        const auto parameters = getParameters();
+
+        if (parameters.isEmpty())
             return;
 
-        const auto parameters = automation::getParameters (*track);
         auto* shown = lane.getParameter();
         juce::Component::SafePointer<AutomationPanel> safe (this);
 
@@ -239,7 +346,7 @@ namespace harmonia::ui::automation
         };
 
         juce::PopupMenu menu;
-        menu.addSectionHeader ("Automate " + track->getName());
+        menu.addSectionHeader ("Automate " + getTargetName());
 
         // Volume and pan, then the sends, then each effect (and the instrument) in a submenu.
         struct Group { te::Plugin* plugin; juce::String name; juce::PopupMenu menu; bool automated = false, ticked = false; };

@@ -76,6 +76,24 @@ namespace harmonia::audio::automation
         return result;
     }
 
+    juce::Array<te::AutomatableParameter*> getMasterParameters (te::Edit& edit)
+    {
+        juce::Array<te::AutomatableParameter*> result;
+
+        if (const auto volume = edit.getMasterVolumePlugin())
+        {
+            result.add (volume->volParam.get());
+            result.add (volume->panParam.get());
+        }
+
+        for (auto* plugin : edit.getMasterPluginList())
+            if (! isMixerPlugin (*plugin))
+                for (auto* parameter : plugin->getAutomatableParameters())
+                    result.add (parameter);
+
+        return result;
+    }
+
     juce::String getDisplayName (te::AutomatableParameter& parameter)
     {
         auto* plugin = parameter.getPlugin();

@@ -4,9 +4,11 @@
 #include "audio/Automation.h"
 #include "audio/Effects.h"
 #include "audio/Export.h"
+#include "audio/Groups.h"
 #include "audio/Sends.h"
 #include "audio/Transport.h"
 #include "core/Project.h"
+#include "core/Sections.h"
 #include "core/Tracks.h"
 
 using namespace harmonia;
@@ -506,6 +508,97 @@ TEST_SUITE ("audio::automation")
         const auto soon = listen()[3];
         CHECK (late > 1.5f * straight);
         CHECK (soon < 0.67f * straight);
+    }
+
+    TEST_CASE ("the master, a return track and a group have lines too; the export follows the master's and the group's")
+    {
+        test::TempFolder temp;
+        auto project = core::Project::createEmpty (test::session());
+        auto& edit = project->getEdit();
+        auto& tone = addToneTrack (*project, temp, 8.0);
+
+        // The master offers its volume and pan, then the knobs of the effects on it.
+        auto master = automation::getMasterParameters (edit);
+        REQUIRE (master.size() >= 2);
+        CHECK (master[0] == edit.getMasterVolumePlugin()->volParam.get());
+        CHECK (automation::getDisplayName (*master[0]) == "Volume");
+        CHECK (automation::getDisplayName (*master[1]) == "Pan");
+        const auto withoutEffects = master.size();
+
+        juce::String error;
+        REQUIRE (effects::add (edit.getMasterPluginList(), effects::getBuiltIn().getFirst(), error) != nullptr);
+        master = automation::getMasterParameters (edit);
+        CHECK (master.size() > withoutEffects);
+        CHECK (automation::getGroupName (*master.getLast()).isNotEmpty());
+
+        // A return track: its fader and its effect's knobs. A group: its fader.
+        auto* reverb = audio::sends::addReturnTrack (*project, audio::sends::Preset::reverb, error);
+        REQUIRE (reverb != nullptr);
+        const auto returnNames = namesOf (*reverb);
+        REQUIRE (returnNames.size() > 2);
+        CHECK (returnNames[0] == "Volume");
+        CHECK (returnNames[2].startsWith ("Reverb: "));
+
+        auto* group = audio::groups::addGroup (*project, { &tone }, "Tones");
+        REQUIRE (group != nullptr);
+        CHECK (namesOf (*group).contains ("Volume"));
+        project->clearUndoHistory();
+
+        // The song is 4 seconds of tone (8 beats at 120 BPM)... the master is silent from beat 4.
+        auto& masterVolume = *edit.getMasterVolumePlugin()->volParam;
+        project->beginGesture ("Add automation point");
+        automation::addPoint (masterVolume, 0.0, zeroDb());
+        automation::addPoint (masterVolume, 4.0, zeroDb());
+        automation::addPoint (masterVolume, 4.0, 0.0f);
+
+        auto rms = exportRms (*project, { { 0.5, 1.5 }, { 2.5, 3.5 } });
+        CHECK (rms[0] > 0.05f);
+        CHECK (rms[1] < rms[0] * 0.01f);
+
+        project->undo();
+        CHECK_FALSE (automation::hasPoints (masterVolume));
+        rms = exportRms (*project, { { 0.5, 1.5 }, { 2.5, 3.5 } });
+        CHECK (rms[1] == doctest::Approx (rms[0]).epsilon (0.05));
+
+        // The group is silent up to beat 4, then lets its track through.
+        auto& groupVolume = volumeOf (*group);
+        project->beginGesture ("Add automation point");
+        automation::addPoint (groupVolume, 0.0, 0.0f);
+        automation::addPoint (groupVolume, 4.0, 0.0f);
+        automation::addPoint (groupVolume, 4.0, zeroDb());
+
+        rms = exportRms (*project, { { 0.5, 1.5 }, { 2.5, 3.5 } });
+        CHECK (rms[1] > 0.05f);
+        CHECK (rms[0] < rms[1] * 0.01f);
+
+        // Saved with the song like any line.
+        const auto file = temp.getFile ("Lines.harmonia");
+        project->beginGesture ("Add automation point");
+        automation::addPoint (masterVolume, 2.0, 0.5f);
+        REQUIRE (project->save (file).isEmpty());
+
+        juce::String openError;
+        auto opened = core::Project::load (test::session(), file, openError);
+        REQUIRE_MESSAGE (opened != nullptr, openError.toStdString());
+        CHECK (automation::getPoints (*opened->getEdit().getMasterVolumePlugin()->volParam).size() == 1);
+        REQUIRE (opened->getGroupTracks().size() == 1);
+        CHECK (automation::getPoints (volumeOf (*opened->getGroupTracks().getFirst())).size() == 3);
+
+        // Bars put in, taken out and repeated carry the master's and the group's lines like a track's.
+        project->beginGesture ("Insert time");
+        core::sections::insertSpace (edit, 0.0, 4.0);
+        CHECK (automation::getPoints (masterVolume).front().beat == doctest::Approx (6.0));
+        CHECK (automation::getPoints (groupVolume).back().beat == doctest::Approx (8.0));
+
+        project->beginGesture ("Delete time");
+        core::sections::deleteRange (edit, 0.0, 4.0);
+        CHECK (automation::getPoints (masterVolume).front().beat == doctest::Approx (2.0));
+        CHECK (automation::getPoints (groupVolume).back().beat == doctest::Approx (4.0));
+
+        project->beginGesture ("Repeat time");
+        core::sections::duplicateRange (edit, 0.0, 4.0);
+        CHECK (automation::getValueAt (groupVolume, 6.0) == doctest::Approx (0.0f));       // the silent bar, once more
+        CHECK (automation::getValueAt (groupVolume, 9.0) == doctest::Approx (zeroDb()));
     }
 
     TEST_CASE ("playback follows a volume line")
