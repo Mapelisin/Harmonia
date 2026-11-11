@@ -22,6 +22,8 @@ add_library(harmonia_core STATIC
     Tracks.cpp
     TrackFolders.h
     TrackFolders.cpp
+    SongNodes.h
+    SongNodes.cpp
     Snap.h
     Snap.cpp
     Tempo.h

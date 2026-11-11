@@ -66,6 +66,7 @@ namespace harmonia::ui
                 { "Markers strip", "+ Marker, double-click: add; drag: move; double-click a marker: rename" },
                 { "Track header: right button", "Rename, colour, duplicate, move, render to audio, freeze, delete" },
                 { "Drag a track header", "Move the track up or down" },
+                { "Ctrl / Shift + click a track header", "Select several tracks: M, S and the header's menu (colour, output, folder, delete) are then for them all" },
                 { "Track header: right button > Folder", "Put neighbouring tracks into a folder; its button collapses it to one row with mute and solo for all" } } },
 
             { "Audio clip editor (below, on an audio track)", {

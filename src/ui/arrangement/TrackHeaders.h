@@ -11,12 +11,17 @@ namespace harmonia::ui::arrangement
     /** makeAddTrackMenu, shown under `target`. */
     void showAddTrackMenu (ArrangementModel&, juce::Component& target);
 
-    /** Where a song track plays: the master, one of the group tracks, or a new group. */
-    juce::PopupMenu makeOutputMenu (ArrangementModel&, te::AudioTrack&);
+    /** Where a song track plays: the master, one of the group tracks, or a new group. With
+        `forSelection` the choice is for every selected track when `track` is one of several
+        (ArrangementModel::getTracksFor): the arrangement's menus ask for that, the mixer's
+        doesn't. */
+    juce::PopupMenu makeOutputMenu (ArrangementModel&, te::AudioTrack&, bool forSelection = false);
 
     /** The column left of the clips: one header per track with its name (double-click to
         rename), mute, solo and volume; audio tracks also have record arm, their input and its
         level while armed. Click a header to make the track current; right-click for its menu.
+        Ctrl + click and Shift + click select several tracks: mute, solo and the menu of one of
+        them are then for them all (ArrangementModel::getTracksFor).
         The first track of a folder has a fold button; a collapsed folder's row shows the folder:
         its name, how many tracks, and mute and solo for all of them. */
     class TrackHeaders final : public juce::Component
@@ -45,6 +50,11 @@ namespace harmonia::ui::arrangement
 
         /** The gap (0 = above the first track) a dragged header would go into, if one is dragged. */
         std::optional<int> getDropGap() const noexcept     { return dropGap; }
+
+        /** A press of the mouse on a track's header (the headers call this). The left button:
+            ArrangementModel::clickTrack with Ctrl and Shift. The right button (the menu follows):
+            one of several selected tracks keeps the selection, any other becomes the only one. */
+        void headerPressed (te::AudioTrack&, const juce::ModifierKeys&);
 
         /** The track menu's commands (also for tests). */
         void renderToAudio (te::AudioTrack&);

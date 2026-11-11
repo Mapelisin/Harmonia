@@ -197,7 +197,9 @@ namespace harmonia::ui
 
         if (auto* track = model.getCurrentTrack())
         {
-            menu.addSectionHeader ("\"" + track->getName() + "\"");
+            // Several selected: the menu names them itself.
+            if (model.getSelectedTracks().size() <= 1)
+                menu.addSectionHeader ("\"" + track->getName() + "\"");
 
             // The same menu as a right-click on the track's header, without its own "Add".
             const auto trackMenu = main.getArrangement().getHeaders().createTrackMenu (*track);

@@ -39,20 +39,27 @@ namespace harmonia::ui::arrangement
         makeAddTrackMenu (model).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target));
     }
 
-    juce::PopupMenu makeOutputMenu (ArrangementModel& model, te::AudioTrack& track)
+    juce::PopupMenu makeOutputMenu (ArrangementModel& model, te::AudioTrack& track, bool forSelection)
     {
         auto& project = model.getProject();
         const auto* current = audio::groups::getGroup (track);
         const te::Track::Ptr keepAlive (&track);
-        const auto setGroup = [&project, keepAlive] (te::AudioTrack* group)
+        const auto several = forSelection && model.getTracksFor (track).size() > 1;
+        const auto setGroup = [&model, &project, keepAlive, several] (te::AudioTrack* group)
         {
-            return [&project, keepAlive, g = te::Track::Ptr (group)]
+            return [&model, &project, keepAlive, several, g = te::Track::Ptr (group)]
             {
                 auto* t = dynamic_cast<te::AudioTrack*> (keepAlive.get());
                 auto* target = dynamic_cast<te::AudioTrack*> (g.get());
 
                 if (t == nullptr || ! t->state.getParent().isValid() || (target != nullptr && ! target->state.getParent().isValid()))
                     return;
+
+                if (several)
+                {
+                    model.setTracksGroup (*t, target);
+                    return;
+                }
 
                 project.beginGesture (target != nullptr ? "Play through " + target->getName() : juce::String ("Play to the master"));
                 audio::groups::setGroup (*t, target);
@@ -66,9 +73,16 @@ namespace harmonia::ui::arrangement
             menu.addItem (group->getName(), true, group == current, setGroup (group));
 
         menu.addSeparator();
-        menu.addItem ("New group with this track", [&project, keepAlive]
+        menu.addItem (several ? "New group with these tracks" : "New group with this track", [&model, &project, keepAlive, several]
         {
-            if (auto* t = dynamic_cast<te::AudioTrack*> (keepAlive.get()); t != nullptr && t->state.getParent().isValid())
+            auto* t = dynamic_cast<te::AudioTrack*> (keepAlive.get());
+
+            if (t == nullptr || ! t->state.getParent().isValid())
+                return;
+
+            if (several)
+                model.groupTracks (*t);
+            else
                 audio::groups::addGroup (project, { t });
         });
         return menu;
@@ -187,8 +201,7 @@ namespace harmonia::ui::arrangement
                     return;
                 }
 
-                model.getProject().beginGesture ("Mute track");
-                track->setMute (! track->isMuted (false));
+                model.setTracksMuted (*track, ! track->isMuted (false));
                 refresh();
             };
 
@@ -218,8 +231,7 @@ namespace harmonia::ui::arrangement
                     return;
                 }
 
-                model.getProject().beginGesture ("Solo track");
-                track->setSolo (! track->isSolo (false));
+                model.setTracksSoloed (*track, ! track->isSolo (false));
                 refresh();
             };
 
@@ -369,11 +381,20 @@ namespace harmonia::ui::arrangement
         {
             const auto index = model.indexOf (track.get());
             const auto isCurrent = track.get() == model.getCurrentTrack();
+            const auto isOneOfSeveral = model.getTracksFor (*track).size() > 1;
             auto bounds = getLocalBounds();
 
             g.setColour (isCurrent ? colours::laneCurrent : theme::colour::surface);
             g.fillRect (bounds);
-            g.setColour (track_colours::getTrackColour (*track, index).withAlpha (isCurrent ? 1.0f : 0.7f));
+
+            // Several tracks selected: each of them is tinted (one alone looks as it always did).
+            if (isOneOfSeveral)
+            {
+                g.setColour (theme::colour::accent.withAlpha (isCurrent ? 0.22f : 0.14f));
+                g.fillRect (bounds);
+            }
+
+            g.setColour (track_colours::getTrackColour (*track, index).withAlpha (isCurrent || isOneOfSeveral ? 1.0f : 0.7f));
             g.fillRect (bounds.removeFromLeft (colourStripWidth));
 
             // In a folder: a second strip, and the folder's name small at the bottom right.
@@ -426,8 +447,10 @@ namespace harmonia::ui::arrangement
 
         void mouseDown (const juce::MouseEvent& e) override
         {
-            model.setCurrentTrack (track.get());
             dragging = false;
+
+            if (auto* owner = findParentComponentOfClass<TrackHeaders>())
+                owner->headerPressed (*track, e.mods);
 
             if (e.mods.isPopupMenu())
                 showMenu();
@@ -435,7 +458,8 @@ namespace harmonia::ui::arrangement
 
         void mouseDrag (const juce::MouseEvent& e) override
         {
-            if (e.mods.isPopupMenu())
+            // Ctrl and Shift select; they don't move the track.
+            if (e.mods.isPopupMenu() || e.mods.isCommandDown() || e.mods.isShiftDown())
                 return;
 
             auto* owner = findParentComponentOfClass<TrackHeaders>();
@@ -504,19 +528,24 @@ namespace harmonia::ui::arrangement
         const auto folder = model.getFolderOf (*track);
         juce::PopupMenu menu;
 
-        menu.addItem ("New folder with this track", [&m = model, t = track] { m.newFolder (*t); });
+        // One of several selected tracks: the folder is for them all.
+        const auto tracks = model.getTracksFor (*track);
+        const auto several = tracks.size() > 1;
+        const auto anyInFolder = std::any_of (tracks.begin(), tracks.end(), [this] (te::AudioTrack* t) { return model.getFolderOf (*t).has_value(); });
+
+        menu.addItem (several ? "New folder with these tracks" : "New folder with this track", [&m = model, t = track] { m.newFolder (*t); });
 
         // The other folders, to move into.
         juce::PopupMenu others;
 
         for (const auto& other : core::folders::getAll (model.getEdit()))
-            if (! folder.has_value() || other.id != folder->id)
-                others.addItem (other.name, [&m = model, t = track, id = other.id] { m.setTrackFolder (*t, id); });
+            if (several || ! folder.has_value() || other.id != folder->id)
+                others.addItem (other.name, [&m = model, t = track, id = other.id] { m.setTracksFolder (*t, id); });
 
         menu.addSubMenu ("Move into folder", others, others.getNumItems() > 0);
-        menu.addItem ("Take out of the folder", folder.has_value(), false, [&m = model, t = track] { m.setTrackFolder (*t, {}); });
+        menu.addItem ("Take out of the folder", anyInFolder, false, [&m = model, t = track] { m.setTracksFolder (*t, {}); });
 
-        if (folder.has_value())
+        if (folder.has_value() && ! several)
         {
             const auto f = *folder;
             menu.addSeparator();
@@ -559,6 +588,26 @@ namespace harmonia::ui::arrangement
             menu.addItem ("Remove the folder (its tracks stay)", [&m = model, f] { m.removeFolder (f.id); });
             menu.addSeparator();
             menu.addSubMenu ("Add track", makeAddTrackMenu (model));
+            return menu;
+        }
+
+        // One of several selected tracks: what is done to them all, and nothing else.
+        if (const auto numTracks = model.getTracksFor (*track).size(); numTracks > 1)
+        {
+            menu.addSectionHeader (juce::String (numTracks) + " tracks selected");
+            menu.addSubMenu ("Colour", track_colours::createMenu (core::tracks::getColour (*track), "Automatic",
+                                                                  [&m = model, t = track] (std::optional<juce::Colour> colour)
+                                                                  {
+                                                                      m.setTracksColour (*t, colour);
+                                                                  }));
+            menu.addItem ("Mute", true, track->isMuted (false), [&m = model, t = track] { m.setTracksMuted (*t, ! t->isMuted (false)); });
+            menu.addItem ("Solo", true, track->isSolo (false), [&m = model, t = track] { m.setTracksSoloed (*t, ! t->isSolo (false)); });
+            menu.addSubMenu ("Output (master or a group)", makeOutputMenu (model, *track, true));
+            menu.addSubMenu ("Folder", createFolderMenu (*track));
+            menu.addSeparator();
+            menu.addSubMenu ("Add track", makeAddTrackMenu (model));
+            menu.addSeparator();
+            menu.addItem ("Delete " + juce::String (numTracks) + " tracks", [&m = model, t = track] { m.deleteTracks (*t); });
             return menu;
         }
 
@@ -731,6 +780,19 @@ namespace harmonia::ui::arrangement
         }
 
         resized();
+    }
+
+    void TrackHeaders::headerPressed (te::AudioTrack& track, const juce::ModifierKeys& mods)
+    {
+        if (mods.isPopupMenu())
+        {
+            if (model.getTracksFor (track).size() <= 1)
+                model.clickTrack (track, false, false);
+
+            return;
+        }
+
+        model.clickTrack (track, mods.isCommandDown(), mods.isShiftDown());
     }
 
     int TrackHeaders::gapAt (float y) const

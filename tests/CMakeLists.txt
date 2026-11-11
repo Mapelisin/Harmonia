@@ -88,6 +88,7 @@ add_executable(harmonia_tests
     ui/TempoUiTests.cpp
     ui/MidiImportTests.cpp
     ui/TrackOpsTests.cpp
+    ui/TrackSelectionTests.cpp
     ui/NoteCommandsTests.cpp
     ui/NoteToolWindowTests.cpp
     ui/ScaleChordTests.cpp

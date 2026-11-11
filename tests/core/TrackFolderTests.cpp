@@ -2,6 +2,7 @@
 
 #include "TestAudioFiles.h"
 #include "TestSession.h"
+#include "core/Markers.h"
 #include "core/Project.h"
 #include "core/TrackFolders.h"
 #include "core/Tracks.h"
@@ -221,5 +222,53 @@ TEST_SUITE ("core::track folders")
         REQUIRE (members.size() == 2);
         CHECK (members[0]->getName() == "B");
         CHECK (members[1]->getName() == "C");
+    }
+
+    TEST_CASE ("the nodes of folders and markers go before the tracks: undo that brings a track back keeps the redo")
+    {
+        SixTracks song;
+        const auto settle = [&]
+        {
+            for (int i = 0; i < 2000 && (i < 60 || song.project->isSettling()); ++i)
+                juce::MessageManager::getInstance()->runDispatchLoopUntil (1);
+        };
+
+        settle();
+        song.project->beginGesture ("New folder");
+        REQUIRE (folders::add (song.edit, { &song.track ("B"), &song.track ("C") }, "Drums").has_value());
+        song.project->beginGesture ("Add marker");
+        core::markers::add (song.edit, 4.0, "Verse");
+
+        // Where the engine keeps what isn't a track: it has nothing to move there later.
+        auto firstTrack = -1;
+
+        for (int i = 0; i < song.edit.state.getNumChildren() && firstTrack < 0; ++i)
+            if (te::TrackList::isTrack (song.edit.state.getChild (i)))
+                firstTrack = i;
+
+        REQUIRE (firstTrack > 0);
+
+        for (const auto* type : { "HFOLDERS", "HMARKERS" })
+        {
+            const auto node = song.edit.state.getChildWithName (type);
+            REQUIRE_MESSAGE (node.isValid(), type);
+            CHECK (song.edit.state.indexOf (node) < firstTrack);
+        }
+
+        settle();
+        song.project->clearUndoHistory();
+        song.project->beginGesture ("Delete track");
+        song.edit.deleteTrack (&song.track ("E"));
+        settle();
+        CHECK (song.project->getTracks().size() == 5);
+
+        song.project->undo();
+        settle();
+        CHECK (song.project->getTracks().size() == 6);
+        CHECK_FALSE (song.project->canUndo());
+        REQUIRE (song.project->canRedo());
+        song.project->redo();
+        settle();
+        CHECK (song.project->getTracks().size() == 5);
     }
 }

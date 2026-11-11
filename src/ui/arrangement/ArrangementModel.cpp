@@ -156,7 +156,7 @@ namespace harmonia::ui::arrangement
 
     std::optional<core::folders::Folder> ArrangementModel::newFolder (te::AudioTrack& track)
     {
-        juce::Array<te::AudioTrack*> tracks { &track };
+        auto tracks = getTracksFor (track);
 
         for (auto* clip : getSelectedClips())
             if (auto* clipTrack = dynamic_cast<te::AudioTrack*> (clip->getClipTrack()))
@@ -291,10 +291,167 @@ namespace harmonia::ui::arrangement
         return nullptr;
     }
 
+    //==============================================================================
+    juce::Array<te::AudioTrack*> ArrangementModel::getSelectedTracks() const
+    {
+        juce::Array<te::AudioTrack*> selected;
+        const auto* current = getCurrentTrack();
+
+        for (auto* track : project.getTracks())
+            if (track == current || std::find (selectedTracks.begin(), selectedTracks.end(), track->itemID) != selectedTracks.end())
+                selected.add (track);
+
+        return selected;
+    }
+
+    bool ArrangementModel::isTrackSelected (const te::Track* track) const
+    {
+        if (track == nullptr || ! isTrackInEdit (*track))
+            return false;
+
+        return track == getCurrentTrack()
+            || std::find (selectedTracks.begin(), selectedTracks.end(), track->itemID) != selectedTracks.end();
+    }
+
+    void ArrangementModel::clickTrack (te::AudioTrack& track, bool toggle, bool range)
+    {
+        auto* current = getCurrentTrack();
+
+        if (current == nullptr || ! (toggle || range))
+        {
+            selectedTracks.clear();
+
+            if (current == &track)
+                changed();
+            else
+                setCurrentTrack (&track);
+
+            return;
+        }
+
+        if (range)
+        {
+            const auto all = project.getTracks();
+            const auto from = all.indexOf (current), to = all.indexOf (&track);
+            selectedTracks.clear();
+
+            for (int i = std::min (from, to); from >= 0 && to >= 0 && i <= std::max (from, to); ++i)
+                if (all[i] != current)
+                    selectedTracks.push_back (all[i]->itemID);
+        }
+        else if (&track == current)
+        {
+            // Out of the selection: the first of the others is current now.
+            auto others = getSelectedTracks();
+            others.removeFirstMatchingValue (current);
+
+            if (others.isEmpty())
+                return;
+
+            const auto kept = selectedTracks;
+            setCurrentTrack (others.getFirst());
+            selectedTracks = kept;
+            std::erase (selectedTracks, others.getFirst()->itemID);
+        }
+        else if (const auto it = std::find (selectedTracks.begin(), selectedTracks.end(), track.itemID); it != selectedTracks.end())
+        {
+            selectedTracks.erase (it);
+        }
+        else
+        {
+            selectedTracks.push_back (track.itemID);
+        }
+
+        changed();
+    }
+
+    juce::Array<te::AudioTrack*> ArrangementModel::getTracksFor (te::AudioTrack& track) const
+    {
+        const auto selected = getSelectedTracks();
+        return selected.size() > 1 && selected.contains (&track) ? selected : juce::Array<te::AudioTrack*> { &track };
+    }
+
+    void ArrangementModel::setTracksMuted (te::AudioTrack& track, bool muted)
+    {
+        const auto tracks = getTracksFor (track);
+        project.beginGesture (tracks.size() > 1 ? "Mute tracks" : "Mute track");
+
+        for (auto* t : tracks)
+            t->setMute (muted);
+
+        changed();
+    }
+
+    void ArrangementModel::setTracksSoloed (te::AudioTrack& track, bool soloed)
+    {
+        const auto tracks = getTracksFor (track);
+        project.beginGesture (tracks.size() > 1 ? "Solo tracks" : "Solo track");
+
+        for (auto* t : tracks)
+            t->setSolo (soloed);
+
+        changed();
+    }
+
+    void ArrangementModel::setTracksColour (te::AudioTrack& track, std::optional<juce::Colour> colour)
+    {
+        const auto tracks = getTracksFor (track);
+
+        if (std::all_of (tracks.begin(), tracks.end(), [&] (te::AudioTrack* t) { return core::tracks::getColour (*t) == colour; }))
+            return;
+
+        project.beginGesture ("Track colour");
+
+        for (auto* t : tracks)
+            core::tracks::setColour (*t, colour);
+    }
+
+    void ArrangementModel::setTracksFolder (te::AudioTrack& track, const juce::String& folderId)
+    {
+        project.beginGesture (folderId.isEmpty() ? "Take out of the folder" : "Move into a folder");
+
+        for (auto* t : getTracksFor (track))
+            core::folders::setFolder (*t, folderId);
+
+        clipsDirty = true;
+        changed();
+    }
+
+    void ArrangementModel::setTracksGroup (te::AudioTrack& track, te::AudioTrack* group)
+    {
+        if (group != nullptr && ! isTrackInEdit (*group))
+            return;
+
+        project.beginGesture (group != nullptr ? "Play through " + group->getName() : juce::String ("Play to the master"));
+
+        for (auto* t : getTracksFor (track))
+            audio::groups::setGroup (*t, group);
+
+        changed();
+    }
+
+    te::AudioTrack* ArrangementModel::groupTracks (te::AudioTrack& track)
+    {
+        auto* group = audio::groups::addGroup (project, getTracksFor (track));
+        changed();
+        return group;
+    }
+
+    void ArrangementModel::deleteTracks (te::AudioTrack& track)
+    {
+        const auto tracks = getTracksFor (track);
+        project.beginGesture (tracks.size() > 1 ? "Delete tracks" : "Delete track");
+        removeTracks (tracks);
+    }
+
     void ArrangementModel::setCurrent (te::AudioTrack* track, te::MidiClip* clip)
     {
         if (track == currentTrack.get() && clip == openedClip.get())
             return;
+
+        // Another track made current: it is the only one selected (clickTrack keeps the rest itself).
+        if (track != currentTrack.get())
+            selectedTracks.clear();
 
         currentTrack = track;
         openedClip = clip;
@@ -831,25 +988,38 @@ namespace harmonia::ui::arrangement
 
     void ArrangementModel::deleteTrack (te::AudioTrack& track)
     {
-        const auto tracks = getTracks();
-        const auto index = tracks.indexOf (&track);
-
-        if (index < 0)
+        if (getTracks().indexOf (&track) < 0)
             return;
 
-        const te::Track::Ptr keepAlive (&track);
         project.beginGesture ("Delete track");
+        removeTracks ({ &track });
+    }
 
-        // Linked copies on other tracks stay linked only if more than one of them is left.
-        clips::remove (clips::getClips (track));
-        audio::sidechain::forgetSource (track);
-        getEdit().deleteTrack (&track);
+    void ArrangementModel::removeTracks (const juce::Array<te::AudioTrack*>& tracksToRemove)
+    {
+        // The row the current track was on: the track that comes there is current afterwards.
+        const auto index = getTracks().indexOf (getCurrentTrack());
+        auto currentRemoved = false;
+
+        for (auto* track : tracksToRemove)
+        {
+            if (track == nullptr || ! isTrackInEdit (*track))
+                continue;
+
+            const te::Track::Ptr keepAlive (track);
+            currentRemoved = currentRemoved || currentTrack.get() == track;
+
+            // Linked copies on other tracks stay linked only if more than one of them is left.
+            clips::remove (clips::getClips (*track));
+            audio::sidechain::forgetSource (*track);
+            getEdit().deleteTrack (track);
+        }
+
         core::folders::tidy (getEdit());
-
         const auto remaining = getTracks();
 
-        if (currentTrack.get() == &track)
-            setCurrentTrack (remaining.isEmpty() ? nullptr : remaining[std::min (index, remaining.size() - 1)]);
+        if (currentRemoved)
+            setCurrentTrack (remaining.isEmpty() ? nullptr : remaining[juce::jlimit (0, remaining.size() - 1, index)]);
 
         clipsDirty = true;
         changed();
@@ -1577,6 +1747,12 @@ namespace harmonia::ui::arrangement
 
         if (selection.size() != before)
             clipsDirty = true;
+
+        std::erase_if (selectedTracks, [this] (te::EditItemID id)
+        {
+            auto* track = te::findTrackForID (project.getEdit(), id);
+            return track == nullptr || ! isTrackInEdit (*track);
+        });
 
         listeners.call ([] (Listener& l) { l.arrangementChanged(); });
     }

@@ -244,6 +244,14 @@ Not possible yet: takes for notes, seeing all the takes at once under the clip.
   **Audio track** (an empty track for sound files, with no instrument).
 - Click a track header to make it the current track: its instrument is shown above the arrangement, and the
   computer keyboard and the MIDI keyboard play it.
+- **Several tracks at once:** **Ctrl + click** a header to add that track to the selected ones (or take it
+  out), **Shift + click** to select every track from the current one to that one. The selected tracks are
+  lit, a little less than the current one. While several are selected, **M**, **S** and the right-click
+  menu on any of them work for all of them: **Colour**, **Mute**, **Solo**, **Output** (the master, a
+  group, or **New group with these tracks**), **Folder**, **Delete N tracks**. The menu then shows only
+  what is done to them all. An action on a track that is not selected is for that track alone. A plain
+  click on a header leaves one track selected again. The volume slider, Duplicate, Freeze and Render work
+  on one track at a time.
 - Double click the name to rename it (clips named after the track are renamed with it).
 - **M** is mute, **S** is solo, the slider is the volume (double click for 0 dB).
 - Right-click the header for a menu: rename, add an instrument track or an audio track, delete the track;

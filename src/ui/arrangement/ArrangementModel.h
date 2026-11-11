@@ -120,6 +120,41 @@ namespace harmonia::ui::arrangement
         /** Opens the clip in the piano roll; its track becomes current. */
         void openClip (te::MidiClip*);
 
+        //==============================================================================
+        // Several tracks at once. Ctrl + click and Shift + click on track headers select tracks
+        // besides the current one; what is then done to one of them on its header (mute, solo,
+        // colour, output, folder, delete) is done to them all. A command on a track that isn't
+        // one of them is for that track alone. Making another track current any other way (a
+        // plain click, a click on a clip) leaves only that one selected.
+
+        /** The selected tracks in song order: the current track and the others taken with Ctrl
+            or Shift. */
+        juce::Array<te::AudioTrack*> getSelectedTracks() const;
+        bool isTrackSelected (const te::Track*) const;
+
+        /** A click on a track's header. Plain: the track is current and the only one selected.
+            `toggle` (Ctrl): the track goes into the selection or out of it (the current track
+            taken out hands over to the first of the others; alone, it stays). `range` (Shift):
+            the tracks from the current one to this one. The current track stays what it was. */
+        void clickTrack (te::AudioTrack&, bool toggle, bool range);
+
+        /** The tracks a command on `track` is for: every selected one if it is one of several,
+            otherwise itself. */
+        juce::Array<te::AudioTrack*> getTracksFor (te::AudioTrack&) const;
+
+        /** For the tracks of getTracksFor (track): one undo step each. */
+        void setTracksMuted (te::AudioTrack&, bool);
+        void setTracksSoloed (te::AudioTrack&, bool);
+        void setTracksColour (te::AudioTrack&, std::optional<juce::Colour>);
+        void setTracksFolder (te::AudioTrack&, const juce::String& folderId);
+        void deleteTracks (te::AudioTrack&);
+
+        /** Where they play: through this group, or straight to the master (nullptr). */
+        void setTracksGroup (te::AudioTrack&, te::AudioTrack* group);
+
+        /** A new group they all play through. */
+        te::AudioTrack* groupTracks (te::AudioTrack&);
+
         /** A clip was clicked: a MIDI clip opens in the piano roll; an audio clip makes its track
             current (nothing open) and is what clip mode plays. */
         void focusClip (te::Clip&);
@@ -493,6 +528,7 @@ namespace harmonia::ui::arrangement
 
         juce::ReferenceCountedObjectPtr<te::AudioTrack> currentTrack;
         juce::ReferenceCountedObjectPtr<te::MidiClip> openedClip;
+        std::vector<te::EditItemID> selectedTracks;      // besides the current one
         te::Clip::Ptr focusedAudioClip;
 
         // Selected clips by ID, so a clip deleted by undo can't leave a dangling pointer.
@@ -514,6 +550,7 @@ namespace harmonia::ui::arrangement
         juce::ListenerList<Listener> listeners;
 
         void setCurrent (te::AudioTrack*, te::MidiClip*);
+        void removeTracks (const juce::Array<te::AudioTrack*>&);
         te::AudioTrack* createAudioTrack (const juce::String& name, te::Track* after);
         void changed();
         void validateCurrent();

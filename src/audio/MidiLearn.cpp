@@ -2,6 +2,7 @@
 #include "audio/Automation.h"
 #include "audio/AutomationWriter.h"
 #include "core/Controllers.h"
+#include "core/SongNodes.h"
 
 namespace harmonia::audio::midi_learn
 {
@@ -139,7 +140,7 @@ namespace harmonia::audio::midi_learn
 
         removeMappings (edit, [&] (const juce::ValueTree& mapping) { return controlOf (mapping) == control || isOf (mapping, parameter); });
 
-        edit.state.getOrCreateChildWithName (controlsTag, &undoManager)
+        core::song_nodes::getOrCreate (edit, controlsTag)
             .appendChild (juce::ValueTree (mappingTag, { { pluginId, plugin.itemID.toVar() },
                                                          { parameterId, parameter.paramID },
                                                          { channelId, control.channel },

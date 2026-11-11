@@ -68,7 +68,7 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   нет, ноты меняет только через `PianoRollModel`. Показан ли он — `MainComponent::areStepsShown`.
 - Проверка интерфейса без окна: тесты «the main window paints…» рисуют главное окно в картинку; с переменной
   `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png`, `main-arrangement.png`, `main-mixer.png`,
-  `main-automation.png`, `main-audio.png` и `main-audio-recording.png`
+  `main-automation.png`, `main-audio.png`, `main-audio-recording.png` и `main-tracks-selected.png`
   (`harmonia_tests.exe -tc="*paints*"`). Живая проверка мышью (скрипт
   кликает по окну) захватывает настоящий курсор — только если пользователь не за компьютером или разрешил.
 - Самопроверка без звука в динамиках: `--selftest --quiet` (громкость мастера в ноль, уровни меряются на дорожке).
@@ -141,6 +141,13 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   копии — `tidy`). `ArrangementModel::getTracks / getTrack / indexOf` — строки аранжировки (без дорожек,
   спрятанных в свёрнутой папке); все дорожки песни — `getAllTracks()` или `Project::getTracks()`.
   Строка свёрнутой папки (`isFoldedRow`) не правится: клипы в ней — `DrawnClip::folded`.
+- Несколько выделенных дорожек (Ctrl / Shift + клик по заголовку): `ArrangementModel::getSelectedTracks`,
+  клик — `clickTrack`. Команда над дорожкой из заголовка или его меню берёт дорожки через `getTracksFor (track)`
+  (все выделенные, если дорожка среди них, иначе она одна) — или явно остаётся командой для одной дорожки и
+  тогда не показывается в меню нескольких (`TrackHeaders::createTrackMenu`). M и S в undo не попадают (движок).
+- Свой узел в корне песни (папки, маркеры, MIDI-привязки) создавать только через `core::song_nodes::getOrCreate`:
+  он ставится перед дорожками. Узел после дорожек движок позже переставит сам отдельным шагом undo (и по undo
+  тоже — тогда пропадает redo).
 - Группы — только через `audio::groups` (выход дорожки в группу — `setGroup`; хранится по ID, патч 0002),
   сайдчейн — через `audio::sidechain` (удаляешь дорожку — `forgetSource`). Рендер части песни берёт источники
   сайдчейна беззвучно (`sidechain::getSourcesFor`).

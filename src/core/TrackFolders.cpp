@@ -1,4 +1,5 @@
 #include "core/TrackFolders.h"
+#include "core/SongNodes.h"
 #include "core/Tracks.h"
 
 namespace harmonia::core::folders
@@ -116,7 +117,7 @@ namespace harmonia::core::folders
         auto* undoManager = &edit.getUndoManager();
         const Folder folder { juce::Uuid().toString(), name.trim().isNotEmpty() ? name.trim() : getNewName (edit), false };
 
-        edit.state.getOrCreateChildWithName (foldersTag, undoManager)
+        song_nodes::getOrCreate (edit, foldersTag)
             .appendChild (juce::ValueTree (folderTag, { { idId, folder.id }, { nameId, folder.name } }), undoManager);
 
         // Together, from where the first is.

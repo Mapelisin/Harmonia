@@ -1,4 +1,5 @@
 #include "core/Markers.h"
+#include "core/SongNodes.h"
 
 namespace harmonia::core::markers
 {
@@ -13,15 +14,7 @@ namespace harmonia::core::markers
 
         juce::ValueTree getOrCreateList (te::Edit& edit)
         {
-            auto list = getList (edit);
-
-            if (! list.isValid())
-            {
-                list = juce::ValueTree (listType);
-                edit.state.appendChild (list, &edit.getUndoManager());
-            }
-
-            return list;
+            return song_nodes::getOrCreate (edit, listType);
         }
     }
 
