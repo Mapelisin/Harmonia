@@ -52,8 +52,8 @@ expect bugs.
 - A song scale with highlighting and snapping, a chord stamp, the name of the chord in the selected notes,
   key detection.
 - Note commands: legato, chop, glue, Strum, Arpeggiate, Humanize, all with live preview.
-- Recording from a MIDI keyboard and from the computer keyboard; shortcuts also work in the Russian keyboard
-  layout.
+- Recording from a MIDI keyboard and from the computer keyboard, anywhere in the song: no clip has to be
+  prepared. Shortcuts also work in the Russian keyboard layout.
 
 **Arrangement**
 - Clips on tracks, linked copies (edit one and all of them change), looping clips, markers, colours.
@@ -95,7 +95,8 @@ expect bugs.
 
 **Files and reliability**
 - Export to WAV, FLAC and MP3, until the song has rung out; stems of the tracks and groups you choose,
-  named by your own pattern.
+  named by your own pattern. The window stays alive while it exports: progress and Cancel.
+- Song templates: a new song starts with your own tracks, instruments, effects and sends.
 - Autosave and recovery after a crash; undo and redo (Ctrl+Z / Ctrl+Y).
 - Earlier versions of a song kept at every save; all of a song's sounds collected into its folder, to move it
   to another computer; missing files found again.
