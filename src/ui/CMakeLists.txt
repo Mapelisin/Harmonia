@@ -53,6 +53,8 @@ add_library(harmonia_ui STATIC
     RecentProjects.cpp
     ExportOptions.h
     ExportOptions.cpp
+    ExportProgress.h
+    ExportProgress.cpp
     StemsOptions.h
     StemsOptions.cpp
     AudioClipHandles.h

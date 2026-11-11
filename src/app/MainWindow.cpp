@@ -115,8 +115,18 @@ namespace harmonia::app
                                       nullptr);
     }
 
+    bool MainWindow::isExporting() const
+    {
+        auto* content = getMainComponent();
+        return content != nullptr && content->isExporting();
+    }
+
     void MainWindow::askToSaveChanges (std::function<void()> then)
     {
+        // An export has the song: it is cancelled (Esc) or ends before the song is closed.
+        if (isExporting())
+            return;
+
         if (! project->hasUnsavedChanges())
         {
             then();
@@ -404,7 +414,7 @@ namespace harmonia::app
         });
     }
 
-    void MainWindow::exportLoopWav()
+    void MainWindow::exportLoop()
     {
         auto* content = getMainComponent();
         const auto region = content != nullptr ? content->getArrangementModel().getLoopRegion() : std::nullopt;
@@ -418,9 +428,15 @@ namespace harmonia::app
         auto& tempo = project->getEdit().tempoSequence;
         const te::TimeRange part (tempo.toTime (te::BeatPosition::fromBeats (region->start)),
                                   tempo.toTime (te::BeatPosition::fromBeats (region->end)));
-        // A loop is a sample for other songs: a WAV at full quality.
-        chooseExport (getProjectName() + " - " + ui::MainComponent::describeBars (*region, content->getArrangementModel().getBeatsPerBar()),
-                      part, {});
+        const auto name = getProjectName() + " - " + ui::MainComponent::describeBars (*region, content->getArrangementModel().getBeatsPerBar());
+
+        // A loop is a sample for other songs: a WAV at full quality unless chosen otherwise (it
+        // remembers its own format, not the song's).
+        ui::ExportOptions::show (session, [safe = juce::Component::SafePointer<MainWindow> (this), name, part] (const audio::ExportFormat& format)
+        {
+            if (safe != nullptr)
+                safe->chooseExport (name, part, format);
+        }, audio::ExportUse::loop);
     }
 
     void MainWindow::chooseExport (const juce::String& defaultName, std::optional<te::TimeRange> part, const audio::ExportFormat& format)
@@ -442,20 +458,22 @@ namespace harmonia::app
                 return;
 
             result = result.withFileExtension (format.getExtension());
+            auto* content = getMainComponent();
+
+            if (content == nullptr)
+                return;
 
             // Rendering takes over the engine: stop first, or playback would resume over it.
-            if (auto* content = getMainComponent())
-                content->getTransport().stop();
+            content->getTransport().stop();
 
-            // Rendering holds the window up for a while (an MP3 is encoded after it).
-            juce::MouseCursor::showWaitCursor();
-            const auto error = audio::exportSong (project->getEdit(), result, format, part);
-            juce::MouseCursor::hideWaitCursor();
-
-            if (error.isNotEmpty())
-                showError ("Export failed", error);
-            else if (auto* content = getMainComponent())
-                content->showMessage ("Exported " + result.getFullPathName());
+            // A bit at a time, with its progress over the window: it can be cancelled.
+            content->runExport (audio::ExportJob::song (project->getEdit(), result, format, part), [this] (audio::ExportJob& job)
+            {
+                if (job.getError().isNotEmpty())
+                    showError ("Export failed", job.getError());
+                else if (auto* c = getMainComponent())
+                    c->showMessage ("Exported " + job.getFiles().getFirst().getFullPathName());
+            });
         });
     }
 
@@ -491,36 +509,25 @@ namespace harmonia::app
 
             auto* content = getMainComponent();
 
-            if (content != nullptr)
-                content->getTransport().stop();
-
-            // Rendering holds the window up: say how far it got.
-            juce::MouseCursor::showWaitCursor();
-
-            const auto result = audio::exportStems (project->getEdit(), target, options, [this] (int done, int total)
-            {
-                if (done < total)
-                    if (auto* c = getMainComponent())
-                    {
-                        c->showMessage ("Exporting stem " + juce::String (done + 1) + " of " + juce::String (total) + "...");
-
-                        if (auto* peer = getPeer())
-                            peer->performAnyPendingRepaintsNow();
-                    }
-            });
-
-            juce::MouseCursor::hideWaitCursor();
-
-            if (result.error.isNotEmpty())
-            {
-                showError ("Export failed", result.error);
+            if (content == nullptr)
                 return;
-            }
 
-            if (auto* c = getMainComponent())
-                c->showMessage ("Exported " + juce::String (result.files.size()) + " stems to " + target.getFullPathName());
+            content->getTransport().stop();
 
-            result.files.getFirst().revealToUser();
+            // A stem after another, with the progress over the window: it can be cancelled.
+            content->runExport (audio::ExportJob::stems (project->getEdit(), target, options), [this, target] (audio::ExportJob& job)
+            {
+                if (job.getError().isNotEmpty())
+                {
+                    showError ("Export failed", job.getError());
+                    return;
+                }
+
+                if (auto* c = getMainComponent())
+                    c->showMessage ("Exported " + juce::String (job.getFiles().size()) + " stems to " + target.getFullPathName());
+
+                job.getFiles().getFirst().revealToUser();
+            });
         });
     }
 
@@ -544,6 +551,11 @@ namespace harmonia::app
         updateTitle();
 
         if (leftover.has_value())
+            return;
+
+        // While the song is exported it is not as the user left it (tracks silenced for a stem):
+        // no copy of it is made then.
+        if (isExporting())
             return;
 
         // A problem is shown once, not twice a second; again if it changes.

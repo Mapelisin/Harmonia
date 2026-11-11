@@ -80,6 +80,37 @@ TEST_SUITE ("ui::ExportOptions")
         CHECK (! cancelled);
     }
 
+    TEST_CASE ("for the loop region: its own title, what each format means for a loop, its own format remembered")
+    {
+        ExportOptions options ({}, audio::ExportUse::loop);
+        CHECK (options.getTitle() == "Export the loop region as");
+        CHECK (ExportOptions ({}).getTitle() == "Export the song as");
+        CHECK (options.getHint().contains ("repeats seamlessly"));
+
+        // An MP3 does not loop cleanly: said before the file is made.
+        const ExportFormat mp3 { ExportFormat::Type::mp3, 16, 320 };
+        CHECK (ExportOptions::describeUse (mp3, audio::ExportUse::loop).contains ("does not repeat"));
+        CHECK_FALSE (ExportOptions::describeUse (mp3).contains ("does not repeat"));
+        CHECK (ExportOptions::describeUse ({ ExportFormat::Type::flac, 24 }, audio::ExportUse::loop).contains ("half the size"));
+
+        // The other WAVs are what they are for the song too.
+        CHECK (ExportOptions::describeUse ({ ExportFormat::Type::wav, 16 }, audio::ExportUse::loop)
+                   == ExportOptions::describeUse ({ ExportFormat::Type::wav, 16 }));
+
+        // The song's format and the loop's are remembered apart.
+        auto& session = test::session();
+        const auto song = audio::getLastExportFormat (session);
+        const auto loop = audio::getLastExportFormat (session, audio::ExportUse::loop);
+
+        audio::setLastExportFormat (session, { ExportFormat::Type::flac, 16 }, audio::ExportUse::loop);
+        audio::setLastExportFormat (session, { ExportFormat::Type::wav, 32 });
+        CHECK (audio::getLastExportFormat (session, audio::ExportUse::loop) == ExportFormat ({ ExportFormat::Type::flac, 16 }));
+        CHECK (audio::getLastExportFormat (session) == ExportFormat ({ ExportFormat::Type::wav, 32 }));
+
+        audio::setLastExportFormat (session, song);
+        audio::setLastExportFormat (session, loop, audio::ExportUse::loop);
+    }
+
     TEST_CASE ("the format used last is kept in the settings and offered next time")
     {
         auto& session = test::session();

@@ -18,7 +18,7 @@ namespace
         void saveProjectAs() override       {}
         void exportSong() override          {}
         void exportStems() override         {}
-        void exportLoopWav() override       { ++loopExports; }
+        void exportLoop() override          { ++loopExports; }
         juce::String getProjectName() const override    { return "Song"; }
 
         int loopExports = 0;
@@ -112,7 +112,7 @@ TEST_SUITE ("exporting the loop region")
         item = findItem (main.createFileMenu(), "Export the loop region");
         REQUIRE (item.has_value());
         CHECK (item->enabled);
-        CHECK (item->text == "Export the loop region as WAV (bar 2)...");
+        CHECK (item->text == "Export the loop region (bar 2)...");
         REQUIRE (item->action != nullptr);
         item->action();
         CHECK (commands.loopExports == 1);

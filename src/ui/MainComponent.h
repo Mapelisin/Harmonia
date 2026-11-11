@@ -12,6 +12,7 @@
 #include "audio/Transport.h"
 #include "core/Project.h"
 #include "ui/CpuMeter.h"
+#include "ui/ExportProgress.h"
 #include "ui/FileCommands.h"
 #include "ui/InstrumentPanel.h"
 #include "ui/MainMenu.h"
@@ -191,6 +192,13 @@ namespace harmonia::ui
         /** Which plugin takes how much of the sound's time: a bubble at the CPU meter. */
         void showPluginLoad();
 
+        /** Runs an export with its progress over the whole window (ui::ExportProgress): playback
+            stops, the window stays alive and Cancel or Esc stops the export. `onDone` hears of
+            its end, well or not, unless it was cancelled. */
+        void runExport (std::unique_ptr<audio::ExportJob>, std::function<void (audio::ExportJob&)> onDone);
+        bool isExporting() const noexcept                               { return exportProgress.isRunning(); }
+        ExportProgress& getExportProgress() noexcept                    { return exportProgress; }
+
         /** What the lower part of the window shows. `pianoRoll` is the editor of the current
             track: the piano roll, or on an audio track the audio clip editor. */
         enum class LowerPanel { pianoRoll, automation, mixer, sounds };
@@ -262,6 +270,7 @@ namespace harmonia::ui
         LowerPanel lowerPanel = LowerPanel::pianoRoll;
         StatusBar statusBar { session };
         ShortcutsPanel shortcuts;
+        ExportProgress exportProgress;
         std::unique_ptr<juce::FileChooser> importChooser;
 
         // A plugin's process crashed (a warning; the mixer marks its slot) or came back.

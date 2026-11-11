@@ -68,7 +68,8 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   нет, ноты меняет только через `PianoRollModel`. Показан ли он — `MainComponent::areStepsShown`.
 - Проверка интерфейса без окна: тесты «the main window paints…» рисуют главное окно в картинку; с переменной
   `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png`, `main-arrangement.png`, `main-mixer.png`,
-  `main-automation.png`, `main-audio.png`, `main-audio-recording.png`, `main-tracks-selected.png` и `plugin-load.png`
+  `main-automation.png`, `main-audio.png`, `main-audio-recording.png`, `main-tracks-selected.png`, `main-exporting.png`
+  и `plugin-load.png`
   (`harmonia_tests.exe -tc="*paints*"`). Живая проверка мышью (скрипт
   кликает по окну) захватывает настоящий курсор — только если пользователь не за компьютером или разрешил.
 - Самопроверка без звука в динамиках: `--selftest --quiet` (громкость мастера в ноль, уровни меряются на дорожке).
@@ -165,7 +166,12 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   `audio::StemsOptions` (дорожки и группы из `getStemChoices`, шаблон имён, формат), окно — `ui::StemsOptions`.
 - Экспорт песни — `audio::exportSong` с `audio::ExportFormat` (WAV 16/24/32, FLAC, MP3; `exportWav` — WAV 24).
   MP3 — `audio::mp3` (Windows: Media Foundation, `Mp3EncoderWindows.cpp`; решение 24). Окно формата —
-  `ui::ExportOptions`, последний формат — `getLastExportFormat`.
+  `ui::ExportOptions`, последний формат — `getLastExportFormat` (у песни и у лупа свой: `audio::ExportUse`).
+- Экспорт из окна не замораживает его (решение 60): задача `audio::ExportJob` (`song` / `stems`, по шагам)
+  запускается через `MainComponent::runExport` — плашка `ui::ExportProgress` с ходом и отменой, песня на это
+  время закрыта от правок. `exportSong` / `exportStems` — те же задачи за один раз (тесты, анализ). Новый
+  долгий рендер из окна — так же, не блокирующим вызовом. Пока задача жива, песня временно изменена
+  (`export_render::TemporaryState`): не сохранять, не копировать, не давать править (`MainWindow::isExporting`).
 - Настройки — `ui::SettingsPanel` (вкладки в `src/ui/settings`). MIDI-клавиатуры вкл/выкл — `MidiInputs::setKeyboardOn`
   (хранит Tracktion); плагины в своих процессах вкл/выкл — `Session::setPluginSandboxOn` (в тестах включено на
   старте). Скан плагинов — один на программу (`PluginScanner::startScan` вернёт false).

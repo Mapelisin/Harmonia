@@ -546,7 +546,7 @@ The **File** menu (it also has **Settings...** for the sound card, MIDI keyboard
 | Ctrl+, | Settings: sound card and buffer, MIDI keyboards, plugin folders |
 | — | Import audio or MIDI...: add audio or MIDI files (see "Audio clips", "MIDI files") |
 | — | Export stems (a file per track or group)...: the tracks you tick, each into a file of its own (see below) |
-| — | Export the loop region as WAV...: only the loop (Ctrl + drag on the ruler), exactly on its borders: a ready-made sample loop |
+| — | Export the loop region...: only the loop (Ctrl + drag on the ruler), exactly on its borders: a ready-made sample loop. Asks the format first |
 | — | Export MIDI...: the notes of the whole song into a `.mid` |
 
 **Export format** (Ctrl+R; Harmonia remembers the last one):
@@ -565,6 +565,12 @@ in "N" editions: the Media Feature Pack from Windows Settings will help).
 By default files go to "Documents\Harmonia". An asterisk in the window title means there are unsaved
 changes; when you close, start a new project or open another one, Harmonia asks whether to save them.
 
+**While it exports.** A panel over the window says what is being done ("Rendering the song", "Stem 2 of 5:
+Drums", "Writing Song.mp3") and how far it is. **Cancel**, or **Esc**, stops the export: no half-written
+file is left and the song is as it was. Until the export ends, the song can't be played or changed and the
+window can't be closed. (A file of the same name that is being replaced is removed when the export starts:
+cancelling doesn't bring it back.)
+
 **How long the exported file is.** The export doesn't stop at the last clip: it goes on while the song
 still rings (a long reverb, a delay that repeats), and ends half a second after the sound has died away,
 fading to nothing. It waits 30 seconds at the most. There is nothing to set.
@@ -582,10 +588,13 @@ you put them at the start and they line up, and the tracks' stems together sound
 tracks are left out; with solo (S), only the soloed ones are included. The pattern and the format are
 remembered. The folder opens by itself.
 
-**A loop as WAV** (File → Export the loop region as WAV): first mark a loop: **Ctrl + drag** on the ruler
-above the clips (or *Loop this section* in a marker's menu). Exactly this piece goes into the file, with
-nothing added for the tail: you can loop it in any sampler or put it back in as a loop. The suggested file
-name includes the bars: "Song - bars 5-8.wav". The menu item shows which bars will go into the file.
+**A loop as a file** (File → Export the loop region): first mark a loop: **Ctrl + drag** on the ruler
+above the clips (or *Loop this section* in a marker's menu). Choose the format (WAV, FLAC or MP3: the loop
+remembers its own, apart from the song's; WAV 24-bit at first), then where to save. Exactly this piece goes
+into the file, with nothing added for the tail: you can loop it in any sampler or put it back in as a loop.
+An MP3 starts with a moment of silence, so it does not repeat seamlessly: for a loop to use in a song,
+choose WAV or FLAC. The suggested file name includes the bars: "Song - bars 5-8.wav". The menu item shows
+which bars will go into the file.
 
 **Autosave.** While there are unsaved changes, Harmonia quietly saves a copy of them every half a minute
 (without touching your file). If the program crashed (for example, because of a plugin) or the power went

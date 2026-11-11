@@ -6,10 +6,10 @@ namespace harmonia::ui
 {
     using audio::ExportFormat;
 
-    ExportOptions::ExportOptions (const ExportFormat& initial)
-        : choices (ExportFormat::getChoices())
+    ExportOptions::ExportOptions (const ExportFormat& initial, audio::ExportUse exported)
+        : use (exported), choices (ExportFormat::getChoices())
     {
-        title.setText ("Export the song as", juce::dontSendNotification);
+        title.setText (use == audio::ExportUse::loop ? "Export the loop region as" : "Export the song as", juce::dontSendNotification);
         title.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
         title.setColour (juce::Label::textColourId, theme::colour::textPrimary);
 
@@ -50,8 +50,28 @@ namespace harmonia::ui
         updateHint();
     }
 
-    juce::String ExportOptions::describeUse (const ExportFormat& format)
+    juce::String ExportOptions::describeUse (const ExportFormat& format, audio::ExportUse use)
     {
+        if (use == audio::ExportUse::loop)
+        {
+            // A loop is a sample for other songs: what matters is whether it repeats cleanly.
+            switch (format.type)
+            {
+                case ExportFormat::Type::mp3:
+                    return "To send or to listen to. An MP3 starts with a moment of silence, so it does not repeat "
+                           "seamlessly: for a loop to use in a song choose WAV or FLAC.";
+
+                case ExportFormat::Type::flac:
+                    return "Exactly the loop, about half the size of a WAV. Not every sampler opens FLAC.";
+
+                case ExportFormat::Type::wav:
+                    break;
+            }
+
+            if (format.bitDepth == 24)
+                return "Exactly the loop, at full quality: a sample that repeats seamlessly in any sampler or program.";
+        }
+
         switch (format.type)
         {
             case ExportFormat::Type::flac:
@@ -76,7 +96,7 @@ namespace harmonia::ui
 
     void ExportOptions::updateHint()
     {
-        auto text = describeUse (getFormat());
+        auto text = describeUse (getFormat(), use);
 
         if (! audio::mp3::isAvailable (320))
             text << "\nMP3: this computer has no MP3 encoder (Windows' Media Foundation is missing).";
@@ -105,9 +125,9 @@ namespace harmonia::ui
         hint.setBounds (area);
     }
 
-    void ExportOptions::show (core::Session& session, std::function<void (const ExportFormat&)> onChosen)
+    void ExportOptions::show (core::Session& session, std::function<void (const ExportFormat&)> onChosen, audio::ExportUse use)
     {
-        auto options = std::make_unique<ExportOptions> (audio::getLastExportFormat (session));
+        auto options = std::make_unique<ExportOptions> (audio::getLastExportFormat (session, use), use);
         juce::Component::SafePointer<ExportOptions> safe (options.get());
 
         const auto close = [safe]
@@ -118,9 +138,9 @@ namespace harmonia::ui
         };
 
         options->onCancel = close;
-        options->onExport = [&session, close, onChosen] (const ExportFormat& format)
+        options->onExport = [&session, close, onChosen, use] (const ExportFormat& format)
         {
-            setLastExportFormat (session, format);
+            setLastExportFormat (session, format, use);
             close();
 
             // After the window has gone: the next step opens a file dialog.

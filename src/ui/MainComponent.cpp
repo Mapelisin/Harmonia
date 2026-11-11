@@ -159,6 +159,8 @@ namespace harmonia::ui
         addChildComponent (automationPanel);
         addChildComponent (soundBrowser);
         addChildComponent (shortcuts);     // over everything
+        addChildComponent (exportProgress);
+        exportProgress.onCancelled = [this] { showMessage ("Export cancelled: nothing was written"); };
 
         currentChanged();
         setSize (1280, 800);
@@ -409,6 +411,7 @@ namespace harmonia::ui
         auto header = area.removeFromTop (theme::size::headerHeight).reduced (theme::size::padding, 0);
         statusBar.setBounds (area.removeFromBottom (theme::size::statusBarHeight));
         shortcuts.setBounds (getLocalBounds());
+        exportProgress.setBounds (getLocalBounds());
 
         // Menu row: name, menus; on the right the audio load and the shortcuts.
         menuRow.removeFromLeft (appNameWidth);
@@ -496,8 +499,19 @@ namespace harmonia::ui
         }
     }
 
+    void MainComponent::runExport (std::unique_ptr<audio::ExportJob> job, std::function<void (audio::ExportJob&)> onDone)
+    {
+        // Rendering takes over the engine: stop first, or playback would resume over it.
+        transport.stop();
+        exportProgress.run (std::move (job), std::move (onDone));
+    }
+
     bool MainComponent::keyPressed (const juce::KeyPress& key)
     {
+        // The song is being exported: no key reaches it (Esc cancels the export).
+        if (exportProgress.isRunning())
+            return exportProgress.keyPressed (key);
+
         if (key == juce::KeyPress::F1Key)
         {
             showShortcuts (! areShortcutsShown());
@@ -634,6 +648,9 @@ namespace harmonia::ui
 
     bool MainComponent::keyStateChanged (bool)
     {
+        if (exportProgress.isRunning())
+            return true;
+
         auto& keyboard = noteInput.getComputerKeyboard();
 
         if (! keyboard.isEnabled())
@@ -990,9 +1007,9 @@ namespace harmonia::ui
         menu.addItem ("Export stems (a file per track or group)...", hasCommands, false, run (&FileCommands::exportStems));
 
         const auto loop = arrangementModel.getLoopRegion();
-        menu.addItem (loop.has_value() ? "Export the loop region as WAV (" + describeBars (*loop, arrangementModel.getBeatsPerBar()) + ")..."
-                                       : juce::String ("Export the loop region as WAV (Ctrl+drag on the ruler first)"),
-                      hasCommands && loop.has_value(), false, run (&FileCommands::exportLoopWav));
+        menu.addItem (loop.has_value() ? "Export the loop region (" + describeBars (*loop, arrangementModel.getBeatsPerBar()) + ")..."
+                                       : juce::String ("Export the loop region (Ctrl+drag on the ruler first)"),
+                      hasCommands && loop.has_value(), false, run (&FileCommands::exportLoop));
         menu.addItem ("Export MIDI...", [safe] { if (safe != nullptr) safe->chooseMidiExport(); });
         menu.addSeparator();
         menu.addItem ("Check loudness for streaming...", [safe] { if (safe != nullptr) safe->checkLoudness(); });

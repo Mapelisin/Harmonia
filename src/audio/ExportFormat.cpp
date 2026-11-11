@@ -6,7 +6,10 @@ namespace harmonia::audio
 {
     namespace
     {
-        const juce::String lastFormatKey ("exportFormat");
+        juce::String getLastFormatKey (ExportUse use)
+        {
+            return use == ExportUse::loop ? "loopExportFormat" : "exportFormat";
+        }
 
         const char* getTypeName (ExportFormat::Type type)
         {
@@ -72,15 +75,15 @@ namespace harmonia::audio
         return {};
     }
 
-    ExportFormat getLastExportFormat (core::Session& session)
+    ExportFormat getLastExportFormat (core::Session& session, ExportUse use)
     {
-        return ExportFormat::fromString (session.getEngine().getPropertyStorage().getPropertiesFile().getValue (lastFormatKey));
+        return ExportFormat::fromString (session.getEngine().getPropertyStorage().getPropertiesFile().getValue (getLastFormatKey (use)));
     }
 
-    void setLastExportFormat (core::Session& session, const ExportFormat& format)
+    void setLastExportFormat (core::Session& session, const ExportFormat& format, ExportUse use)
     {
         auto& settings = session.getEngine().getPropertyStorage().getPropertiesFile();
-        settings.setValue (lastFormatKey, format.toString());
+        settings.setValue (getLastFormatKey (use), format.toString());
         settings.saveIfNeeded();
     }
 

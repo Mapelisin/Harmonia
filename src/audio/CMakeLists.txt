@@ -17,6 +17,10 @@ add_library(harmonia_audio STATIC
     Effects.cpp
     Export.h
     Export.cpp
+    ExportJob.h
+    ExportJob.cpp
+    ExportRender.h
+    ExportRender.cpp
     ExportTail.h
     ExportTail.cpp
     Consolidate.h

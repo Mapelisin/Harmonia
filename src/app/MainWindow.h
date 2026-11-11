@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/Export.h"
+#include "audio/ExportJob.h"
 #include "core/Autosave.h"
 #include "core/Project.h"
 #include "core/ProjectFiles.h"
@@ -49,7 +50,7 @@ namespace harmonia::app
         void exportSong() override;
         void exportStems() override;
         void exportStemsInto (const audio::StemsOptions&);
-        void exportLoopWav() override;
+        void exportLoop() override;
         juce::String getProjectName() const override;
         juce::File getProjectFile() const override                      { return file; }
         void openEarlierVersion (const juce::File&) override;
@@ -84,6 +85,9 @@ namespace harmonia::app
 
         /** Asks where to save `defaultName` in `format`, then exports the song (or `part` of it) there. */
         void chooseExport (const juce::String& defaultName, std::optional<te::TimeRange> part, const audio::ExportFormat& format);
+
+        /** The song is being exported: it is not to be replaced, closed or copied meanwhile. */
+        bool isExporting() const;
         void updateTitle();
         bool restore (const core::Autosave::Leftover&);
         void timerCallback() override;

@@ -33,7 +33,11 @@ namespace harmonia::audio
         bool operator!= (const ExportFormat& other) const noexcept    { return ! operator== (other); }
     };
 
-    /** The format the song was exported in last time (kept in the settings; WAV 24-bit at first). */
-    ExportFormat getLastExportFormat (core::Session&);
-    void setLastExportFormat (core::Session&, const ExportFormat&);
+    /** What is exported: the song, or a stretch of it to use as a loop. */
+    enum class ExportUse { song, loop };
+
+    /** The format the song (or a loop) was exported in last time: each has its own (kept in the
+        settings; WAV 24-bit at first). */
+    ExportFormat getLastExportFormat (core::Session&, ExportUse = ExportUse::song);
+    void setLastExportFormat (core::Session&, const ExportFormat&, ExportUse = ExportUse::song);
 }
