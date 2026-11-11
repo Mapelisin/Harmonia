@@ -499,7 +499,14 @@ namespace harmonia::core::clips
 
     bool isReversing (const te::AudioClipBase& clip)
     {
-        return clip.getIsReversed() && ! clip.getCurrentSourceFile().existsAsFile();
+        if (! clip.getIsReversed())
+            return false;
+
+        // The engine is done with the reversed copy a moment after the file is there (it still
+        // looks into it, on the message thread): not ready until then. A clip taken away in that
+        // moment stops the engine half way.
+        const auto copy = clip.getAudioFile();
+        return ! copy.getFile().existsAsFile() || clip.edit.engine.getRenderManager().isProxyBeingGenerated (copy);
     }
 
     //==============================================================================
