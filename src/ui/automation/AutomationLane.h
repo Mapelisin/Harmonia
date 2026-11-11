@@ -5,8 +5,10 @@
 namespace harmonia::ui::automation
 {
     /** The line of one parameter over the song, under the arrangement and lined up with it (the
-        same beats across). Draws the bars, the line with its points, the handles its stretches
-        are bent by and the playhead; the mouse edits it (see AutomationGestures). */
+        same beats across). Draws the bars, the line with its points (the selected ones marked),
+        the handles its stretches are bent by and the playhead; the mouse edits it (see
+        AutomationGestures). It takes the keyboard focus when clicked, so that the keys of the
+        selected points reach its panel. */
     class AutomationLane final : public juce::Component
     {
     public:

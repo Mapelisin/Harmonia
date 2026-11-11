@@ -1,4 +1,5 @@
 #include "ui/automation/AutomationPanel.h"
+#include "ui/ComputerKeyboard.h"
 #include "ui/TrackColours.h"
 #include "ui/Theme.h"
 
@@ -137,6 +138,52 @@ namespace harmonia::ui::automation
         }
     }
 
+    double AutomationPanel::getPasteBeat() const
+    {
+        const auto playhead = edit.tempoSequence.toBeats (te::TimePosition::fromSeconds (transport.getPositionSeconds())).inBeats();
+        return std::max (0.0, core::snap::snapFloor (playhead, model.getSnap(), model.getSnapContext()));
+    }
+
+    bool AutomationPanel::keyPressed (const juce::KeyPress& key)
+    {
+        auto& gestures = lane.getGestures();
+        const auto mods = key.getModifiers();
+        const auto code = key.getKeyCode();
+        auto used = false;
+
+        if (! mods.isAnyModifierKeyDown())
+        {
+            if (code == juce::KeyPress::deleteKey || code == juce::KeyPress::backspaceKey)
+            {
+                used = gestures.deleteSelected();
+            }
+            else if (code == juce::KeyPress::escapeKey && ! gestures.getSelection().empty())
+            {
+                gestures.clearSelection();
+                used = true;
+            }
+        }
+        else if (mods.isCommandDown() && ! mods.isAltDown() && ! mods.isShiftDown())
+        {
+            switch (keys::getLetter (key))
+            {
+                case 'C': used = gestures.copySelected(); break;
+                case 'X': used = gestures.cutSelected(); break;
+                case 'V': used = gestures.paste (getPasteBeat()); break;
+                case 'A': gestures.selectAll(); used = ! gestures.getSelection().empty(); break;
+                default:  break;
+            }
+        }
+
+        if (used)
+        {
+            updateControls();
+            lane.repaint();
+        }
+
+        return used;
+    }
+
     void AutomationPanel::updateControls()
     {
         auto* parameter = lane.getParameter();
@@ -156,6 +203,11 @@ namespace harmonia::ui::automation
 
         auto text = numPoints == 0 ? "No line: stays at " + automation::valueToText (*parameter, automation::getValueAt (*parameter, 0.0))
                                    : juce::String (numPoints) + (numPoints == 1 ? " point" : " points");
+
+        if (const auto numSelected = (int) lane.getGestures().getSelection().size(); numSelected > 0)
+            text << ", " << numSelected << " selected";
+        else if (numPoints > 1)
+            text << "\n" << "Ctrl+drag selects points";
 
         if (numLines > 0)
             text << "\n" << "Lines on this track: " << numLines;

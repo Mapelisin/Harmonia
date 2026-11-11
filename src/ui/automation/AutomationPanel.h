@@ -30,6 +30,13 @@ namespace harmonia::ui::automation
         /** Removes the shown line (one undo step). */
         void clearLine();
 
+        /** The keys of the selected points, when the lane was the last thing clicked: Del,
+            Ctrl+C, Ctrl+X, Ctrl+V (see getPasteBeat), Ctrl+A (all points), Esc (none). */
+        bool keyPressed (const juce::KeyPress&) override;
+
+        /** Where Ctrl+V puts copied points: the playhead, on the arrangement's grid. */
+        double getPasteBeat() const;
+
         AutomationLane& getLane() noexcept                          { return lane; }
         juce::Button& getParameterButton() noexcept                 { return parameterButton; }
 

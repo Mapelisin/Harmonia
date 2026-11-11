@@ -183,6 +183,119 @@ namespace harmonia::audio::automation
         }
     }
 
+    void movePoints (te::AutomatableParameter& parameter, const std::vector<int>& indices, const std::vector<Point>& from,
+                     double beatShift, float valueShift)
+    {
+        auto& curve = parameter.getCurve();
+        const auto count = (int) from.size();
+
+        if (count != curve.getNumPoints())
+            return;
+
+        std::vector<bool> moves (from.size(), false);
+
+        for (const auto index : indices)
+            if (juce::isPositiveAndBelow (index, count))
+                moves[(size_t) index] = true;
+
+        // No point that moves passes one that stays (or beat 0), none leaves the range.
+        auto first = -1;
+
+        for (int i = 0; i < count; ++i)
+        {
+            if (! moves[(size_t) i])
+                continue;
+
+            auto earliest = 0.0, latest = std::numeric_limits<double>::max();
+
+            for (int j = i; --j >= 0;)
+                if (! moves[(size_t) j]) { earliest = from[(size_t) j].beat; break; }
+
+            for (int j = i + 1; j < count; ++j)
+                if (! moves[(size_t) j]) { latest = from[(size_t) j].beat; break; }
+
+            const auto& point = from[(size_t) i];
+            beatShift = juce::jlimit (std::min (0.0, earliest - point.beat), std::max (0.0, latest - point.beat), beatShift);
+            valueShift = juce::jlimit (-point.value, 1.0f - point.value, valueShift);
+            first = first < 0 ? i : first;
+        }
+
+        if (first < 0)
+            return;
+
+        // Each makes room for the next: going later the last moves first, going earlier the first.
+        const auto move = [&] (int i)
+        {
+            if (moves[(size_t) i])
+                movePoint (parameter, i, from[(size_t) i].beat + beatShift, from[(size_t) i].value + valueShift);
+        };
+
+        if (from[(size_t) first].beat + beatShift > toBeat (curve, curve.getPointPosition (first)))
+            for (int i = count; --i >= 0;)
+                move (i);
+        else
+            for (int i = 0; i < count; ++i)
+                move (i);
+    }
+
+    void removePoints (te::AutomatableParameter& parameter, std::vector<int> indices)
+    {
+        std::sort (indices.begin(), indices.end());
+        indices.erase (std::unique (indices.begin(), indices.end()), indices.end());
+
+        for (auto index = indices.rbegin(); index != indices.rend(); ++index)
+            removePoint (parameter, *index);
+    }
+
+    std::vector<Point> copyPoints (te::AutomatableParameter& parameter, std::vector<int> indices)
+    {
+        std::sort (indices.begin(), indices.end());
+        indices.erase (std::unique (indices.begin(), indices.end()), indices.end());
+
+        const auto points = getPoints (parameter);
+        std::vector<Point> shape;
+
+        for (const auto index : indices)
+            if (juce::isPositiveAndBelow (index, (int) points.size()))
+                shape.push_back (points[(size_t) index]);
+
+        if (shape.empty())
+            return shape;
+
+        const auto start = shape.front().beat;
+
+        for (auto& point : shape)
+            point.beat -= start;
+
+        // The last point's bend was towards a point that isn't part of the shape.
+        shape.back().curve = 0.0f;
+        return shape;
+    }
+
+    std::vector<int> pastePoints (te::AutomatableParameter& parameter, const std::vector<Point>& shape, double beat)
+    {
+        std::vector<int> pasted;
+
+        if (shape.empty())
+            return pasted;
+
+        auto& curve = parameter.getCurve();
+        auto* undoManager = getUndoManager (parameter);
+        beat = std::max (0.0, beat);
+        const auto endBeat = beat + shape.back().beat;
+        constexpr double tolerance = 1.0e-6;
+
+        for (int i = curve.getNumPoints(); --i >= 0;)
+            if (const auto at = toBeat (curve, curve.getPointPosition (i)); at > beat - tolerance && at < endBeat + tolerance)
+                curve.removePoint (i, undoManager);
+
+        for (const auto& point : shape)
+            pasted.push_back (curve.addPoint (toCurvePosition (curve, beat + point.beat),
+                                              toValue (parameter, juce::jlimit (0.0f, 1.0f, point.value)), point.curve, undoManager));
+
+        return pasted;
+    }
+
     void setCurve (te::AutomatableParameter& parameter, int index, float bend)
     {
         auto& curve = parameter.getCurve();

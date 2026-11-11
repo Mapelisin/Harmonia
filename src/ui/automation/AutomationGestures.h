@@ -16,7 +16,13 @@ namespace harmonia::ui::automation
         - Drag the small handle in the middle of a stretch of the line, up or down: bend the
           stretch (the handle stays under the mouse). Double-click or right-click the handle:
           straight again.
-        Every gesture is one undo step. */
+        - Ctrl + drag: a rectangle selects the points in it (Ctrl+Shift: adds them to those
+          selected). Ctrl + click a point: into the selection or out of it; Ctrl + click on empty
+          space: nothing selected.
+        - Drag one of several selected points: they all move, keeping their shape (not past the
+          points that stay; Shift: only up and down).
+        Every gesture that changes the line is one undo step, and so is each command on the
+        selected points (delete, cut, paste). */
     class AutomationGestures
     {
     public:
@@ -49,6 +55,32 @@ namespace harmonia::ui::automation
         /** The stretch (its first point) whose bend handle is under `position`, or -1. */
         int bendAt (juce::Point<float>) const;
 
+        //==============================================================================
+        /** The selected points, in time order. The selection is of the line as it is: when the
+            line changes other than by these gestures and commands (undo, a recording...), it is
+            gone. */
+        std::vector<int> getSelection() const;
+        bool isSelected (int index) const;
+        void setSelection (std::vector<int> indices);
+        void selectAll();
+        void clearSelection()                                       { setSelection ({}); }
+
+        /** The rectangle being drawn to select points, while one is. */
+        std::optional<juce::Rectangle<float>> getRectangle() const;
+
+        /** Commands on the selected points; false when there was nothing to do. */
+        bool deleteSelected();
+        bool copySelected();
+        bool cutSelected();
+
+        /** Whether points were copied (in any lane: the values go from the bottom of one
+            parameter's range to the top of another's). */
+        static bool canPaste();
+
+        /** The copied points, the first of them at `beat`, in place of what the line had over
+            their length; they become the selection. */
+        bool paste (double beat);
+
         void down (const Pointer&);
         void drag (const Pointer&);
         void up (const Pointer&);
@@ -73,7 +105,16 @@ namespace harmonia::ui::automation
         double grabBeat = 0.0;
         float bendGrabOffset = 0.0f;        // from the mouse to the handle, when it was taken
 
+        std::vector<int> selection;                             // in time order
+        std::vector<audio::automation::Point> selectedLine;     // the line they were selected on
+        bool selecting = false, movingSelection = false;
+        juce::Point<float> rectangleStart, rectangleEnd;
+        std::vector<int> selectionAtStart;                      // what a rectangle adds to
+        std::vector<audio::automation::Point> moveFrom;         // the line when a move of several began
+        float grabValue = 0.0f;                                 // the value under the mouse then
+
         double toBeat (const Pointer&) const;
         void eraseAt (juce::Point<float>);
+        void selectInRectangle();
     };
 }

@@ -32,6 +32,11 @@ The panel opens in place of the piano roll: the **Automation** button on the rig
 | Right-click and drag over points | Delete every point you pass over |
 | Drag the small circle in the middle of a stretch | Bend the line between two points |
 | Double click or right-click the small circle | Straight again |
+| **Ctrl** + drag | A rectangle selects points (**Ctrl+Shift**: adds to the selected ones) |
+| **Ctrl** + click a point | Take it into the selection, or out of it |
+| Drag one of the selected points | They all move together |
+| **Del** / **Ctrl+C** / **Ctrl+X** / **Ctrl+V** | Delete, copy, cut the selected points / paste at the playhead |
+| **Ctrl+A** / **Esc** | Select every point / none |
 | **Clear** | Remove the whole line of this knob |
 
 The value is shown above the point under the mouse ("-6.0 dB · bar 5.1").
@@ -51,6 +56,25 @@ bent. Double click the circle (or right-click it) to make the line straight agai
 - What you see is what you hear: playback and the export follow the bent line.
 - When you cut, move or repeat a piece of time that goes through a bent line, both parts keep their shape.
   If the bend is strong, the program adds a few points of its own along the cut part to hold the shape.
+
+## Several points at once
+
+Hold **Ctrl** and drag a rectangle over the points: they get a ring round them, and the left column says how
+many are selected. **Ctrl+Shift** adds another rectangle to the selection, **Ctrl + click** on a point takes
+it in or out, **Ctrl + click** on an empty spot (or **Esc**) selects nothing, **Ctrl+A** selects every
+point of the line.
+
+- **Move:** drag any of the selected points and they all go with it, keeping their shape (**Shift**: up
+  and down only, **Alt**: off the grid). When one of them reaches a point that is not selected, the start
+  of the song, the top or the bottom, they all stop.
+- **Del** deletes them. **Ctrl+C** copies, **Ctrl+X** cuts.
+- **Ctrl+V** pastes at the playhead (on the grid): put the playhead where the shape should start (click the
+  bar numbers), then paste. The pasted points replace the points that were under them and stay selected,
+  so you can move them right away. You can paste into the line of another knob or another track: the
+  shape keeps its place between the bottom and the top of the knob's range.
+
+The keys work after a click in the automation lane. A plain click (without Ctrl) works as before and
+drops the selection.
 
 ## How it works
 

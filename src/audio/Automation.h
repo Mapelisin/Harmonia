@@ -54,6 +54,23 @@ namespace harmonia::audio::automation
 
     void removePoint (te::AutomatableParameter&, int index);
 
+    /** Moves several points together, as one shape: each `beatShift` later and `valueShift` (of
+        0..1) higher than it is in `from` (the line's points when the move began; `indices` are
+        into them). The shift is cut short where a point would pass a point that stays, or beat
+        0, or leave 0..1: all of them move by the same, or none further. */
+    void movePoints (te::AutomatableParameter&, const std::vector<int>& indices, const std::vector<Point>& from,
+                     double beatShift, float valueShift);
+
+    void removePoints (te::AutomatableParameter&, std::vector<int> indices);
+
+    /** Points of the line as a shape to put elsewhere: in time order, their beats counted from
+        the first of them. */
+    std::vector<Point> copyPoints (te::AutomatableParameter&, std::vector<int> indices);
+
+    /** Puts a copied shape on the line, its first point at `beat`, in place of the points the
+        line had from there to the shape's end. Returns the indices of the points put. */
+    std::vector<int> pastePoints (te::AutomatableParameter&, const std::vector<Point>& shape, double beat);
+
     /** Bends the line between point `index` and the next (-1..1, see Point::curve). */
     void setCurve (te::AutomatableParameter&, int index, float curve);
 

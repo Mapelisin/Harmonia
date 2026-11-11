@@ -147,6 +147,15 @@ namespace harmonia::ui
                 { "+ Folder", "Add a folder with your sounds to the places (right button: remove)" },
                 { "Esc", "Stop listening" } } },
 
+            { "Automation (F8)", {
+                { "Click, drag a point", "A new point (on the grid; Alt: free) / move it (Shift: up and down only)" },
+                { "Right button or double-click on a point", "Delete it (drag the right button over points: all of them)" },
+                { "Drag the small circle between two points", "Bend the line there; double-click or right-click it: straight again" },
+                { "Ctrl + drag", "A rectangle selects points (Ctrl+Shift: adds to them); Ctrl + click a point: in or out" },
+                { "Drag a selected point", "All the selected points move, keeping their shape" },
+                { "Del / Ctrl+C / Ctrl+X / Ctrl+V", "Delete, copy, cut the selected points / paste at the playhead (after a click in the lane)" },
+                { "Ctrl+A / Esc", "Select every point of the line / none" } } },
+
             { "Mixer (F9)", {
                 { "+ on a strip", "Add an effect: built-in or a plugin" },
                 { "Click an effect", "Open its window" },

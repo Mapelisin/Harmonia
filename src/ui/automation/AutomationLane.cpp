@@ -15,6 +15,7 @@ namespace harmonia::ui::automation
         : model (m), view (v)
     {
         setMouseCursor (juce::MouseCursor::CrosshairCursor);
+        setWantsKeyboardFocus (true);
     }
 
     void AutomationLane::setParameter (te::AutomatableParameter* parameter)
@@ -191,6 +192,7 @@ namespace harmonia::ui::automation
         }
 
         const auto dragged = gestures.getDraggedPoint();
+        const auto selected = gestures.getSelection();
 
         for (size_t i = 0; i < points.size(); ++i)
         {
@@ -199,7 +201,8 @@ namespace harmonia::ui::automation
             if (x < -pointRadius || x > width + pointRadius)
                 continue;
 
-            const auto highlighted = (int) i == hovered || (int) i == dragged;
+            const auto isSelected = std::binary_search (selected.begin(), selected.end(), (int) i);
+            const auto highlighted = (int) i == hovered || (int) i == dragged || isSelected;
             const auto circle = juce::Rectangle<float> (2.0f * pointRadius, 2.0f * pointRadius)
                                     .withCentre ({ x, gestures.valueToY (points[i].value) });
 
@@ -207,6 +210,22 @@ namespace harmonia::ui::automation
             g.fillEllipse (circle);
             g.setColour (theme::pianoroll::noteBorder);
             g.drawEllipse (circle, 1.0f);
+
+            // A selected point has a ring round it: seen on any line colour, and apart from a
+            // point that is only under the mouse.
+            if (isSelected)
+            {
+                g.setColour (theme::colour::textPrimary);
+                g.drawEllipse (circle.expanded (2.0f), 1.0f);
+            }
+        }
+
+        if (const auto rectangle = gestures.getRectangle())
+        {
+            g.setColour (theme::pianoroll::selectionFill);
+            g.fillRect (*rectangle);
+            g.setColour (theme::colour::accent);
+            g.drawRect (*rectangle, 1.0f);
         }
 
         const auto shown = dragged >= 0 ? dragged : hovered;
@@ -263,6 +282,7 @@ namespace harmonia::ui::automation
 
     void AutomationLane::mouseDown (const juce::MouseEvent& e)
     {
+        grabKeyboardFocus();
         gestures.down (toPointer (e));
         hovered = gestures.getDraggedPoint();
         hoveredBend = gestures.getBentStretch();

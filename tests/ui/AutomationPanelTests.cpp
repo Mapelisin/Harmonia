@@ -60,6 +60,9 @@ namespace
     };
 
     const juce::ModifierKeys alt { juce::ModifierKeys::altModifier | juce::ModifierKeys::leftButtonModifier };
+    const juce::ModifierKeys ctrl { juce::ModifierKeys::ctrlModifier | juce::ModifierKeys::leftButtonModifier };
+    const juce::ModifierKeys ctrlShift { juce::ModifierKeys::ctrlModifier | juce::ModifierKeys::shiftModifier
+                                         | juce::ModifierKeys::leftButtonModifier };
     const juce::ModifierKeys shift { juce::ModifierKeys::shiftModifier | juce::ModifierKeys::leftButtonModifier };
     const juce::ModifierKeys rightButton { juce::ModifierKeys::rightButtonModifier };
 
@@ -263,6 +266,199 @@ TEST_SUITE ("automation: gestures")
         CHECK (f.gestures.getCursorFor (f.at (20.0, 0.9f)) == juce::MouseCursor::CrosshairCursor);
     }
 
+    TEST_CASE ("Ctrl + drag selects points with a rectangle, Ctrl+Shift adds, Ctrl + click takes one in or out; a plain click drops it")
+    {
+        GestureFixture f;
+
+        for (auto [beat, value] : { std::pair { 2.0, 0.2f }, std::pair { 6.0, 0.6f }, std::pair { 10.0, 0.8f }, std::pair { 14.0, 0.4f } })
+            f.click (f.at (beat, value));
+
+        REQUIRE (f.points().size() == 4);
+        const auto line = f.points();
+        f.project->clearUndoHistory();
+        CHECK (f.gestures.getSelection().empty());
+        CHECK_FALSE (f.gestures.getRectangle().has_value());
+
+        const auto select = [&f] (juce::Point<float> from, juce::Point<float> to, juce::ModifierKeys mods)
+        {
+            f.gestures.down (f.pointer (from, mods));
+            f.gestures.drag (f.pointer (to, mods));
+            CHECK (f.gestures.getRectangle().has_value());
+            f.gestures.up (f.pointer (to, mods));
+            CHECK_FALSE (f.gestures.getRectangle().has_value());
+        };
+
+        // Round the two in the middle, drawn from the bottom right to the top left.
+        select (f.at (11.0, 0.5f), f.at (5.0, 0.9f), ctrl);
+        CHECK (f.gestures.getSelection() == std::vector<int> { 1, 2 });
+        CHECK (f.gestures.isSelected (1));
+        CHECK_FALSE (f.gestures.isSelected (0));
+
+        // Another rectangle is another selection; with Shift it adds.
+        select (f.at (1.0, 0.1f), f.at (3.0, 0.3f), ctrl);
+        CHECK (f.gestures.getSelection() == std::vector<int> { 0 });
+        select (f.at (13.0, 0.3f), f.at (15.0, 0.5f), ctrlShift);
+        CHECK (f.gestures.getSelection() == std::vector<int> { 0, 3 });
+
+        // Ctrl + click a point: in, and out again.
+        f.click (f.at (6.0, 0.6f), ctrl);
+        CHECK (f.gestures.getSelection() == std::vector<int> { 0, 1, 3 });
+        f.click (f.at (2.0, 0.2f), ctrl);
+        CHECK (f.gestures.getSelection() == std::vector<int> { 1, 3 });
+
+        // None of that changed the line or left an undo step.
+        CHECK (f.points() == line);
+        CHECK_FALSE (f.project->canUndo());
+
+        // Ctrl + click on empty space: nothing selected (and no point added).
+        f.click (f.at (8.0, 0.1f), ctrl);
+        CHECK (f.gestures.getSelection().empty());
+        CHECK (f.points() == line);
+
+        // A plain click on a point that isn't selected takes that point alone, as ever.
+        select (f.at (5.0, 0.5f), f.at (11.0, 0.9f), ctrl);
+        REQUIRE (f.gestures.getSelection().size() == 2);
+        f.gestures.down (f.pointer (f.at (14.0, 0.4f)));
+        f.gestures.drag (f.pointer (f.at (15.0, 0.5f)));
+        f.gestures.up (f.pointer (f.at (15.0, 0.5f)));
+        CHECK (f.gestures.getSelection().empty());
+        CHECK (f.points()[3].beat == doctest::Approx (15.0));
+        CHECK (f.points()[1].beat == doctest::Approx (6.0));
+
+        // All of them; and what is selected is selected on this line only.
+        f.gestures.selectAll();
+        CHECK (f.gestures.getSelection().size() == 4);
+        f.gestures.setParameter (f.track().getVolumePlugin()->panParam.get());
+        CHECK (f.gestures.getSelection().empty());
+    }
+
+    TEST_CASE ("dragging one of several selected points moves them all and keeps their shape; one undo step")
+    {
+        GestureFixture f;
+
+        for (auto [beat, value] : { std::pair { 2.0, 0.2f }, std::pair { 6.0, 0.6f }, std::pair { 10.0, 0.8f }, std::pair { 20.0, 0.4f } })
+            f.click (f.at (beat, value));
+
+        f.project->clearUndoHistory();
+        const auto line = f.points();
+        f.gestures.setSelection ({ 1, 2 });
+
+        // Taken by the second of them, a little off its centre: three beats later, a bit lower.
+        const juce::Point<float> off { 2.0f, 1.0f };
+        f.gestures.down (f.pointer (f.at (10.0, 0.8f) + off));
+        CHECK (f.gestures.getDraggedPoint() == 2);
+        f.gestures.drag (f.pointer (f.at (12.0, 0.7f) + off));
+        f.gestures.drag (f.pointer (f.at (13.0, 0.6f) + off));
+        CHECK (f.points()[1].beat == doctest::Approx (9.0));
+        CHECK (f.points()[1].value == doctest::Approx (0.4f).epsilon (0.01));
+        CHECK (f.points()[2].beat == doctest::Approx (13.0));
+        CHECK (f.points()[2].value == doctest::Approx (0.6f).epsilon (0.01));
+        CHECK (f.gestures.getSelection() == std::vector<int> { 1, 2 });       // still selected, while they move
+
+        // Too far: the last of them stops at the point that stays, the first keeps its distance.
+        f.gestures.drag (f.pointer (f.at (30.0, 0.6f) + off));
+        CHECK (f.points()[1].beat == doctest::Approx (16.0));
+        CHECK (f.points()[2].beat == doctest::Approx (20.0));
+
+        // Too high: the highest stops at the top.
+        f.gestures.drag (f.pointer (f.at (12.0, 1.0f) + juce::Point<float> (2.0f, -30.0f)));
+        CHECK (f.points()[2].value == doctest::Approx (1.0f));
+        CHECK (f.points()[1].value == doctest::Approx (0.8f).epsilon (0.01));
+        f.gestures.up (f.pointer (f.at (12.0, 1.0f)));
+        CHECK (f.gestures.getSelection() == std::vector<int> { 1, 2 });
+
+        f.project->undo();
+        CHECK (f.points() == line);
+        CHECK_FALSE (f.project->canUndo());
+        CHECK (f.gestures.getSelection().empty());       // the line changed elsewhere: nothing is selected
+
+        // Shift: up and down only. Alt: off the grid.
+        f.gestures.setSelection ({ 1, 2 });
+        f.gestures.down (f.pointer (f.at (6.0, 0.6f), shift));
+        f.gestures.drag (f.pointer (f.at (9.0, 0.5f), shift));
+        f.gestures.up (f.pointer (f.at (9.0, 0.5f), shift));
+        CHECK (f.points()[1].beat == doctest::Approx (6.0));
+        CHECK (f.points()[1].value == doctest::Approx (0.5f).epsilon (0.01));
+        CHECK (f.points()[2].value == doctest::Approx (0.7f).epsilon (0.01));
+
+        f.gestures.down (f.pointer (f.at (6.0, 0.5f), alt));
+        f.gestures.drag (f.pointer (f.at (6.3, 0.5f), alt));
+        f.gestures.up (f.pointer (f.at (6.3, 0.5f), alt));
+        CHECK (f.points()[1].beat == doctest::Approx (6.3).epsilon (0.001));
+        CHECK (f.points()[2].beat == doctest::Approx (10.3).epsilon (0.001));
+
+        // One selected point alone is dragged as any point.
+        f.gestures.setSelection ({ 0 });
+        f.gestures.down (f.pointer (f.at (2.0, 0.2f)));
+        f.gestures.drag (f.pointer (f.at (3.0, 0.3f)));
+        f.gestures.up (f.pointer (f.at (3.0, 0.3f)));
+        CHECK (f.points()[0].beat == doctest::Approx (3.0));
+        CHECK (f.points()[1].beat == doctest::Approx (6.3).epsilon (0.001));
+    }
+
+    TEST_CASE ("the selected points are deleted, cut, copied and pasted; each is one undo step")
+    {
+        GestureFixture f;
+
+        for (auto [beat, value] : { std::pair { 2.0, 0.2f }, std::pair { 6.0, 0.6f }, std::pair { 10.0, 0.8f }, std::pair { 14.0, 0.4f } })
+            f.click (f.at (beat, value));
+
+        f.project->clearUndoHistory();
+        const auto line = f.points();
+
+        // Nothing selected: nothing to do, no undo step.
+        CHECK_FALSE (f.gestures.deleteSelected());
+        CHECK_FALSE (f.gestures.copySelected());
+        CHECK_FALSE (f.gestures.cutSelected());
+        CHECK_FALSE (f.project->canUndo());
+
+        f.gestures.setSelection ({ 1, 2 });
+        CHECK (f.gestures.copySelected());
+        CHECK (AutomationGestures::canPaste());
+        CHECK (f.points() == line);
+
+        // Pasted at bar 6 (beat 20): the same shape there, and it is what is selected now.
+        CHECK (f.gestures.paste (20.0));
+        REQUIRE (f.points().size() == 6);
+        CHECK (f.points()[4].beat == doctest::Approx (20.0));
+        CHECK (f.points()[4].value == doctest::Approx (0.6f).epsilon (0.01));
+        CHECK (f.points()[5].beat == doctest::Approx (24.0));
+        CHECK (f.points()[5].value == doctest::Approx (0.8f).epsilon (0.01));
+        CHECK (f.gestures.getSelection() == std::vector<int> { 4, 5 });
+
+        CHECK (f.gestures.deleteSelected());
+        CHECK (f.points() == line);
+        CHECK (f.gestures.getSelection().empty());
+
+        f.project->undo();
+        CHECK (f.points().size() == 6);
+        f.project->undo();
+        CHECK (f.points() == line);
+        CHECK_FALSE (f.project->canUndo());
+
+        // Cut: gone from here, and what Paste puts.
+        f.gestures.setSelection ({ 0, 3 });
+        CHECK (f.gestures.cutSelected());
+        REQUIRE (f.points().size() == 2);
+        CHECK (f.points()[0].beat == doctest::Approx (6.0));
+        CHECK (f.gestures.paste (0.0));
+        REQUIRE (f.points().size() == 2);          // beats 0 to 12 held both points left: the shape took their place
+        CHECK (f.points()[0].beat == doctest::Approx (0.0));
+        CHECK (f.points()[0].value == doctest::Approx (0.2f).epsilon (0.01));
+        CHECK (f.points()[1].beat == doctest::Approx (12.0));
+        CHECK (f.points()[1].value == doctest::Approx (0.4f).epsilon (0.01));
+        CHECK (f.gestures.getSelection() == std::vector<int> { 0, 1 });
+
+        f.project->undo();
+        f.project->undo();
+        CHECK (f.points() == line);
+
+        // Onto another line: pan gets the same shape.
+        f.gestures.setParameter (f.track().getVolumePlugin()->panParam.get());
+        CHECK (f.gestures.paste (4.0));
+        CHECK (automation::getPoints (*f.track().getVolumePlugin()->panParam).size() == 2);
+    }
+
     TEST_CASE ("without a parameter the gestures do nothing")
     {
         GestureFixture f;
@@ -300,6 +496,61 @@ TEST_SUITE ("automation: panel")
 
         CHECK (f.main->keyPressed (juce::KeyPress (juce::KeyPress::F7Key)));
         CHECK_FALSE (f.panel().isVisible());
+    }
+
+    TEST_CASE ("the keys of the selected points: Ctrl+A, Ctrl+C, Ctrl+V at the playhead, Ctrl+X, Del, Esc")
+    {
+        MainFixture f;
+        CHECK (f.main->keyPressed (juce::KeyPress (juce::KeyPress::F8Key)));
+        auto& panel = f.panel();
+        auto& gestures = panel.getLane().getGestures();
+        auto& volume = *f.project->getTracks().getFirst()->getVolumePlugin()->volParam;
+        const auto ctrlKey = [] (char letter) { return juce::KeyPress (letter, juce::ModifierKeys::ctrlModifier, 0); };
+
+        // No line, nothing selected: the keys are not the panel's.
+        CHECK_FALSE (panel.keyPressed (juce::KeyPress (juce::KeyPress::deleteKey)));
+        CHECK_FALSE (panel.keyPressed (ctrlKey ('a')));
+        CHECK_FALSE (panel.keyPressed (ctrlKey ('c')));
+        CHECK_FALSE (panel.keyPressed (juce::KeyPress (juce::KeyPress::escapeKey)));
+
+        automation::addPoint (volume, 0.0, 0.2f);
+        automation::addPoint (volume, 4.0, 0.9f);
+        f.project->clearUndoHistory();
+
+        CHECK (panel.keyPressed (ctrlKey ('a')));
+        CHECK (gestures.getSelection() == std::vector<int> { 0, 1 });
+        CHECK (panel.keyPressed (ctrlKey ('c')));
+
+        // The playhead in bar 3, a little past its start: the copy starts on the grid there.
+        f.main->getTransport().setPositionSeconds (4.1);        // 120 BPM: beat 8.2
+        CHECK (panel.getPasteBeat() == doctest::Approx (8.0));
+        CHECK (panel.keyPressed (ctrlKey ('v')));
+        auto points = automation::getPoints (volume);
+        REQUIRE (points.size() == 4);
+        CHECK (points[2].beat == doctest::Approx (8.0));
+        CHECK (points[3].beat == doctest::Approx (12.0));
+        CHECK (points[3].value == doctest::Approx (0.9f).epsilon (0.001));
+        CHECK (gestures.getSelection() == std::vector<int> { 2, 3 });
+
+        CHECK (panel.keyPressed (juce::KeyPress (juce::KeyPress::escapeKey)));
+        CHECK (gestures.getSelection().empty());
+        CHECK_FALSE (panel.keyPressed (juce::KeyPress (juce::KeyPress::deleteKey)));
+        CHECK (automation::getPoints (volume).size() == 4);
+
+        gestures.setSelection ({ 2, 3 });
+        CHECK (panel.keyPressed (ctrlKey ('x')));
+        CHECK (automation::getPoints (volume).size() == 2);
+
+        gestures.setSelection ({ 1 });
+        CHECK (panel.keyPressed (juce::KeyPress (juce::KeyPress::deleteKey)));
+        CHECK (automation::getPoints (volume).size() == 1);
+
+        // Three steps back: the delete, the cut, the paste.
+        CHECK (f.main->keyPressed (ctrlKey ('z')));
+        CHECK (f.main->keyPressed (ctrlKey ('z')));
+        CHECK (f.main->keyPressed (ctrlKey ('z')));
+        CHECK (automation::getPoints (volume).size() == 2);
+        CHECK_FALSE (f.project->canUndo());
     }
 
     TEST_CASE ("each track remembers its parameter; a track with a line starts on it")

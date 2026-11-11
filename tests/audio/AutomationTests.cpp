@@ -172,6 +172,133 @@ TEST_SUITE ("audio::automation")
         CHECK_FALSE (automation::hasPoints (volume));
     }
 
+    TEST_CASE ("several points move as one shape, not past the points that stay; they are removed, copied and pasted together")
+    {
+        auto project = core::Project::createEmpty (test::session());
+        auto& volume = volumeOf (*project->getTracks().getFirst());
+
+        for (auto [beat, value] : { std::pair { 0.0, 0.2f }, std::pair { 4.0, 0.4f }, std::pair { 8.0, 0.8f },
+                                    std::pair { 12.0, 0.6f }, std::pair { 16.0, 0.3f } })
+            automation::addPoint (volume, beat, value);
+
+        automation::setCurve (volume, 1, 0.4f);
+        project->clearUndoHistory();
+        const auto from = automation::getPoints (volume);
+        REQUIRE (from.size() == 5);
+
+        const auto check = [&volume] (int index, double beat, float value)
+        {
+            const auto points = automation::getPoints (volume);
+            REQUIRE (index < (int) points.size());
+            CAPTURE (index);
+            CHECK (points[(size_t) index].beat == doctest::Approx (beat));
+            CHECK (points[(size_t) index].value == doctest::Approx (value).epsilon (0.001));
+        };
+
+        SUBCASE ("moved: the same shift for all, as a drag gives it (always from where they were)")
+        {
+            project->beginGesture ("Move automation points");
+            automation::movePoints (volume, { 1, 2 }, from, 2.0, 0.1f);
+            check (1, 6.0, 0.5f);
+            check (2, 10.0, 0.9f);
+            CHECK (automation::getPoints (volume)[1].curve == 0.4f);        // the bend between them goes along
+
+            automation::movePoints (volume, { 1, 2 }, from, 1.0, -0.1f);    // back a little
+            check (1, 5.0, 0.3f);
+            check (2, 9.0, 0.7f);
+
+            automation::movePoints (volume, { 1, 2 }, from, -1.0, 0.0f);    // and past where they were
+            check (1, 3.0, 0.4f);
+            check (2, 7.0, 0.8f);
+
+            // Cut short: the last of them stops at the point that stays, the highest at the top,
+            // and the others keep their distance from it.
+            automation::movePoints (volume, { 1, 2 }, from, 10.0, 0.5f);
+            check (1, 8.0, 0.6f);
+            check (2, 12.0, 1.0f);
+
+            automation::movePoints (volume, { 1, 2 }, from, -10.0, -0.9f);
+            check (1, 0.0, 0.0f);
+            check (2, 4.0, 0.4f);
+            check (0, 0.0, 0.2f);
+            check (3, 12.0, 0.6f);
+
+            project->undo();
+            CHECK (automation::getPoints (volume) == from);
+        }
+
+        SUBCASE ("moved with a point that stays between them: neither passes it or its other neighbour")
+        {
+            project->beginGesture ("Move automation points");
+            automation::movePoints (volume, { 1, 3 }, from, 5.0, 0.0f);
+            check (1, 8.0, 0.4f);
+            check (2, 8.0, 0.8f);
+            check (3, 16.0, 0.6f);
+
+            automation::movePoints (volume, { 1, 3 }, from, -6.0, 0.0f);
+            check (1, 0.0, 0.4f);
+            check (3, 8.0, 0.6f);
+
+            // Nothing sensible to move: ignored.
+            automation::movePoints (volume, { 99, -1 }, automation::getPoints (volume), 1.0, 0.1f);
+            automation::movePoints (volume, { 1 }, {}, 1.0, 0.1f);
+            check (1, 0.0, 0.4f);
+        }
+
+        SUBCASE ("removed together")
+        {
+            project->beginGesture ("Delete automation points");
+            automation::removePoints (volume, { 3, 1, 3, 99 });
+            REQUIRE (automation::getPoints (volume).size() == 3);
+            check (1, 8.0, 0.8f);
+            check (2, 16.0, 0.3f);
+
+            project->undo();
+            CHECK (automation::getPoints (volume) == from);
+        }
+
+        SUBCASE ("copied as a shape and put elsewhere, in place of what was there")
+        {
+            const auto shape = automation::copyPoints (volume, { 2, 1 });
+            REQUIRE (shape.size() == 2);
+            CHECK (shape[0].beat == doctest::Approx (0.0));
+            CHECK (shape[0].value == doctest::Approx (0.4f));
+            CHECK (shape[0].curve == 0.4f);
+            CHECK (shape[1].beat == doctest::Approx (4.0));
+            CHECK (shape[1].curve == 0.0f);
+            CHECK (automation::copyPoints (volume, {}).empty());
+            CHECK (automation::getPoints (volume) == from);
+
+            // After the line's end: two more points.
+            project->beginGesture ("Paste automation points");
+            CHECK (automation::pastePoints (volume, shape, 20.0) == std::vector<int> { 5, 6 });
+            check (5, 20.0, 0.4f);
+            check (6, 24.0, 0.8f);
+            CHECK (automation::getPoints (volume)[5].curve == 0.4f);
+
+            // Over points of the line (beats 10 to 14 hold the one at 12): it goes.
+            project->beginGesture ("Paste automation points");
+            CHECK (automation::pastePoints (volume, shape, 10.0) == std::vector<int> { 3, 4 });
+            REQUIRE (automation::getPoints (volume).size() == 8);
+            check (2, 8.0, 0.8f);
+            check (3, 10.0, 0.4f);
+            check (4, 14.0, 0.8f);
+            check (5, 16.0, 0.3f);
+
+            // Onto another parameter: the same share of its range.
+            auto& pan = *project->getTracks().getFirst()->getVolumePlugin()->panParam;
+            project->beginGesture ("Paste automation points");
+            CHECK (automation::pastePoints (pan, shape, 0.0) == std::vector<int> { 0, 1 });
+            CHECK (automation::getPoints (pan)[1].value == doctest::Approx (0.8f).epsilon (0.001));
+
+            project->undo();
+            project->undo();
+            project->undo();
+            CHECK (automation::getPoints (volume) == from);
+            CHECK_FALSE (automation::hasPoints (pan));
+        }
+    }
+
     TEST_CASE ("points stay on their beats when the tempo changes, and are saved with the project")
     {
         test::TempFolder temp;
