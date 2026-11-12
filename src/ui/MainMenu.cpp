@@ -289,6 +289,9 @@ namespace harmonia::ui
         }
 
         menu.addSubMenu ("Count-in before recording audio", countInMenu);
+        menu.addItem (makeItem ("Punch in / out: record only inside the loop region", {}, true,
+                                on (main, [] (MainComponent& m) { m.setPunch (! m.getArrangementModel().isPunchOn()); }),
+                                main.getArrangementModel().isPunchOn()));
         menu.addItem (makeItem ("Play notes on the computer keyboard", "Ctrl+T", true, on (main, [] (MainComponent& m)
         {
             auto& keyboard = m.getNoteInput().getComputerKeyboard();

@@ -38,7 +38,8 @@ namespace harmonia::ui
         recordButton.setTooltip ("Record (R): notes played while the song plays go into the clip open in the piano roll\n"
                                  "(in Song mode, played anywhere else, into the clip that is there or into a new one),\n"
                                  "and armed audio tracks record their input (straight on from where the song is).\n"
-                                 "In Song mode with a loop region, audio is recorded round the loop: a take each time.");
+                                 "In Song mode with a loop region, audio is recorded round the loop: a take each time;\n"
+                                 "with Punch on, only what is played inside the region is recorded.");
         recordButton.onClick = [this] { noteInput.setRecordArmed (! noteInput.isRecordArmed()); };
 
         writeButton.setTooltip ("Write automation (Ctrl+Shift+A): while the song plays, the knobs and faders of tracks you move\n"
@@ -60,6 +61,16 @@ namespace harmonia::ui
         countInButton.setTooltip ("Count-in: metronome clicks before a recording of audio starts, to get ready\n"
                                   "(off, 1 bar or 2 bars). The recording still starts where Play was pressed.");
         countInButton.onClick = [this] { showCountInMenu(); };
+
+        punchButton.setTooltip ("Punch in / out: a recording takes only what is played inside the loop region\n"
+                                "(Song mode; Ctrl+drag on the arrangement's ruler sets the region, it turns red).\n"
+                                "The song starts a bar before the region and plays on after it; the sound an armed\n"
+                                "audio track had inside the region is replaced. One Ctrl+Z takes it all back.");
+        punchButton.onClick = [this]
+        {
+            if (onPunchToggled != nullptr)
+                onPunchToggled();
+        };
 
         modeButton.setTooltip ("What Play plays (L): the clip open in the piano roll, looped (Clip),\n"
                                "or the arrangement (Song: the loop region set with Ctrl+drag on its ruler, or the whole song).\n"
@@ -112,7 +123,7 @@ namespace harmonia::ui
 
         for (auto* c : std::initializer_list<juce::Component*> { &toStartButton, &stopButton, &playButton, &recordButton, &writeButton,
                                                                  &positionDisplay, &tempoBox, &timeSigButton, &tapButton,
-                                                                 &clickButton, &countInButton, &modeButton,
+                                                                 &clickButton, &countInButton, &punchButton, &modeButton,
                                                                  &keysButton, &quantizeBox })
         {
             c->setWantsKeyboardFocus (false);
@@ -131,7 +142,7 @@ namespace harmonia::ui
     namespace
     {
         constexpr int iconButtonWidth = 32, iconButtonHeight = 28, gap = 4, groupGap = 16;
-        constexpr int positionWidth = 196, positionHeight = 32, quantizeWidth = 150, writeWidth = 50;
+        constexpr int positionWidth = 196, positionHeight = 32, quantizeWidth = 150, writeWidth = 50, punchWidth = 52;
     }
 
     int TransportBar::getPreferredWidth()
@@ -139,7 +150,7 @@ namespace harmonia::ui
         return 4 * (iconButtonWidth + gap) + writeWidth + groupGap   // to start, stop, play, record, write
              + positionWidth + groupGap
              + 78 + gap + 40 + gap + 40 + groupGap              // tempo, time signature, tap
-             + iconButtonWidth + gap + 76 + gap + 54 + groupGap // metronome, count-in, clip / song
+             + iconButtonWidth + gap + 76 + gap + punchWidth + gap + 54 + groupGap   // metronome, count-in, punch, clip / song
              + 74 + gap + quantizeWidth;                        // keys, quantize
     }
 
@@ -163,6 +174,7 @@ namespace harmonia::ui
         place (tapButton, 40, theme::size::buttonHeight, groupGap);
         place (clickButton, iconButtonWidth, iconButtonHeight);
         place (countInButton, 76);
+        place (punchButton, punchWidth);
         place (modeButton, 54, theme::size::buttonHeight, groupGap);
         place (keysButton, 74);
         place (quantizeBox, juce::jlimit (0, quantizeWidth, area.getWidth()));
@@ -277,6 +289,14 @@ namespace harmonia::ui
         countInButton.setColour (juce::TextButton::buttonColourId,
                                  countIn != audio::Transport::CountIn::off ? theme::colour::accent.withAlpha (0.35f)
                                                                            : theme::colour::surfaceRaised);
+
+        // On: red where a recording would punch now, dim while there is nothing to punch into.
+        const auto punchAlpha = arrangementModel.getPunchRegion().has_value() ? 0.6f
+                              : arrangementModel.isPunchOn()                 ? 0.25f : 0.0f;
+        punchButton.setColour (juce::TextButton::buttonColourId,
+                               punchAlpha > 0.0f ? theme::colour::record.withAlpha (punchAlpha) : theme::colour::surfaceRaised);
+        punchButton.setColour (juce::TextButton::textColourOffId,
+                               punchAlpha > 0.5f ? juce::Colours::white : theme::colour::textSecondary);
 
         const auto song = arrangementModel.getPlayMode() == arrangement::PlayMode::song;
         modeButton.setButtonText (song ? "Song" : "Clip");

@@ -448,6 +448,241 @@ TEST_SUITE ("audio::takes")
         CHECK (takes::getCurrent (*recorded[0]) == 1);
     }
 
+    TEST_CASE ("a punch records only inside the loop: the song plays in from a bar before, the old sound there is replaced")
+    {
+        RecordingRig rig;
+        auto& track = rig.addAudioTrack ("Vocals");
+        auto& edit = rig.project->getEdit();
+        audio::Transport transport (edit);
+        AudioInputs inputs (edit);
+
+        // The old take: 8 s of sound, bars 1-4.
+        juce::String error;
+        const auto oldFile = test::writeTone (rig.temp.getFile ("Old.wav"), 8.0, 0.4f);
+        REQUIRE_MESSAGE (rig.project->addAudioClip (track, oldFile, 0.0, error) != nullptr, error.toStdString());
+
+        AudioInputs::setArmed (track, true);
+        inputs.refresh();
+        edit.dispatchPendingUpdatesSynchronously();
+        rig.project->clearUndoHistory();
+
+        transport.recordsAudio = [&inputs] { return inputs.anyArmed(); };
+        transport.setRecordsTakes (true);       // a punch isn't a recording of takes
+        transport.setPunch (true);
+        CHECK (transport.isPunchOn());
+
+        // Nothing to punch into without a loop: an ordinary recording.
+        transport.setPositionSeconds (9.0);
+        transport.play();
+        CHECK_FALSE (transport.isPunching());
+        CHECK_FALSE (transport.getPunchBeats().has_value());
+        CHECK (transport.getRecordStartSeconds() == doctest::Approx (9.0));
+        rig.process (0.5);
+        transport.stop();
+        edit.dispatchPendingUpdatesSynchronously();
+        rig.project->undo();
+        REQUIRE (clips::getClips (track).size() == 1);
+        rig.project->clearUndoHistory();
+
+        transport.setLoopBeats (8.0, 12.0);     // bar 3: seconds 4 to 6
+        transport.setPositionSeconds (7.0);     // wherever the song was
+        transport.play();
+        CHECK (transport.isPunching());
+        CHECK (transport.isRecording());
+        CHECK_FALSE (transport.isRecordingTakes());
+        CHECK_FALSE (edit.getTransport().looping.get());
+        CHECK (transport.getPositionSeconds() == doctest::Approx (2.0));        // a bar before the loop
+        CHECK (transport.getRecordStartSeconds() == doctest::Approx (4.0));
+        REQUIRE (transport.getPunchBeats().has_value());
+        CHECK (transport.getPunchBeats()->getStart() == doctest::Approx (8.0));
+        CHECK (transport.getPunchBeats()->getEnd() == doctest::Approx (12.0));
+
+        rig.process (5.0);      // the way in, the loop, and a second past it
+        transport.stop();
+        CHECK_FALSE (transport.isPunching());
+        CHECK_FALSE (transport.getPunchBeats().has_value());
+        CHECK (edit.getTransport().looping.get());      // the loop is a loop again
+        CHECK_FALSE (edit.recordingPunchInOut.get());
+
+        for (auto* input : rig.engine().getDeviceManager().getWaveInputDevices())
+            CHECK (input->getMergeMode() == te::WaveInputDevice::getMergeModes()[0]);
+
+        // The old take is cut at the loop's ends; between them, the new one.
+        edit.dispatchPendingUpdatesSynchronously();
+        auto now = clips::getClips (track);
+        REQUIRE (now.size() == 3);
+        std::sort (now.begin(), now.end(), [] (te::Clip* a, te::Clip* b) { return clips::getStartBeat (*a) < clips::getStartBeat (*b); });
+        CHECK (clips::getStartBeat (*now[0]) == doctest::Approx (0.0));
+        CHECK (clips::getEndBeat (*now[0]) == doctest::Approx (8.0).epsilon (0.001));
+        CHECK (clips::getStartBeat (*now[1]) == doctest::Approx (8.0).epsilon (0.001));
+        CHECK (clips::getEndBeat (*now[1]) == doctest::Approx (12.0).epsilon (0.001));
+        CHECK (clips::getStartBeat (*now[2]) == doctest::Approx (12.0).epsilon (0.001));
+        CHECK (clips::getEndBeat (*now[2]) == doctest::Approx (16.0).epsilon (0.001));
+
+        const auto fileOf = [] (te::Clip* clip) { return dynamic_cast<te::AudioClipBase*> (clip)->getCurrentSourceFile(); };
+        CHECK (fileOf (now[0]) == oldFile);
+        CHECK (fileOf (now[2]) == oldFile);
+        CHECK (fileOf (now[1]).isAChildOf (rig.temp.getFile ("Recordings")));
+        CHECK (rmsOf (fileOf (now[1])) > 0.2f);
+
+        // One step back: the old take whole, nothing recorded.
+        CHECK (edit.getUndoManager().getUndoDescription() == "Record audio");
+        rig.project->undo();
+        now = clips::getClips (track);
+        REQUIRE (now.size() == 1);
+        CHECK (clips::getStartBeat (*now[0]) == doctest::Approx (0.0));
+        CHECK (clips::getEndBeat (*now[0]) == doctest::Approx (16.0).epsilon (0.001));
+        rig.project->redo();
+        CHECK (clips::getClips (track).size() == 3);
+    }
+
+    TEST_CASE ("while a punch records, the track's old sound is silent inside the loop and back after it")
+    {
+        RecordingRig rig;
+        auto& track = rig.addAudioTrack ("Vocals");
+        auto& edit = rig.project->getEdit();
+        audio::Transport transport (edit);
+        AudioInputs inputs (edit);
+
+        juce::String error;
+        REQUIRE_MESSAGE (rig.project->addAudioClip (track, test::writeTone (rig.temp.getFile ("Old.wav"), 8.0, 0.4f), 0.0, error) != nullptr,
+                         error.toStdString());
+
+        AudioInputs::setArmed (track, true);
+        inputs.refresh();
+        edit.dispatchPendingUpdatesSynchronously();
+
+        transport.recordsAudio = [&inputs] { return inputs.anyArmed(); };
+        transport.setLoopBeats (8.0, 12.0);     // seconds 4 to 6
+        transport.setPunch (true);
+        transport.play();                       // from 2 s
+
+        // Nothing comes in at the input: what is heard is the old take.
+        rig.process (0.3, 0.0f);
+        const auto before = rig.process (1.4, 0.0f);
+        rig.process (0.6, 0.0f);                // over the loop's start
+        const auto inside = rig.process (1.4, 0.0f);
+        rig.process (0.6, 0.0f);                // over its end
+        const auto after = rig.process (1.0, 0.0f);
+        transport.stop();
+
+        CHECK (before > 0.1f);
+        CHECK (inside < 0.01f);
+        CHECK (after > 0.1f);
+    }
+
+    TEST_CASE ("a punch with a count-in clicks its way in; stopped before the loop it records nothing and cuts nothing")
+    {
+        RecordingRig rig;
+        auto& track = rig.addAudioTrack ("Vocals");
+        auto& edit = rig.project->getEdit();
+        audio::Transport transport (edit);
+        AudioInputs inputs (edit);
+
+        struct Restore
+        {
+            audio::Transport& t;
+            ~Restore()  { t.setCountIn (audio::Transport::CountIn::off); }
+        } restore { transport };
+
+        juce::String error;
+        REQUIRE_MESSAGE (rig.project->addAudioClip (track, test::writeTone (rig.temp.getFile ("Old.wav"), 8.0, 0.4f), 0.0, error) != nullptr,
+                         error.toStdString());
+
+        AudioInputs::setArmed (track, true);
+        inputs.refresh();
+        edit.dispatchPendingUpdatesSynchronously();
+        rig.project->clearUndoHistory();
+
+        transport.setCountIn (audio::Transport::CountIn::oneBar);
+        transport.recordsAudio = [&inputs] { return inputs.anyArmed(); };
+        transport.setLoopBeats (8.0, 12.0);     // seconds 4 to 6
+        transport.setPunch (true);
+        transport.play();
+        CHECK (transport.isPunching());
+        CHECK (transport.isCountingIn());
+        CHECK (transport.getPositionSeconds() < 2.1);       // the count-in's bar (and a bit) before the loop
+        CHECK (transport.getPositionSeconds() > 1.5);
+
+        rig.process (1.0);
+        CHECK (transport.isCountingIn());
+        transport.stop();
+
+        edit.dispatchPendingUpdatesSynchronously();
+        auto now = clips::getClips (track);
+        REQUIRE (now.size() == 1);
+        CHECK (clips::getEndBeat (*now[0]) == doctest::Approx (16.0).epsilon (0.001));
+
+        // Played through: the new take is the loop, as without a count-in.
+        transport.play();
+        rig.process (1.0);
+        CHECK (transport.isCountingIn());       // (the window asks all the time: that is how it sees the count-in end)
+        rig.process (1.5);
+        CHECK_FALSE (transport.isCountingIn());
+        rig.process (2.5);
+        transport.stop();
+
+        edit.dispatchPendingUpdatesSynchronously();
+        now = clips::getClips (track);
+        REQUIRE (now.size() == 3);
+        std::sort (now.begin(), now.end(), [] (te::Clip* a, te::Clip* b) { return clips::getStartBeat (*a) < clips::getStartBeat (*b); });
+        CHECK (clips::getStartBeat (*now[1]) == doctest::Approx (8.0).epsilon (0.001));
+        CHECK (clips::getEndBeat (*now[1]) == doctest::Approx (12.0).epsilon (0.001));
+        CHECK (rmsOf (dynamic_cast<te::AudioClipBase*> (now[1])->getCurrentSourceFile()) > 0.2f);
+    }
+
+    TEST_CASE ("a punch for notes alone: Play goes into the loop from a bar before it, and not round it")
+    {
+        RecordingRig rig;
+        auto& edit = rig.project->getEdit();
+        audio::Transport transport (edit);
+        auto notesArmed = true;
+        transport.recordsNotes = [&notesArmed] { return notesArmed; };
+
+        transport.setLoopBeats (8.0, 12.0);
+        transport.setPunch (true);
+        transport.setPositionSeconds (5.0);
+        transport.play();
+        CHECK (transport.isPunching());
+        CHECK_FALSE (transport.isRecordRequested());
+        CHECK_FALSE (edit.getTransport().looping.get());
+        CHECK (transport.getPositionSeconds() == doctest::Approx (2.0));
+        REQUIRE (transport.getPunchBeats().has_value());
+        CHECK (transport.getPunchBeats()->getStart() == doctest::Approx (8.0));
+
+        rig.process (0.5);
+        CHECK (transport.isPlaying());
+        CHECK_FALSE (transport.isRecording());
+        transport.stop();
+        CHECK_FALSE (transport.isPunching());
+        CHECK (edit.getTransport().looping.get());
+
+        // A loop at the song's very start has no bar before it.
+        transport.setLoopBeats (0.0, 4.0);
+        transport.play();
+        CHECK (transport.isPunching());
+        CHECK (transport.getPositionSeconds() == doctest::Approx (0.0));
+        transport.stop();
+
+        // Nothing is recorded: Play plays the loop round, as ever.
+        notesArmed = false;
+        transport.setLoopBeats (8.0, 12.0);
+        transport.setPositionSeconds (5.0);
+        transport.play();
+        CHECK_FALSE (transport.isPunching());
+        CHECK (edit.getTransport().looping.get());
+        CHECK (transport.getPositionSeconds() == doctest::Approx (5.0));
+        transport.stop();
+
+        // And so does a recording with Punch off.
+        notesArmed = true;
+        transport.setPunch (false);
+        transport.play();
+        CHECK_FALSE (transport.isPunching());
+        CHECK (edit.getTransport().looping.get());
+        transport.stop();
+    }
+
     TEST_CASE ("without a loop, or with takes off, a recording goes straight on and has no takes")
     {
         RecordingRig rig;

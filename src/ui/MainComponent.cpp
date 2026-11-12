@@ -134,6 +134,11 @@ namespace harmonia::ui
         // Record (R) + Play records the armed audio tracks too.
         transport.recordsAudio = [this] { return noteInput.isRecordArmed() && audioInputs.anyArmed(); };
 
+        // A punch plays into the loop region for notes too, and only what is played in it is kept.
+        transport.recordsNotes = [this] { return noteInput.isRecordArmed(); };
+        noteInput.punchBeats = [this] { return transport.getPunchBeats(); };
+        transportBar.onPunchToggled = [this] { setPunch (! arrangementModel.isPunchOn()); };
+
         arrangement.onMessage = [this] (const juce::String& text, bool isProblem)
         {
             if (isProblem)
@@ -188,6 +193,9 @@ namespace harmonia::ui
         transportBar.onGoToStart = nullptr;
         menuBar.setModel (nullptr);
         transport.recordsAudio = nullptr;
+        transport.recordsNotes = nullptr;
+        transportBar.onPunchToggled = nullptr;
+        noteInput.punchBeats = nullptr;
         noteInput.onStateChanged = nullptr;
         noteInput.onClipsMade = nullptr;
         midiInputs.onMessage = nullptr;
@@ -267,6 +275,25 @@ namespace harmonia::ui
         // Recording with a loop region set in song mode goes round it: a take each time.
         transport.setRecordsTakes (arrangementModel.getPlayMode() == arrangement::PlayMode::song
                                    && arrangementModel.getLoopRegion().has_value());
+
+        // Or, with Punch on, it takes only what is played inside the region.
+        transport.setPunch (arrangementModel.getPunchRegion().has_value());
+    }
+
+    void MainComponent::setPunch (bool shouldPunch)
+    {
+        arrangementModel.setPunch (shouldPunch);
+        updateLoop();
+        transportBar.refresh();
+        arrangement.repaint();
+
+        if (! shouldPunch)
+            showMessage ("Punch is off: recordings go on from where the song is");
+        else if (const auto region = arrangementModel.getPunchRegion())
+            showMessage ("Punch is on: only " + arrangement::ArrangementModel::describeBars (*region, arrangementModel.getBeatsPerBar())
+                           + " will be recorded; the song starts a bar earlier");
+        else
+            showMessage ("Punch is on: set a loop region (Ctrl+drag on the ruler, Song mode)");
     }
 
     void MainComponent::showRecordedClips (const juce::Array<te::MidiClip*>& clips)

@@ -158,6 +158,9 @@ namespace harmonia::ui
         void setPlayMode (arrangement::PlayMode);
         void togglePlayMode();
 
+        /** Punch in / out: recordings take only what is played inside the loop region. */
+        void setPunch (bool);
+
         /** Plays from the next / previous marker (Ctrl+Right / Ctrl+Left); from the start before the first. */
         void jumpToMarker (bool next);
 

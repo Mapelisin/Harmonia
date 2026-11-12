@@ -488,6 +488,15 @@ namespace harmonia::ui::arrangement
         void setLoopRegion (core::note_ops::BeatRange);
         void clearLoopRegion();
 
+        /** Punch in / out: a recording takes only what is played inside the loop region (see
+            audio::Transport::setPunch). The switch stays as it is without a region, but only
+            does something with one, in song mode. */
+        bool isPunchOn() const noexcept                     { return punchOn; }
+        void setPunch (bool);
+
+        /** The loop region, when a recording would punch into it; nothing otherwise. */
+        std::optional<core::note_ops::BeatRange> getPunchRegion() const;
+
         //==============================================================================
         // Markers: named places in the song (core::markers); each change is one undo step.
 
@@ -547,6 +556,7 @@ namespace harmonia::ui::arrangement
         double pixelsPerBeat = 16.0;
         PlayMode playMode = PlayMode::clip;
         std::optional<core::note_ops::BeatRange> loopRegion;
+        bool punchOn = false;
 
         std::vector<DrawnClip> drawn;
 

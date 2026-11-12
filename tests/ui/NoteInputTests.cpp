@@ -477,6 +477,73 @@ TEST_SUITE ("note input: recording")
         CHECK (notes[0].startBeat == doctest::Approx (0.0));
     }
 
+    TEST_CASE ("a punch keeps only what is played inside it; a note played a moment early is its first note")
+    {
+        NoteInputFixture f;
+        f.clock.loop = {};      // a punch plays straight on
+        f.project->clearUndoHistory();
+
+        std::optional<juce::Range<double>> punch = juce::Range<double> (4.0, 8.0);
+        f.input->punchBeats = [&punch] { return punch; };
+        f.input->setRecordArmed (true);
+        f.clock.playing = true;
+
+        f.play (60, 1.0, 2.0);          // on the way in
+        f.play (62, 3.95, 4.5);         // a moment before the punch: its first note
+        f.play (64, 5.0, 6.0);
+        f.play (65, 7.5, 9.0);          // held past the end: stops there
+        f.play (67, 9.0, 10.0);         // after it
+        f.play (69, 3.0, 5.0);          // begun well before it: not the punch's
+
+        // The mod wheel, moved before the punch and inside it.
+        f.clock.beat = 2.0;
+        f.input->handleMidiMessage (juce::MidiMessage::controllerEvent (1, 1, 100), NoteInput::now());
+        f.clock.beat = 6.0;
+        f.input->handleMidiMessage (juce::MidiMessage::controllerEvent (1, 1, 50), NoteInput::now());
+
+        // A key held outside the punch doesn't show as being recorded; inside it does.
+        f.clock.beat = 9.5;
+        f.input->noteOn (71, 100, NoteInput::Source::midiKeyboard);
+        f.clock.beat = 9.75;
+        f.input->update();
+        CHECK (f.model.getLiveNotes().empty());
+        f.input->noteOff (71, NoteInput::Source::midiKeyboard);
+
+        f.clock.beat = 6.5;
+        f.input->noteOn (72, 100, NoteInput::Source::midiKeyboard);
+        f.clock.beat = 7.0;
+        f.input->update();
+        CHECK (f.model.getLiveNotes().size() == 1);
+        f.input->noteOff (72, NoteInput::Source::midiKeyboard);
+
+        f.clock.playing = false;
+        f.input->update();
+
+        const auto notes = f.notes();
+        REQUIRE (notes.size() == 4);
+        CHECK (notes[0].pitch == 62);
+        CHECK (notes[0].startBeat == doctest::Approx (4.0));
+        CHECK (notes[0].lengthBeats == doctest::Approx (0.5));
+        CHECK (notes[1].pitch == 64);
+        CHECK (notes[1].startBeat == doctest::Approx (5.0));
+        CHECK (notes[2].pitch == 72);
+        CHECK (notes[3].pitch == 65);
+        CHECK (notes[3].startBeat == doctest::Approx (7.5));
+        CHECK (notes[3].lengthBeats == doctest::Approx (0.5));
+
+        const auto wheel = core::controllers::getPlayed (*f.clip, core::controllers::Controller::modWheel);
+        REQUIRE (wheel.size() == 1);
+        CHECK (wheel[0].beat == doctest::Approx (6.0));
+
+        // Punch off: everything played is recorded again.
+        punch.reset();
+        f.clock.playing = true;
+        f.play (60, 1.0, 2.0);
+        f.clock.playing = false;
+        f.input->update();
+        CHECK (f.notes().size() == 5);
+    }
+
     TEST_CASE ("nothing is recorded where notes can't go: an audio track, a frozen track")
     {
         NoteInputFixture f;
@@ -610,6 +677,57 @@ TEST_SUITE ("note input: main window")
         input.setRecordArmed (false);
     }
 
+    TEST_CASE ("the Punch button makes the loop region the place recordings go; only in song mode, only with a region")
+    {
+        test::ProjectWithClip song;
+        auto& project = song.project;
+        MainComponent main (test::session(), *project);
+        main.setBounds (0, 0, 1280, 800);
+
+        auto& arrangement = main.getArrangementModel();
+        auto& transport = main.getTransport();
+        auto& button = main.getTransportBar().getPunchButton();
+        arrangement.openClip (song.clip);
+        CHECK (button.isShowing() == main.isShowing());
+        CHECK (button.getRight() <= main.getTransportBar().getWidth());
+        CHECK_FALSE (arrangement.isPunchOn());
+        CHECK_FALSE (transport.isPunchOn());
+
+        // On in clip mode: nothing to punch into yet.
+        REQUIRE (arrangement.getPlayMode() == arrangement::PlayMode::clip);
+        button.onClick();
+        CHECK (arrangement.isPunchOn());
+        CHECK_FALSE (arrangement.getPunchRegion().has_value());
+        CHECK_FALSE (transport.isPunchOn());
+        CHECK (main.getStatusBar().getMessage().startsWith ("Punch is on: set a loop region"));
+
+        // Song mode with a loop region: that is where a recording goes.
+        main.setPlayMode (arrangement::PlayMode::song);
+        CHECK_FALSE (transport.isPunchOn());
+        arrangement.setLoopRegion ({ 8.0, 16.0 });
+        main.setPunch (true);
+        REQUIRE (arrangement.getPunchRegion().has_value());
+        CHECK (arrangement.getPunchRegion()->start == doctest::Approx (8.0));
+        CHECK (transport.isPunchOn());
+        CHECK (main.getStatusBar().getMessage()
+                 == "Punch is on: only bars 3-4 will be recorded; the song starts a bar earlier");
+
+        // The window paints with the region as a punch.
+        CHECK (main.createComponentSnapshot (main.getLocalBounds()).isValid());
+
+        // Back in clip mode the open clip is what plays round: no punch.
+        main.setPlayMode (arrangement::PlayMode::clip);
+        CHECK (arrangement.isPunchOn());
+        CHECK_FALSE (transport.isPunchOn());
+        main.setPlayMode (arrangement::PlayMode::song);
+        CHECK (transport.isPunchOn());
+
+        button.onClick();
+        CHECK_FALSE (arrangement.isPunchOn());
+        CHECK_FALSE (transport.isPunchOn());
+        CHECK (main.getStatusBar().getMessage() == "Punch is off: recordings go on from where the song is");
+    }
+
     TEST_CASE ("a take's new clip opens in the piano roll when no clip was open, and the status bar says where it is")
     {
         test::ProjectWithClip song;
@@ -660,6 +778,29 @@ TEST_SUITE ("note input: main window")
 
 TEST_SUITE ("note input: main window")
 {
+    TEST_CASE ("the main window paints with Punch on: the loop region is where a recording goes")
+    {
+        test::ProjectWithClip song;
+        MainComponent main (test::session(), *song.project);
+        main.setBounds (0, 0, 1280, 800);
+        main.getArrangementModel().openClip (song.clip);
+        main.setPlayMode (arrangement::PlayMode::song);
+        main.getArrangementModel().setLoopRegion ({ 8.0, 16.0 });
+        main.setPunch (true);
+        main.getNoteInput().setRecordArmed (true);
+
+        const auto image = main.createComponentSnapshot (main.getLocalBounds());
+        CHECK (image.isValid());
+
+        if (const auto dir = juce::SystemStats::getEnvironmentVariable ("HARMONIA_SNAPSHOT_DIR", {}); dir.isNotEmpty())
+        {
+            juce::FileOutputStream out (juce::File (dir).getChildFile ("main-punch.png"));
+            out.setPosition (0);
+            out.truncate();
+            juce::PNGImageFormat().writeImageToStream (image, out);
+        }
+    }
+
     TEST_CASE ("the main window paints while recording, with held keys and notes being recorded")
     {
         auto project = core::Project::createEmpty (test::session());

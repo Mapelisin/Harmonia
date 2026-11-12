@@ -35,7 +35,9 @@ namespace harmonia::ui::arrangement
         {
             if (const auto region = model.getLoopRegion())
             {
-                g.setColour (theme::colour::accent.withAlpha (0.35f));
+                // Punch in / out: it is where a recording goes, not a loop.
+                const auto base = model.getPunchRegion().has_value() ? theme::colour::record : theme::colour::accent;
+                g.setColour (base.withAlpha (0.35f));
                 g.fillRect (bounds.withLeft (view.beatToX (region->start)).withRight (view.beatToX (region->end)));
             }
         }

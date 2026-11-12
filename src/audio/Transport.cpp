@@ -34,9 +34,31 @@ namespace harmonia::audio
         countInPending = recordRequested && edit.getNumCountInBeats() > 0;
         countInStarted = false;
 
-        recordingTakes = recordRequested && takesWanted && loopWanted;
+        const auto recordsAnything = recordRequested || (recordsNotes != nullptr && recordsNotes());
+        punching = punchWanted && loopWanted && recordsAnything;
+        setEnginePunch (punching);
 
-        if (recordingTakes)
+        recordingTakes = recordRequested && takesWanted && loopWanted && ! punching;
+
+        if (punching)
+        {
+            const auto loop = transport().getLoopRange();
+            auto start = loop.getStart();
+
+            // A count-in plays the song in from before where it is; without one, a bar earlier.
+            if (! countInPending)
+            {
+                auto& tempo = edit.tempoSequence;
+                const auto loopStartBeat = tempo.toBeats (loop.getStart()).inBeats();
+                const auto beatsPerBar = (double) tempo.getTimeSig (0)->numerator.get();
+                start = tempo.toTime (te::BeatPosition::fromBeats (std::max (0.0, loopStartBeat - beatsPerBar)));
+            }
+
+            transport().setPosition (start);
+            recordStartSeconds = loop.getStart().inSeconds();
+            transport().looping = false;
+        }
+        else if (recordingTakes)
         {
             // Every take is one time round, so the first starts where the loop does.
             transport().setPosition (transport().getLoopRange().getStart());
@@ -58,7 +80,8 @@ namespace harmonia::audio
     void Transport::stop()
     {
         const auto wasRecording = recordRequested || isRecording();
-        playRequested = recordRequested = false;
+        const auto wasPunching = punching;
+        playRequested = recordRequested = punching = false;
         stopTimer();
 
         // The engine makes the recordings into clips now: one undo step for all of them.
@@ -79,8 +102,43 @@ namespace harmonia::audio
                         core::audio_clips::prepareForPlayback (*audioClip);
 
             recordingTakes = false;
-            transport().looping = loopWanted;
         }
+
+        if (wasPunching)
+            setEnginePunch (false);
+
+        if (wasRecording || wasPunching)
+            transport().looping = loopWanted;
+    }
+
+    void Transport::setPunch (bool shouldPunch)
+    {
+        punchWanted = shouldPunch;
+    }
+
+    std::optional<juce::Range<double>> Transport::getPunchBeats() const
+    {
+        if (! punching)
+            return std::nullopt;
+
+        auto& tempo = edit.tempoSequence;
+        const auto loop = transport().getLoopRange();
+        return juce::Range<double> (tempo.toBeats (loop.getStart()).inBeats(), tempo.toBeats (loop.getEnd()).inBeats());
+    }
+
+    void Transport::setEnginePunch (bool on)
+    {
+        // The engine punches whenever this is set and it records (between the loop's ends).
+        if (edit.recordingPunchInOut.get() != on)
+            edit.recordingPunchInOut = on;
+
+        // Replacing: the engine keeps what the track had in the loop silent while it records over
+        // it, and cuts it away when the recording becomes a clip (the same undo step).
+        const auto mode = te::WaveInputDevice::getMergeModes()[on ? 1 : 0];
+
+        for (auto* input : edit.engine.getDeviceManager().getWaveInputDevices())
+            if (input->getMergeMode() != mode)
+                input->setMergeMode (mode);
     }
 
     void Transport::setRecordsTakes (bool shouldRecordTakes)
@@ -183,7 +241,7 @@ namespace harmonia::audio
                                         tempo.toTime (te::BeatPosition::fromBeats (endBeat)) });
         }
 
-        transport().looping = loopWanted && (! recordRequested || recordingTakes);
+        transport().looping = loopWanted && ! punching && (! recordRequested || recordingTakes);
     }
 
     bool Transport::canPlayNow() const

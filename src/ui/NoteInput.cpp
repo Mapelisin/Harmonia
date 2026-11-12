@@ -19,6 +19,7 @@ namespace harmonia::ui
         stopTimer();
         computerKeyboard.onSettingsChanged = nullptr;
         onClipsMade = nullptr;
+        punchBeats = nullptr;
         computerKeyboard.releaseAll();
         finishTake();
         model.setHeldPitches ({});
@@ -92,6 +93,11 @@ namespace harmonia::ui
 
         if (const auto beat = heardBeat (wallMs))
         {
+            // Punch in / out: the wheels are recorded only inside it.
+            if (const auto punch = punchBeats != nullptr ? punchBeats() : std::nullopt;
+                punch.has_value() && ! punch->contains (*beat))
+                return;
+
             if (const auto placed = placeInsideClip (*beat))
                 model.addRecordedController (c, *placed, value);
             else if (elsewhere != nullptr)
@@ -156,7 +162,13 @@ namespace harmonia::ui
             if (const auto beat = clock.getHeardBeat (now()))
                 lastHeardBeat = *beat;
 
-            model.setLiveNotes (keepInsideClip (recorder.getSoundingNotes (lastHeardBeat)));
+            std::vector<core::Note> sounding;
+
+            for (const auto& note : recorder.getSoundingNotes (lastHeardBeat))
+                if (const auto kept = keepInsidePunch (note))
+                    sounding.push_back (*kept);
+
+            model.setLiveNotes (keepInsideClip (std::move (sounding)));
         }
     }
 
@@ -233,7 +245,12 @@ namespace harmonia::ui
 
         for (const auto& played : notes)
         {
-            const auto n = core::quantizeRecorded (played, quantize, grid, takeLoop);
+            const auto kept = keepInsidePunch (core::quantizeRecorded (played, quantize, grid, takeLoop));
+
+            if (! kept.has_value())
+                continue;
+
+            const auto& n = *kept;
 
             // Played while the song was somewhere else than the open clip: not lost.
             if (placeInsideClip (n.startBeat).has_value())
@@ -246,6 +263,27 @@ namespace harmonia::ui
 
         if (! inOpenClip.empty())
             model.addRecordedNotes (inOpenClip);
+    }
+
+    std::optional<core::Note> NoteInput::keepInsidePunch (core::Note note) const
+    {
+        const auto punch = punchBeats != nullptr ? punchBeats() : std::nullopt;
+
+        if (! punch.has_value())
+            return note;
+
+        const auto end = note.startBeat + note.lengthBeats;
+
+        // The first note of a phrase is often played a moment before the beat: it is the punch's.
+        if (note.startBeat < punch->getStart() && note.startBeat >= punch->getStart() - punchEarlyBeats
+            && end > punch->getStart())
+            note.startBeat = punch->getStart();
+
+        if (note.startBeat < punch->getStart() - 1.0e-9 || note.startBeat >= punch->getEnd() - 1.0e-9)
+            return std::nullopt;
+
+        note.lengthBeats = std::min (end, punch->getEnd()) - note.startBeat;
+        return note;
     }
 
     std::vector<core::Note> NoteInput::keepInsideClip (std::vector<core::Note> notes) const

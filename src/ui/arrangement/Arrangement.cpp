@@ -458,6 +458,11 @@ namespace harmonia::ui::arrangement
             ClipArea::RecordingMarker marker;
             marker.startBeat = model.getEdit().tempoSequence.toBeats (te::TimePosition::fromSeconds (transport.getRecordStartSeconds())).inBeats();
             marker.endBeat = *beat;
+
+            // A punch records no further than the loop region's end, though the song plays on.
+            if (const auto punch = transport.getPunchBeats())
+                marker.endBeat = std::min (marker.endBeat, punch->getEnd());
+
             const auto tracks = model.getTracks();
 
             for (int i = 0; i < tracks.size(); ++i)

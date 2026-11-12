@@ -260,6 +260,9 @@ next one.
   new clip opens here when you stop. While recording is armed, the song doesn't jump back to its start
   at its end: it plays on, and what you play there makes the song longer. To record round a part of the
   song instead, set a loop (**Ctrl + drag** on the ruler above the clips).
+- **Punch** (the button at the top), with a loop set in Song mode: the song starts a bar before the loop
+  and only the notes you play inside it are recorded. See
+  [Punch in / out](arrangement.md#punch-in--out-record-one-phrase-again).
 - While a key is held, the note is shown in red; the pressed key lights up on the left.
 - The metronome icon (**Ctrl+M**) is the metronome.
 - The list to the right of Keys sets how recorded notes are placed: **As played**, **Quantize starts**

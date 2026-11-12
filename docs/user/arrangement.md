@@ -15,7 +15,7 @@
   stopped, go to the start), **▶** is play (Space), **●** is record (**R**; dim means armed, bright means
   recording). Next is a large **counter**: bar.beat.sixteenth (for example, `5.2.3`) with the time
   `0:08.250` next to it. Then the tempo, the time signature, Tap, the metronome (the icon, **Ctrl+M**), the
-  count-in, Clip/Song and the note input settings.
+  count-in, Punch, Clip/Song and the note input settings.
 
 ## Tracks and clips
 
@@ -237,6 +237,30 @@ commands work with the clips of the arrangement.
 
 Without a loop region (or in Clip mode) recording works as usual: straight on, in one piece.
 Not possible yet: takes for notes, seeing all the takes at once under the clip.
+
+### Punch in / out: record one phrase again
+
+1. **Song** mode. Select the phrase on the ruler: **Ctrl + drag** (the loop region).
+2. Click **Punch** at the top (or **Transport → Punch in / out**). The button and the region turn red: this
+   is where the recording will go.
+3. A track with **●**, record (**R**), **▶**. The song starts **a bar before the region**, so you can sing
+   your way in, and only what you sing **inside the region** is recorded. After the region the song plays
+   on until you stop it.
+4. **■**: the old sound inside the region is replaced with the new one; everything before and after it is as
+   it was. One Ctrl+Z brings the old sound back.
+
+- While the region is being recorded, the track's old sound there is silent: you hear yourself, not the
+  previous take.
+- With **Count-in** on, its clicks sound before the region instead of the one bar.
+- Stopped before the region: nothing is recorded and nothing is cut.
+- Notes work the same way: only what you play inside the region goes into the clip (it is added to the
+  notes that are there). A note played a moment before the region is its first note.
+- With Punch on, takes round the loop aren't recorded: the region is either a loop for takes or a place to
+  punch into. Turn Punch off to get them back.
+- Without a loop region, or in Clip mode, Punch does nothing (the button is dim). It isn't saved with the
+  song.
+
+Not possible yet: your own length of the way in, several punch takes in a row.
 
 ## Tracks
 

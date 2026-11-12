@@ -19,7 +19,9 @@ namespace harmonia::audio
           audio::AudioInputs): straight on from where the song is, without looping (the loop comes
           back at Stop). Stop turns the recordings into clips as one undo step.
         - With setRecordsTakes on and a loop set, it records round the loop instead, from the
-          loop's start: each time round is a take of the one clip made at Stop (core::takes). */
+          loop's start: each time round is a take of the one clip made at Stop (core::takes).
+        - With setPunch on and a loop set, a recording takes only what is played inside the loop
+          (punch in / out): the song plays into the loop from a bar before it and on past it. */
     class Transport : private juce::Timer
     {
     public:
@@ -42,6 +44,25 @@ namespace harmonia::audio
 
         /** Which time round the loop a recording of takes is (1, 2...); 0 when it isn't one. */
         int getTakeNumber() const;
+
+        /** Punch in / out: a recording with a loop set takes only what is played inside the loop.
+            Play then starts a bar before the loop (with a count-in: the count-in plays the song
+            in from before the loop, clicking) and the song plays on past the loop until Stop.
+            What an armed audio track had inside the loop is replaced by the recording, and isn't
+            heard while it is being recorded over. Takes round the loop are off meanwhile.
+            The way in is the same when only notes are recorded (`recordsNotes`); which notes
+            are kept is up to who records them (getPunchBeats). */
+        void setPunch (bool);
+        bool isPunchOn() const noexcept             { return punchWanted; }
+
+        /** Asked at Play: will played notes be recorded this time? */
+        std::function<bool()> recordsNotes;
+
+        /** True from a Play that punches until Stop. */
+        bool isPunching() const noexcept            { return punching; }
+
+        /** The beats a punch records, while one is going. */
+        std::optional<juce::Range<double>> getPunchBeats() const;
 
         /** True from a Play that records audio until Stop. */
         bool isRecordRequested() const noexcept     { return recordRequested; }
@@ -82,6 +103,7 @@ namespace harmonia::audio
         te::Edit& edit;
         bool playRequested = false, recordRequested = false, loopWanted = false;
         bool takesWanted = false, recordingTakes = false;
+        bool punchWanted = false, punching = false;
         mutable bool countInPending = false, countInStarted = false;
         double recordStartSeconds = 0.0;
         int resumeCount = 0;
@@ -90,6 +112,7 @@ namespace harmonia::audio
         te::TransportControl& transport() const    { return edit.getTransport(); }
         bool canPlayNow() const;
         void issuePlay();
+        void setEnginePunch (bool);
         void timerCallback() override;
 
         JUCE_DECLARE_NON_COPYABLE (Transport)

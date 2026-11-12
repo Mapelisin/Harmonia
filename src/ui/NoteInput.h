@@ -21,7 +21,9 @@ namespace harmonia::ui
         placed where the player heard the song when they pressed the key (see
         audio::PlaybackClock), then quantized if asked. Keys being held are shown in the piano roll before they are
         released and become notes. The pitch-bend and mod wheels are recorded into the clip
-        as they move (core::controllers); the sustain pedal makes the notes longer instead. */
+        as they move (core::controllers); the sustain pedal makes the notes longer instead.
+
+        Punch in / out (`punchBeats`): only what is played inside those beats is kept. */
     class NoteInput final : private juce::Timer
     {
     public:
@@ -71,6 +73,15 @@ namespace harmonia::ui
             none: those clips, in the order they were made. */
         std::function<void (const juce::Array<te::MidiClip*>&)> onClipsMade;
 
+        /** Asked for every note and controller move: the song beats a punch records now (see
+            audio::Transport::getPunchBeats), nothing when everything played is recorded. A note
+            must begin inside them (one played a moment early begins at their start) and ends
+            with them at the latest. */
+        std::function<std::optional<juce::Range<double>>()> punchBeats;
+
+        /** How early before a punch a note may be played and still be its first note (beats). */
+        static constexpr double punchEarlyBeats = 0.125;
+
     private:
         pianoroll::PianoRollModel& model;
         audio::NotePreview& preview;
@@ -96,6 +107,7 @@ namespace harmonia::ui
         void commit (const std::vector<core::Note>&);
         void commit (const std::optional<core::Note>&);
         std::vector<core::Note> keepInsideClip (std::vector<core::Note>) const;
+        std::optional<core::Note> keepInsidePunch (core::Note) const;
         std::optional<double> placeInsideClip (double beat) const;
         void recordController (core::controllers::Controller, float value, double wallMs);
         void showHeld();

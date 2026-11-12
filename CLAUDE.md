@@ -68,8 +68,8 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   нет, ноты меняет только через `PianoRollModel`. Показан ли он — `MainComponent::areStepsShown`.
 - Проверка интерфейса без окна: тесты «the main window paints…» рисуют главное окно в картинку; с переменной
   `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png`, `main-arrangement.png`, `main-mixer.png`,
-  `main-automation.png`, `main-audio.png`, `main-audio-recording.png`, `main-tracks-selected.png`, `main-exporting.png`
-  и `plugin-load.png`
+  `main-automation.png`, `main-audio.png`, `main-audio-recording.png`, `main-tracks-selected.png`, `main-exporting.png`,
+  `main-punch.png` и `plugin-load.png`
   (`harmonia_tests.exe -tc="*paints*"`). Живая проверка мышью (скрипт
   кликает по окну) захватывает настоящий курсор — только если пользователь не за компьютером или разрешил.
 - Самопроверка без звука в динамиках: `--selftest --quiet` (громкость мастера в ноль, уровни меряются на дорожке).
@@ -92,6 +92,10 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   новый, тот же шаг undo, что и дубль). Дорожку `NoteInput` узнаёт через `setTrack`
   (`MainComponent::currentChanged`); о новых клипах сообщает `onClipsMade` после дубля. Взведённая запись в
   режиме Song без лупа выключает зацикливание песни (`MainComponent::updateLoop`).
+- Punch in / out (запись только внутри зоны повтора, решение 64): переключатель — `ArrangementModel::setPunch`
+  (из окна — `MainComponent::setPunch`), зона — `getPunchRegion` (только режим Song с зоной). Движку его передаёт
+  `audio::Transport::setPunch`: на время записи включает punch движка и замену старого звука у входов. Всё, что
+  пишет сыгранное само (ноты — `NoteInput::punchBeats`), спрашивает `Transport::getPunchBeats`.
 - Редактор аудиоклипа (нижняя панель аудиодорожки): поведение — `ui/audioeditor/AudioEditorModel` (клип —
   `ArrangementModel::getFocusedAudioClip`, секунды файла ↔ доли песни, команды) и `AudioEditorGestures` (мышь),
   тесты без окна. Ручки фейдов и громкости аудиоклипа (и в аранжировке) — общий `ui/AudioClipHandles`.

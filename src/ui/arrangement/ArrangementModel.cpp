@@ -1725,6 +1725,20 @@ namespace harmonia::ui::arrangement
         }
     }
 
+    void ArrangementModel::setPunch (bool shouldPunch)
+    {
+        if (punchOn != shouldPunch)
+        {
+            punchOn = shouldPunch;
+            changed();
+        }
+    }
+
+    std::optional<core::note_ops::BeatRange> ArrangementModel::getPunchRegion() const
+    {
+        return punchOn && playMode == PlayMode::song ? loopRegion : std::nullopt;
+    }
+
     core::note_ops::BeatRange ArrangementModel::getPlayRange() const
     {
         if (playMode == PlayMode::clip)
