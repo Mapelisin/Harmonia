@@ -61,14 +61,17 @@ expect bugs.
 - Editing by time, as in Ableton: drag across the rows to select a piece of time, whatever the clips'
   borders, then delete, cut, copy, paste, repeat, drag or consolidate it (Ctrl+J); its automation goes
   with it.
+- Automation follows clips: move, copy or repeat a clip, and the knob movements drawn under it go along.
 - Track folders: neighbouring tracks collapse into one row with mute and solo for all of them.
 - Freezing: a track with heavy plugins plays as audio, its plugins off, and unfreezes back.
-- MIDI file import and export; a sound browser with preview.
+- MIDI file import and export; a sound browser with preview: loops are heard at the song's tempo, and the
+  sounds you like are kept under a star.
 
 **Audio**
-- Audio tracks: drag in WAV, MP3, FLAC, AIFF or OGG files; record from a sound card input, with a count-in
-  and loop recording of takes.
-- Audio clip editor: fades, gain, reverse, normalize, stretching to the tempo and changing the pitch.
+- Audio tracks: drag in WAV, MP3, FLAC, AIFF or OGG files; record from a sound card input, with a count-in,
+  loop recording of takes and punch in / out.
+- Audio clip editor: fades, gain, reverse, normalize, stretching to the tempo and changing the pitch; the
+  sound can be slid inside a clip without moving the clip.
 - Follow tempo puts any sample on the grid with one click: its tempo (72.3 BPM too) and first beat are
   measured from the sound itself. Playing that speeds up and slows down is straightened beat by beat, and
   any beat can be dragged onto its hit by hand.
@@ -95,7 +98,11 @@ expect bugs.
 
 **Files and reliability**
 - Export to WAV, FLAC and MP3, until the song has rung out; stems of the tracks and groups you choose,
-  named by your own pattern. The window stays alive while it exports: progress and Cancel.
+  named by your own pattern.
+- Export at a streaming loudness (−14 LUFS and others) without changing the song, at a sample rate you
+  choose, and with an instrumental (the song without the tracks you tick) written in the same export.
+- Nothing long freezes the window: exports, freezing, rendering and Mix Doctor show how far they are and
+  can be cancelled.
 - Song templates: a new song starts with your own tracks, instruments, effects and sends.
 - Autosave and recovery after a crash; undo and redo (Ctrl+Z / Ctrl+Y).
 - Earlier versions of a song kept at every save; all of a song's sounds collected into its folder, to move it
