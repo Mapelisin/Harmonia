@@ -406,15 +406,35 @@ namespace harmonia::core::audio_tempo
         return hidden;
     }
 
+    bool canSlide (const te::WaveAudioClip& clip)
+    {
+        return ! audio_clips::isLooping (clip) && clip.getAudioFile().getLength() > 0.0;
+    }
+
     bool slide (te::WaveAudioClip& clip, double beats)
     {
-        const auto map = getBeatMap (clip);
-
-        if (! map.has_value() || std::abs (beats) < 1.0e-9 || audio_clips::isLooping (clip))
+        if (std::abs (beats) < 1.0e-9 || ! canSlide (clip))
             return false;
 
         // The sound later: the clip shows its file from an earlier moment; never from before
         // the file, nor from so late that nothing is left of it.
+        const auto position = clip.getPosition();
+        const auto map = getBeatMap (clip);
+
+        if (! map.has_value())
+        {
+            // A clip that plays its file as it is: by the seconds those beats take in the song.
+            const auto was = position.getOffset().inSeconds();
+            const auto latest = std::max (0.0, clip.getAudioFile().getLength() / std::max (0.01, clip.getSpeedRatio()) - 0.05);
+            const auto offset = juce::jlimit (0.0, std::max (latest, was), was - beats / getSongBeatsPerSecond (clip));
+
+            if (std::abs (offset - was) < 1.0e-6)
+                return false;
+
+            clip.setPosition (te::ClipPosition { position.time, te::TimeDuration::fromSeconds (offset) });
+            return true;
+        }
+
         const auto shown = getShownBeats (clip);
         const auto latest = map->toBeats (std::max (0.0, clip.getAudioFile().getLength() - 0.05));
         const auto from = juce::jlimit (0.0, latest, shown.getStart() - beats);
@@ -422,9 +442,19 @@ namespace harmonia::core::audio_tempo
         if (std::abs (map->toSeconds (from) - map->toSeconds (shown.getStart())) < 1.0e-6)
             return false;
 
-        const auto position = clip.getPosition();
         clip.setPosition (te::ClipPosition { position.time, te::TimeDuration::fromSeconds (from / getSongBeatsPerSecond (clip)) });
         return true;
+    }
+
+    Slip::Slip (te::WaveAudioClip& c)
+        : clip (&c), from (c.getPosition())
+    {
+    }
+
+    bool Slip::moveTo (double beats)
+    {
+        clip->setPosition (from);
+        return slide (*clip, beats);
     }
 
     bool followsTempo (const te::AudioClipBase& clip)

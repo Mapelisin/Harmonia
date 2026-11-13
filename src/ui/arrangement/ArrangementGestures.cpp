@@ -81,6 +81,8 @@ namespace harmonia::ui::arrangement
         targets.clear();
         grabbed = nullptr;
         copy = Copy::none;
+        copied = false;
+        slip.reset();
         toggleOnClick = selectOnlyOnClick = false;
         appliedDelta = 0.0;
         appliedTrackDelta = 0;
@@ -178,10 +180,11 @@ namespace harmonia::ui::arrangement
                 return;
             }
 
-            // The clip's name strip takes the clip; the rest of it is time, as the empty rows are.
+            // The clip's name strip takes the clip; the rest of it is time, as the empty rows are -
+            // but with Ctrl+Shift the sound of a clip is taken there, to be slid under the clip.
             if (onNameStrip)
                 beginMove (*clip, p);
-            else
+            else if (! (p.mods.isCommandDown() && p.mods.isShiftDown() && beginSlip (*clip, hit->first.trackIndex)))
                 beginTime (p, clip);
 
             return;
@@ -277,6 +280,7 @@ namespace harmonia::ui::arrangement
             case Kind::rectangle:   if (dragged) updateRectangleSelection (p); break;
             case Kind::timeSelect:  if (dragged) dragTime (p); break;
             case Kind::moveTime:    if (dragged) dragPiece (p); break;
+            case Kind::slip:        if (dragged) dragSlip (p); break;
 
             case Kind::pan:
                 view.scrollByPixels (-(double) (p.position.x - lastPosition.x), -(double) (p.position.y - lastPosition.y));
@@ -304,6 +308,10 @@ namespace harmonia::ui::arrangement
                 else if (selectOnlyOnClick)
                     model.setSelection ({ clip });
             }
+        }
+        else if (kind == Kind::move)
+        {
+            carryAutomation();
         }
         else if (kind == Kind::rectangle && dragged)
         {
@@ -356,6 +364,7 @@ namespace harmonia::ui::arrangement
         kind = Kind::none;
         targets.clear();
         grabbed = nullptr;
+        slip.reset();
         selectionAtStart.clear();
         clickedClip = nullptr;
         movingPiece.reset();
@@ -459,6 +468,7 @@ namespace harmonia::ui::arrangement
         {
             makeCopies();
             copy = Copy::none;
+            copied = true;
         }
 
         // The grabbed clip's start lands on the grid; the others keep their distance to it.
@@ -509,6 +519,52 @@ namespace harmonia::ui::arrangement
             if (auto* clip = t.clip.get(); clip != nullptr && clips::isInEdit (*clip))
                 if (auto* track = tracks[t.trackIndex + trackDelta])
                     clips::move (*clip, t.startBeat + delta, *track);
+    }
+
+    bool ArrangementGestures::beginSlip (te::Clip& clip, int trackIndex)
+    {
+        auto* wave = dynamic_cast<te::WaveAudioClip*> (&clip);
+
+        if (wave == nullptr || ! core::audio_tempo::canSlide (*wave) || model.isLockedRow (model.getTrack (trackIndex)))
+            return false;
+
+        if (! model.isSelected (clip))
+            model.setSelection ({ &clip });
+
+        model.getProject().beginGesture ("Slide the sound");
+        slip.emplace (*wave);
+        kind = Kind::slip;
+        return true;
+    }
+
+    void ArrangementGestures::dragSlip (const Pointer& p)
+    {
+        if (! slip.has_value())
+            return;
+
+        // With the mouse, by steps of the grid (Alt: freely), as far as the file goes.
+        const auto mode = getSnapMode (p);
+        const auto context = model.getSnapContext();
+        slip->moveTo (snap::snapNearest (view.xToBeat (p.position.x), mode, context)
+                        - snap::snapNearest (view.xToBeat (downPointer.position.x), mode, context));
+    }
+
+    void ArrangementGestures::carryAutomation()
+    {
+        // Along their own rows the clips take their automation with them, once they are let go
+        // (another row has other knobs).
+        if (appliedTrackDelta != 0 || std::abs (appliedDelta) < 1.0e-9)
+            return;
+
+        std::vector<core::automation_pieces::Carried> carried;
+
+        for (const auto& t : targets)
+            if (auto* clip = t.clip.get(); clip != nullptr && clips::isInEdit (*clip))
+                if (auto* track = dynamic_cast<te::AudioTrack*> (clip->getTrack()))
+                    carried.push_back ({ track, t.startBeat, t.startBeat + appliedDelta,
+                                         clips::getEndBeat (*clip) - clips::getStartBeat (*clip) });
+
+        model.carryAutomation (carried, copied);
     }
 
     void ArrangementGestures::makeCopies()

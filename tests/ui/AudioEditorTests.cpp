@@ -1,6 +1,7 @@
 #include <doctest.h>
 
 #include "TestAudioFiles.h"
+#include "core/AudioClips.h"
 #include "core/AudioTempo.h"
 #include "core/Clips.h"
 #include "core/Project.h"
@@ -736,6 +737,64 @@ TEST_SUITE ("audio clip editor")
         gestures.up ({ { 268.0f, 10.0f }, alt });
         CHECK (model.beatToFileSeconds (8.0) == doctest::Approx (2.68).epsilon (0.0005));
     }
+
+    TEST_CASE ("Ctrl+Shift+drag on the sound slides it under the clip: the played part goes along the file, on the grid (Alt: freely), one undo step")
+    {
+        EditorFixture f;
+        constexpr int both = juce::ModifierKeys::ctrlModifier | juce::ModifierKeys::shiftModifier;
+        const auto offset = [&f] { return f.clip->getPosition().getOffset().inSeconds(); };
+        CHECK (f.model.canSlip());
+
+        // The played part a beat to the right (50 pixels): the clip stays where it is in the song
+        // and plays its file from half a second in.
+        f.drag ({ 300.0f, 120.0f }, { 350.0f, 120.0f }, both);
+        CHECK (offset() == doctest::Approx (0.5));
+        CHECK (clips::getStartBeat (*f.clip) == doctest::Approx (0.0));
+        CHECK (clips::getEndBeat (*f.clip) == doctest::Approx (8.0));
+        CHECK (f.model.getPlayedSeconds().getStart() == doctest::Approx (0.5));
+        CHECK (f.project->getUndoDescription() == "Slide the sound");
+
+        // Further left than the file starts: it stops at the file's start.
+        f.drag ({ 300.0f, 120.0f }, { 150.0f, 120.0f }, both);
+        CHECK (offset() == doctest::Approx (0.0));
+        f.project->undo();
+        CHECK (offset() == doctest::Approx (0.5));
+        f.project->undo();
+        CHECK (offset() == doctest::Approx (0.0));
+
+        // 30 pixels: on the grid a whole beat (the nearest line), with Alt 0.3 s.
+        f.drag ({ 300.0f, 120.0f }, { 330.0f, 120.0f }, both);
+        CHECK (offset() == doctest::Approx (0.5));
+        f.project->undo();
+        f.drag ({ 300.0f, 120.0f }, { 330.0f, 120.0f }, both | juce::ModifierKeys::altModifier);
+        CHECK (offset() == doctest::Approx (0.3).epsilon (0.01));
+        f.project->undo();
+        CHECK (offset() == doctest::Approx (0.0));
+
+        // While it is dragged the readout says where the clip plays its file from.
+        const juce::ModifierKeys keys (left | both);
+        f.gestures.down ({ { 300.0f, 120.0f }, keys, 1 });
+        f.gestures.drag ({ { 350.0f, 120.0f }, keys, 1 });
+        REQUIRE (f.gestures.getReadout().has_value());
+        CHECK (f.gestures.getReadout()->first == "Plays from 0.50 s of the file");
+        f.gestures.up ({ { 350.0f, 120.0f }, keys, 1 });
+        f.project->undo();
+        CHECK (offset() == doctest::Approx (0.0));
+
+        // Without the keys a drag there does nothing, and a click puts the playhead.
+        f.drag ({ 300.0f, 120.0f }, { 350.0f, 120.0f });
+        CHECK (offset() == doctest::Approx (0.0));
+
+        // A sound that repeats is not slid.
+        f.project->beginGesture ("Loop");
+        core::audio_clips::setLooping (*f.clip, true);
+        dispatch();
+        CHECK_FALSE (f.model.canSlip());
+        const auto was = offset();
+        f.drag ({ 300.0f, 120.0f }, { 350.0f, 120.0f }, both);
+        CHECK (offset() == doctest::Approx (was));
+    }
+
 
     TEST_CASE ("the main window paints the audio clip editor in place of the piano roll on an audio track")
     {

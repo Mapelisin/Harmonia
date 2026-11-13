@@ -119,6 +119,15 @@ namespace harmonia::ui
         }
 
         menu.addSeparator();
+
+        const auto follows = arrangementModel.automationFollowsClips();
+        menu.addItem (makeItem ("Automation follows clips", {}, true, on (main, [follows] (MainComponent& m)
+        {
+            m.getArrangementModel().setAutomationFollowsClips (! follows);
+            m.showMessage (! follows ? "Automation now goes with the clips you move, copy, cut and paste along their tracks"
+                                     : "Automation now stays where it is in the song, whatever the clips do");
+        }), follows));
+        menu.addSeparator();
         addMidiLearnItems (menu);
         return menu;
     }

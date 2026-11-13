@@ -112,6 +112,7 @@ namespace harmonia::ui::audioeditor
         lastPosition = p.position;
         dragged = false;
         kind = Kind::none;
+        slip.reset();
 
         if (p.mods.isMiddleButtonDown())
         {
@@ -177,6 +178,18 @@ namespace harmonia::ui::audioeditor
             return;
         }
 
+        // Ctrl+Shift on the sound: it is taken, to be slid under the clip.
+        if (p.mods.isCommandDown() && p.mods.isShiftDown() && p.position.y >= body.getY())
+        {
+            slip = model.beginSlip();
+
+            if (slip.has_value())
+            {
+                kind = Kind::slip;
+                return;
+            }
+        }
+
         kind = Kind::click;
     }
 
@@ -193,6 +206,7 @@ namespace harmonia::ui::audioeditor
             case Kind::fadeOut:
             case Kind::gain:        if (dragged) dragHandle (p); break;
             case Kind::beat:        if (dragged) dragBeat (p); break;
+            case Kind::slip:        if (dragged) dragSlip (p); break;
 
             case Kind::pan:
                 view.scrollByPixels (-(double) (p.position.x - lastPosition.x));
@@ -217,6 +231,7 @@ namespace harmonia::ui::audioeditor
             onPositionChosen (std::max (0.0, model.fileSecondsToBeat (view.xToSeconds (p.position.x))));
 
         kind = Kind::none;
+        slip.reset();
     }
 
     void AudioEditorGestures::wheel (const Pointer& p, float deltaX, float deltaY)
@@ -270,6 +285,22 @@ namespace harmonia::ui::audioeditor
         auto context = model.getArrangement().getSnapContext();
         context.lineBeats = snap::getLineBeats (model.getPixelsPerBeat (view.pixelsPerSecond), context.beatsPerBar, minLinePixels);
         return context;
+    }
+
+    void AudioEditorGestures::dragSlip (const Pointer& p)
+    {
+        if (! slip.has_value())
+            return;
+
+        // The played part goes along the file with the mouse, so the sound goes the other way
+        // under the clip: by steps of the grid (Alt: freely), as far as the file goes. Counted
+        // with the sound lying where it lay when it was taken.
+        slip->moveTo (0.0);
+        const auto mode = p.mods.isAltDown() ? snap::Mode::none : model.getArrangement().getSnap();
+        const auto context = getSnapContext();
+        const auto from = snap::snapNearest (model.fileSecondsToBeat (view.xToSeconds (downPointer.position.x)), mode, context);
+        const auto to = snap::snapNearest (model.fileSecondsToBeat (view.xToSeconds (p.position.x)), mode, context);
+        slip->moveTo (from - to);
     }
 
     void AudioEditorGestures::dragTrim (const Pointer& p)
@@ -356,6 +387,13 @@ namespace harmonia::ui::audioeditor
             const auto text = juce::String (start ? "Start: " : "End: ") + describePosition (beat, model.getArrangement().getBeatsPerBar())
                             + "  (" + juce::String (seconds, 2) + " s of the file)";
             return std::pair { text, juce::Point<float> (view.secondsToX (seconds), body.getY() + 10.0f) };
+        }
+
+        if (kind == Kind::slip)
+        {
+            const auto seconds = model.getPlayedSeconds().getStart();
+            return std::pair { "Plays from " + juce::String (seconds, 2) + " s of the file",
+                               juce::Point<float> (view.secondsToX (seconds), body.getY() + 10.0f) };
         }
 
         const auto handles = getHandles();

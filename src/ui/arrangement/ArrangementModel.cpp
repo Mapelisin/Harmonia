@@ -1307,11 +1307,23 @@ namespace harmonia::ui::arrangement
 
         project.beginGesture (linked ? "Duplicate clips (linked)" : "Duplicate clips");
         juce::Array<te::Clip*> copies;
+        std::vector<core::automation_pieces::Carried> carried;
 
         for (auto* clip : originals)
-            if (auto* copy = clips::duplicate (*clip, clips::getStartBeat (*clip) + offset, linked))
+        {
+            const auto from = clips::getStartBeat (*clip);
+
+            if (auto* copy = clips::duplicate (*clip, from + offset, linked))
+            {
                 copies.add (copy);
 
+                if (auto* track = dynamic_cast<te::AudioTrack*> (clip->getTrack()))
+                    carried.push_back ({ track, from, from + offset, clips::getEndBeat (*clip) - from });
+            }
+        }
+
+        // Their automation is repeated with them.
+        carryAutomation (carried, true);
         setSelection (copies);
         clipsDirty = true;
         changed();

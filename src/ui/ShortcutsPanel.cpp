@@ -48,6 +48,8 @@ namespace harmonia::ui
                 { "Click a clip", "Open it in the piano roll and select it" },
                 { "Drag a clip by its name", "Move it (to another track too); Alt: without the grid" },
                 { "Shift+drag / Ctrl+drag its name", "A linked copy / an independent copy" },
+                { "Edit > Automation follows clips", "Moved, copied, repeated or cut and pasted along its track, a clip takes its automation" },
+                { "Ctrl+Shift+drag on an audio clip", "Slide the sound inside the clip; the clip stays (Alt: without the grid)" },
                 { "Drag in a track's row", "Select a piece of time, over clips and empty space alike (several rows too)" },
                 { "Del, Ctrl+X / C / V, Ctrl+B, Ctrl+E", "With time selected: delete, cut, copy, paste there, repeat, split at its edges" },
                 { "Drag the selected time", "Move what is in it (Ctrl: copy), in place of what is there" },

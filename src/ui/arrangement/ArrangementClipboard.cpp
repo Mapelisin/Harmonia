@@ -29,6 +29,7 @@ namespace harmonia::ui::arrangement
             double beatOffset = 0.0;
             double wasAtBeat = 0.0;
             std::optional<juce::Range<double>> shown;
+            core::automation_pieces::Piece lines;       // of a whole clip: the automation that is its own
         };
 
         /** What the automation of a row does over a piece of time (the row counted from the
@@ -43,6 +44,7 @@ namespace harmonia::ui::arrangement
             rows' automation did over it. */
         struct Clipboard
         {
+            te::SafeSelectable<te::Edit> song;          // automation goes back only into the song it is from
             std::vector<CopiedClip> clips;
             double pieceBeats = 0.0;
             int pieceRows = 0;
@@ -56,6 +58,8 @@ namespace harmonia::ui::arrangement
             static Clipboard clipboard;
             return clipboard;
         }
+
+        const char* const followsClipsKey = "automationFollowsClips";
 
         /** What a track has between two beats, as copies (the track isn't touched). */
         void copyRange (te::AudioTrack& track, double from, double to, int trackOffset, std::vector<CopiedClip>& into)
@@ -137,6 +141,27 @@ namespace harmonia::ui::arrangement
         return rightHalves.size();
     }
 
+    bool ArrangementModel::automationFollowsClips() const
+    {
+        return project.getEdit().engine.getPropertyStorage().getPropertiesFile().getBoolValue (followsClipsKey, true);
+    }
+
+    void ArrangementModel::setAutomationFollowsClips (bool follows)
+    {
+        auto& settings = project.getEdit().engine.getPropertyStorage().getPropertiesFile();
+        settings.setValue (followsClipsKey, follows);
+        settings.saveIfNeeded();
+    }
+
+    void ArrangementModel::carryAutomation (const std::vector<core::automation_pieces::Carried>& carried, bool copied)
+    {
+        if (carried.empty() || ! automationFollowsClips())
+            return;
+
+        core::automation_pieces::carry (carried, copied);
+        changed();
+    }
+
     int ArrangementModel::copySelected()
     {
         const auto selected = getSelectedClips();
@@ -155,12 +180,21 @@ namespace harmonia::ui::arrangement
 
         auto& clipboard = getClipboard();
         clipboard = {};
+        clipboard.song = &project.getEdit();
 
         for (auto* clip : selected)
+        {
+            // With each clip, the automation that is its own: it goes where the clip is pasted.
+            const auto start = clips::getStartBeat (*clip);
+            auto* track = dynamic_cast<te::AudioTrack*> (clip->getTrack());
+
             clipboard.clips.push_back ({ te::ClipCopy::fromClip (*clip),
                                          indexOf (clip->getTrack()) - topTrack,
-                                         clips::getStartBeat (*clip) - firstBeat,
-                                         clips::getStartBeat (*clip), std::nullopt });
+                                         start - firstBeat,
+                                         start, std::nullopt,
+                                         track != nullptr ? core::automation_pieces::copyOwn (*track, start, clips::getEndBeat (*clip))
+                                                          : core::automation_pieces::Piece() });
+        }
 
         return (int) clipboard.clips.size();
     }
@@ -172,6 +206,21 @@ namespace harmonia::ui::arrangement
         if (count > 0)
         {
             project.beginGesture (count == 1 ? "Cut clip" : "Cut clips");
+
+            // What is cut is taken away, to be put elsewhere: its automation with it. (What is
+            // deleted leaves its automation: a line isn't a clip.)
+            if (automationFollowsClips())
+            {
+                for (auto* clip : getSelectedClips())
+                {
+                    if (auto* track = dynamic_cast<te::AudioTrack*> (clip->getTrack()))
+                    {
+                        const auto start = clips::getStartBeat (*clip);
+                        core::automation_pieces::clear (*track, core::automation_pieces::copyOwn (*track, start, clips::getEndBeat (*clip)), start);
+                    }
+                }
+            }
+
             removeClips (getSelectedClips());
         }
 
@@ -189,6 +238,9 @@ namespace harmonia::ui::arrangement
         const auto baseTrack = row >= 0 ? row : std::max (0, indexOf (getCurrentTrack()));
         beat = std::max (0.0, beat);
         juce::Array<te::Clip*> pasted;
+
+        // The automation copied with it goes back onto the tracks of the song it is from.
+        const auto withAutomation = automationFollowsClips() && clipboard.song.get() == &project.getEdit();
 
         if (clipboard.isPiece())
         {
@@ -221,9 +273,10 @@ namespace harmonia::ui::arrangement
                             pasted.add (clip);
 
                 // Its automation too, on the track it was copied from.
-                for (const auto& copied : clipboard.automation)
-                    if (copied.trackOffset == i)
-                        core::automation_pieces::paste (*track, copied.lines, beat);
+                if (withAutomation)
+                    for (const auto& copied : clipboard.automation)
+                        if (copied.trackOffset == i)
+                            core::automation_pieces::paste (*track, copied.lines, beat);
             }
 
             clipsDirty = true;
@@ -242,7 +295,13 @@ namespace harmonia::ui::arrangement
                 if (clips::canTake (*tracks[i], copied.copy))
                 {
                     if (auto* clip = clips::insertCopy (*tracks[i], copied.copy, beat + copied.beatOffset))
+                    {
                         pasted.add (clip);
+
+                        // Its automation too, on the track it was copied from.
+                        if (withAutomation)
+                            core::automation_pieces::paste (*tracks[i], copied.lines, beat + copied.beatOffset);
+                    }
 
                     break;
                 }
@@ -309,6 +368,7 @@ namespace harmonia::ui::arrangement
             return 0;
 
         Clipboard copied;
+        copied.song = &project.getEdit();
         copied.pieceBeats = piece->getLength();
         copied.pieceRows = piece->getNumRows();
 
@@ -340,7 +400,7 @@ namespace harmonia::ui::arrangement
 
             // What is cut is taken away, to be put elsewhere: its automation with it. (What is
             // deleted leaves its automation: a line isn't a clip.)
-            if (piece.has_value())
+            if (piece.has_value() && automationFollowsClips())
                 for (int row = piece->firstRow; row <= piece->lastRow; ++row)
                     if (auto* track = getTrack (row); track != nullptr && ! isLockedRow (track))
                         core::automation_pieces::clear (*track, piece->startBeat, piece->endBeat);
@@ -372,9 +432,10 @@ namespace harmonia::ui::arrangement
         juce::Array<te::Clip*> made;
 
         // The rows' automation is repeated with the clips.
-        for (int row = piece->firstRow; row <= piece->lastRow; ++row)
-            if (auto* track = getTrack (row); track != nullptr && ! isLockedRow (track))
-                core::automation_pieces::paste (*track, core::automation_pieces::copy (*track, piece->startBeat, piece->endBeat), to);
+        if (automationFollowsClips())
+            for (int row = piece->firstRow; row <= piece->lastRow; ++row)
+                if (auto* track = getTrack (row); track != nullptr && ! isLockedRow (track))
+                    core::automation_pieces::paste (*track, core::automation_pieces::copy (*track, piece->startBeat, piece->endBeat), to);
 
         for (int row = piece->firstRow; row <= piece->lastRow; ++row)
             if (auto* track = getTrack (row); track != nullptr && ! isLockedRow (track))
@@ -466,7 +527,7 @@ namespace harmonia::ui::arrangement
 
         // The rows' automation goes along while the piece stays on its rows (another row has
         // other knobs).
-        if (deltaRows == 0)
+        if (deltaRows == 0 && automationFollowsClips())
         {
             for (int row = piece->firstRow; row <= piece->lastRow; ++row)
             {

@@ -100,6 +100,9 @@ same list).
   it.
 - With no line, the panel shows a dashed line: the current value of the knob.
 - The line is tied to the bars: when the tempo changes, the points stay on their beats.
+- **Lines go with clips.** Move a clip along its track, copy it, repeat it (Ctrl+B) or cut and paste it, and
+  the lines that have points under it go with it. **Edit → Automation follows clips** turns that off. More:
+  the [arrangement](arrangement.md) cheat sheet, "A piece of time".
 - Every track remembers which knob you were looking at in the panel.
 - The lines are saved in the project and are heard in the WAV export.
 

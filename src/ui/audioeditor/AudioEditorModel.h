@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/AudioTempo.h"
 #include "core/Clips.h"
 #include "ui/arrangement/ArrangementModel.h"
 
@@ -85,6 +86,13 @@ namespace harmonia::ui::audioeditor
 
         /** Can the sound be slid (a clip following the tempo that doesn't repeat)? */
         bool canSlide() const;
+
+        /** Can the sound be slid under the clip by hand (any clip that doesn't repeat)? */
+        bool canSlip() const;
+
+        /** Takes the sound in hand, to slide it under the clip as the mouse goes (Slip::moveTo):
+            one undo step. Nothing if it can't be slid. */
+        std::optional<core::audio_tempo::Slip> beginSlip();
 
         /** Does the clip follow beat by beat (its sound doesn't keep one tempo)? The song's beats
             then lie over the file where the sound's own beats are, unevenly. */

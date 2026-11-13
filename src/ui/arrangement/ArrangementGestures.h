@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/AudioTempo.h"
 #include "ui/arrangement/ArrangementModel.h"
 #include "ui/arrangement/ArrangementView.h"
 #include "ui/AudioClipHandles.h"
@@ -83,7 +84,7 @@ namespace harmonia::ui::arrangement
         std::optional<std::pair<DrawnClip, Zone>> hitTest (juce::Point<float>);
 
     private:
-        enum class Kind { none, move, resizeStart, resizeEnd, erase, rectangle, pan, fadeIn, fadeOut, gain, timeSelect, moveTime };
+        enum class Kind { none, move, resizeStart, resizeEnd, erase, rectangle, pan, fadeIn, fadeOut, gain, timeSelect, moveTime, slip };
 
         ArrangementModel& model;
         ArrangementView& view;
@@ -105,6 +106,10 @@ namespace harmonia::ui::arrangement
         te::Clip::Ptr grabbed;
         double grabbedStart = 0.0;
         enum class Copy { none, linked, independent } copy = Copy::none;
+        bool copied = false;            // what the hand holds are copies this drag made
+
+        // the sound of a clip, slid under it
+        std::optional<core::audio_tempo::Slip> slip;
         bool toggleOnClick = false, selectOnlyOnClick = false;
         double appliedDelta = 0.0;
         int appliedTrackDelta = 0;
@@ -128,6 +133,9 @@ namespace harmonia::ui::arrangement
         void beginMove (te::Clip&, const Pointer&);
         void dragMove (const Pointer&);
         void makeCopies();
+        void carryAutomation();
+        bool beginSlip (te::Clip&, int trackIndex);
+        void dragSlip (const Pointer&);
         void dragResize (const Pointer&);
         void dragHandle (const Pointer&);
         float grabbedGainY = 0.0f;

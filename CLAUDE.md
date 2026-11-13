@@ -85,6 +85,13 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   `audio::consolidate` (звук — `audio::renderClips`: клипы без эффектов дорожки); автоматизация, которая едет
   с куском на своей дорожке, — `core::automation_pieces` (линии целиком — `core::automation_curves`).
   Команда, которая переносит кусок времени, берёт с собой и автоматизацию (решение 49).
+- Автоматизация едет с клипами (решение 68, переключатель `ArrangementModel::automationFollowsClips`, в тестах
+  чистить ключ `automationFollowsClips`): новая команда, которая двигает или копирует целые клипы вдоль их
+  дорожки, зовёт `ArrangementModel::carryAutomation` (что принадлежит клипу — `core::automation_pieces::copyOwn`:
+  только линии со своими точками под ним); команда над куском времени спрашивает тот же переключатель. Удаление
+  клипа линии не трогает, перенос на другую дорожку — тоже.
+- Сдвиг звука внутри клипа (slip, Ctrl+Shift+тянуть) — только через `core::audio_tempo::slide` / `Slip`
+  (`canSlide`: не клип с повтором); жест начинает вызывающий.
 - Аранжировка: поведение — в `ui/arrangement/ArrangementModel` и `ArrangementGestures` (тесты без окна).
   Открытый клип и текущая дорожка живут в `ArrangementModel`; `MainComponent` переносит их в piano roll.
   Перед сменой клипа piano roll — `NoteInput::finishTake()`.

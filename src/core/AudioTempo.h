@@ -53,10 +53,32 @@ namespace harmonia::core::audio_tempo
         for a clip that repeats. Into the current undo step. Returns the seconds of sound hidden. */
     double startOnBeat (te::WaveAudioClip&, const beat_finder::Beat& beat);
 
-    /** Slides the sound of a clip following the tempo under the clip by `beats` of the song
-        (earlier: negative), the clip staying where it is: for a first beat taken a step off.
-        As far as the file goes. Into the current undo step. Returns false if it couldn't move. */
+    /** Can the sound of the clip be slid under it (slide, Slip)? Not that of a clip that repeats. */
+    bool canSlide (const te::WaveAudioClip&);
+
+    /** Slides the sound of a clip under the clip by `beats` of the song (earlier: negative), the
+        clip staying where it is and as long as it is: for a first beat taken a step off, for a
+        take that came in late. As far as the file goes: never from before its start, nor so far
+        that nothing of it is left under the clip's start. Into the current undo step. Returns
+        false if it couldn't move. */
     bool slide (te::WaveAudioClip&, double beats);
+
+    /** A sound slid by hand under its clip (slip editing). It remembers where the sound lay when
+        the hand took it; each move of the hand puts it so many beats from there. Into the
+        current undo step. */
+    class Slip
+    {
+    public:
+        explicit Slip (te::WaveAudioClip&);
+
+        /** The sound `beats` of the song later (earlier: negative) than it lay when it was taken,
+            as far as the file goes (see slide). False: it lies where it lay then. */
+        bool moveTo (double beats);
+
+    private:
+        te::WaveAudioClip::Ptr clip;
+        te::ClipPosition from;
+    };
 
     bool followsTempo (const te::AudioClipBase&);
 

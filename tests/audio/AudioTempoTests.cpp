@@ -3,6 +3,7 @@
 #include "TestAudioFiles.h"
 #include "audio/Consolidate.h"
 #include "audio/Export.h"
+#include "core/AudioClips.h"
 #include "core/AudioTempo.h"
 #include "core/Clips.h"
 #include "core/Project.h"
@@ -426,6 +427,79 @@ TEST_SUITE ("audio: clips follow the song tempo")
         CHECK (clip->getPosition().getOffset().inSeconds() == doctest::Approx (0.0));
         CHECK_FALSE (audio_tempo::slide (*clip, 0.25));
     }
+
+    TEST_CASE ("the sound of a clip that plays its file as it is slides under it too; taken in hand, it goes from where it lay")
+    {
+        AudioSong song;
+        song.project->setTempoBpm (120.0);
+
+        // Eight clicks half a second apart, the first half a second into the file (5 s in all).
+        // The clip starts on beat 4 of the song (2 s): the clicks are at 2.5 s, 3 s...
+        const auto file = writeClicks (song.temp.getFile ("Clicks.wav"), 120.0, 8, 0.5, 0.5);
+        auto* clip = song.add (file, 4.0);
+        song.project->getEdit().dispatchPendingUpdatesSynchronously();
+        song.project->clearUndoHistory();
+        REQUIRE_FALSE (audio_tempo::followsTempo (*clip));
+        CHECK (audio_tempo::canSlide (*clip));
+
+        const auto offset = [clip] { return clip->getPosition().getOffset().inSeconds(); };
+        const auto exportedClicks = [&song]
+        {
+            double sampleRate = 0.0;
+            const auto rendered = song.render (sampleRate);
+            return findClicks (rendered, sampleRate);
+        };
+
+        auto clicks = exportedClicks();
+        REQUIRE (clicks.size() == 8);
+        CHECK (std::abs (clicks[0] - 2.5) < 0.004);
+
+        // Half a beat earlier (a quarter of a second at 120 BPM): the clip stays where it is and
+        // as long as it is, every click is a quarter of a second earlier.
+        song.project->beginGesture ("Slide the sound");
+        CHECK (audio_tempo::slide (*clip, -0.5));
+        CHECK (offset() == doctest::Approx (0.25));
+        CHECK (core::clips::getStartBeat (*clip) == doctest::Approx (4.0));
+        CHECK (core::clips::getEndBeat (*clip) == doctest::Approx (14.0));
+        clicks = exportedClicks();
+        REQUIRE (clicks.size() == 8);
+        CHECK (std::abs (clicks[0] - 2.25) < 0.004);
+        CHECK (std::abs (clicks[7] - 5.75) < 0.004);
+
+        // Later only as far as the file has sound before; earlier until hardly anything of the
+        // file is left under the clip.
+        CHECK (audio_tempo::slide (*clip, 100.0));
+        CHECK (offset() == doctest::Approx (0.0));
+        CHECK_FALSE (audio_tempo::slide (*clip, 1.0));
+        CHECK (audio_tempo::slide (*clip, -100.0));
+        CHECK (offset() == doctest::Approx (4.95).epsilon (0.001));
+        CHECK_FALSE (audio_tempo::slide (*clip, -1.0));
+        song.project->undo();
+        CHECK (offset() == doctest::Approx (0.0));
+
+        // Taken in hand (slip editing): every move is counted from where the sound lay then.
+        song.project->beginGesture ("Slide the sound");
+        audio_tempo::Slip slip (*clip);
+        CHECK (slip.moveTo (-0.5));
+        CHECK (offset() == doctest::Approx (0.25));
+        CHECK (slip.moveTo (-1.0));
+        CHECK (offset() == doctest::Approx (0.5));
+        CHECK_FALSE (slip.moveTo (0.5));        // later than the file starts: it lies where it lay
+        CHECK (offset() == doctest::Approx (0.0));
+        CHECK (slip.moveTo (-0.25));
+        clicks = exportedClicks();
+        REQUIRE (clicks.size() == 8);
+        CHECK (std::abs (clicks[0] - 2.375) < 0.004);
+        song.project->undo();
+        CHECK (offset() == doctest::Approx (0.0));
+
+        // A sound that repeats is not slid.
+        song.project->beginGesture ("Loop");
+        core::audio_clips::setLooping (*clip, true);
+        CHECK_FALSE (audio_tempo::canSlide (*clip));
+        CHECK_FALSE (audio_tempo::slide (*clip, -0.5));
+    }
+
 
     TEST_CASE ("a sound that speeds up follows beat by beat: every hit on a beat of the song, whatever the song's tempo")
     {

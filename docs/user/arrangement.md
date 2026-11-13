@@ -35,6 +35,7 @@ drag them onto tracks.
 | Drag a clip **by its name** (the strip at its top) | Move it (also to another track). Everything selected moves |
 | **Shift** + drag its name | **A linked copy**: edit one and all of them change (like pattern clones in FL) |
 | **Ctrl** + drag its name | An ordinary (independent) copy |
+| **Ctrl + Shift** + drag on a clip of sound, below its name | **Slide the sound inside the clip**: the clip stays where it is, its sound moves under it (see "Audio clips" below) |
 | Drag **anywhere else in the rows**: over a clip below its name, or on an empty spot | **Select a piece of time** on the rows the mouse crosses, whatever the clips' borders (see "A piece of time" below) |
 | **Ctrl** + click | Add to the selection / remove from it |
 | Drag the left / right edge | Hide or show the start / end of the clip (the notes stay in place) |
@@ -108,6 +109,15 @@ one clip and end in the middle of another, notes and sound alike. (A clip itself
   its own rows, the rows' automation lines (volume, pan, effect knobs) over that time go with it; where the
   piece was taken from, a line runs straight from edge to edge. **Del** leaves the lines alone. Onto other
   rows only the clips go: another track has its own knobs.
+- **Automation follows clips too.** A clip you move along its track by its name, copy (Ctrl / Shift + drag),
+  repeat (Ctrl+B) or cut and paste on its own track takes its automation with it: the lines of the track
+  that have points of their own under the clip (a filter rise drawn for this clip). A line that only passes
+  under the clip, on its way between two points far apart, stays: it belongs to the song, not to the clip.
+  Where the clip was, its lines run straight from edge to edge. The lines move when you let go of the mouse;
+  the clip and its lines are one Ctrl+Z step. Deleting a clip leaves the lines, and so does dragging it to
+  another track.
+- **Edit → Automation follows clips** (ticked from the start, remembered) turns this off: then the lines stay
+  where they are in the song, whatever you do with clips and with pieces of time.
 - Notes land only on instrument tracks, sound only on audio tracks: a piece dropped where it can't go stays
   where it was, and the status bar says why.
 - A part moved or copied out of a linked clip is a clip of its own (not linked).
@@ -126,6 +136,11 @@ one clip and end in the middle of another, notes and sound alike. (A clip itself
 - The clip shows the **waveform**. Moving, copying (Shift/Ctrl + drag, Ctrl+B), deleting and trimming the
   edges work the same as for MIDI clips. You cannot stretch a clip past the end of the file, unless you turn
   on looping for it (below).
+- **Slide the sound inside the clip** (slip editing): hold **Ctrl + Shift** and drag on the clip, below its
+  name. The clip stays where it is and as long as it is; its sound goes earlier or later under it with the
+  mouse. For a take that came in a little late, or to pick another part of a long recording without touching
+  the clip's edges. It moves by the grid; hold **Alt** too to move it freely. It stops where the file
+  starts. One Ctrl+Z step. Not for a clip that repeats (Loop).
 - **Looping:** the ▾ menu → **Loop (repeats when made longer)**. What the clip plays now becomes the loop:
   drag the right edge and the sound repeats for as long as the clip lasts. A "↻" appears on the clip, with a
   thin line between passes. The same item again makes the clip play once.
@@ -174,6 +189,7 @@ are dim. Above it is a ruler with the bars of the song.
 | The white line on the left / right | Drag to show or hide the start / end of the sound (on the **Snap** grid; with **Alt**, freely). It does not go past the file |
 | The squares and the circle at the top | The clip's fades and gain, as on the clip in the arrangement; a double click resets |
 | Click the waveform or the ruler | Put the song cursor there |
+| **Ctrl + Shift** + drag on the waveform | Slide the sound inside the clip: the bright part moves along the file, the clip stays where it is in the song (on the grid; with **Alt**, freely). A label by the mouse says from which second of the file the clip plays |
 | Wheel / Ctrl+wheel | Scroll / zoom |
 | The middle mouse button | Drag the view |
 | **Show clip** | Show the whole part that plays |

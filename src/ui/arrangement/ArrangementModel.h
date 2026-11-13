@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/RoutineJob.h"
+#include "core/AutomationPieces.h"
 #include "core/Markers.h"
 #include "core/TempoChanges.h"
 #include "core/TrackFolders.h"
@@ -384,6 +385,17 @@ namespace harmonia::ui::arrangement
         te::MidiClip* createClip (te::AudioTrack&, double beat);
 
         void deleteSelected();
+
+        /** Automation follows clips (the Edit menu; kept in the program's settings, on at first):
+            a clip that is moved, copied, duplicated, or cut and pasted along its own track takes
+            with it what the track's lines do under it (core::automation_pieces::copyOwn), and so
+            does a piece of time. Off: the lines stay where they are in the song. */
+        bool automationFollowsClips() const;
+        void setAutomationFollowsClips (bool);
+
+        /** Clips went along their tracks in the current undo step (or were `copied` along them):
+            their automation goes too, if it follows clips. */
+        void carryAutomation (const std::vector<core::automation_pieces::Carried>&, bool copied);
 
         /** Deletes clips in the current undo transaction (for gestures; see beginGesture). */
         void removeClips (const juce::Array<te::Clip*>&);

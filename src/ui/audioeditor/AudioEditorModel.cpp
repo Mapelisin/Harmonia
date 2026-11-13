@@ -218,6 +218,23 @@ namespace harmonia::ui::audioeditor
         return wave != nullptr && audio_tempo::followsTempo (*wave) && ! core::audio_clips::isLooping (*wave);
     }
 
+    bool AudioEditorModel::canSlip() const
+    {
+        auto* wave = getWaveClip();
+        return wave != nullptr && audio_tempo::canSlide (*wave);
+    }
+
+    std::optional<audio_tempo::Slip> AudioEditorModel::beginSlip()
+    {
+        auto* wave = getWaveClip();
+
+        if (wave == nullptr || ! audio_tempo::canSlide (*wave))
+            return std::nullopt;
+
+        beginChange ("Slide the sound");
+        return audio_tempo::Slip (*wave);
+    }
+
     bool AudioEditorModel::followsBeatByBeat() const
     {
         auto* clip = getClip();

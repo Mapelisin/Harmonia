@@ -13,8 +13,10 @@ namespace harmonia::ui::audioeditor
         The whole file is shown, the part the clip plays bright. Drag the start or end line:
         show more or less of the sound (the grid snaps it, Alt: free). The handles at the top:
         drag the left / right one across for a fade in / out, the middle one up and down for the
-        clip's gain; double-click one to reset it. A click puts the playhead there. Wheel:
-        scroll; Ctrl+wheel: zoom; middle button: drag the view.
+        clip's gain; double-click one to reset it. A click puts the playhead there. Ctrl+Shift
+        and a drag on the sound: the played part goes along the file with the mouse, the clip
+        staying where it is in the song - its sound slides under it (the grid snaps it, Alt:
+        free). Wheel: scroll; Ctrl+wheel: zoom; middle button: drag the view.
 
         In the ruler above the waveform (`ruler`), while the clip follows the tempo: drag a line
         of the song's grid to put that beat over another moment of the sound; near a hit it goes
@@ -75,7 +77,7 @@ namespace harmonia::ui::audioeditor
         std::optional<double> getMovedBeat() const;
 
     private:
-        enum class Kind { none, click, pan, trimStart, trimEnd, fadeIn, fadeOut, gain, beat };
+        enum class Kind { none, click, pan, trimStart, trimEnd, fadeIn, fadeOut, gain, beat, slip };
 
         AudioEditorModel& model;
         View& view;
@@ -88,10 +90,12 @@ namespace harmonia::ui::audioeditor
         float grabbedGainY = 0.0f;
         double grabbedBeat = 0.0, grabbedSpanBeats = 1.0;
         bool isOnHit = false;
+        std::optional<core::audio_tempo::Slip> slip;
 
         core::snap::Context getSnapContext() const;
         void dragTrim (const Pointer&);
         void dragHandle (const Pointer&);
         void dragBeat (const Pointer&);
+        void dragSlip (const Pointer&);
     };
 }

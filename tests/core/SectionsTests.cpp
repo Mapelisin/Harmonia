@@ -479,4 +479,120 @@ TEST_SUITE ("core: the automation of a piece of time")
             CHECK (after[sampleAt (20.25)] == doctest::Approx (0.2f).epsilon (1.0e-3));
         }
     }
+
+    TEST_CASE ("the automation of a clip goes where the clip went: the lines with points of their own under it, and no others")
+    {
+        Song song;
+        auto& edit = song.edit();
+        auto& volume = *song.keys->getVolumePlugin()->volParam;
+        auto& pan = *song.keys->getVolumePlugin()->panParam;
+        const auto at = [&edit] (double beat) { return edit.tempoSequence.toTime (te::BeatPosition::fromBeats (beat)); };
+
+        // The volume dips under beats 8..12 (where a clip lies); the pan goes slowly from one
+        // side to the other across the whole song.
+        for (auto [beat, value] : { std::pair { 8.0, 0.8f }, std::pair { 9.0, 0.3f }, std::pair { 11.0, 0.3f }, std::pair { 12.0, 0.8f } })
+            volume.getCurve().addPoint (at (beat), value, 0.0f, &edit.getUndoManager());
+
+        pan.getCurve().addPoint (at (0.0), -0.5f, 0.0f, &edit.getUndoManager());
+        pan.getCurve().addPoint (at (32.0), 0.5f, 0.0f, &edit.getUndoManager());
+        song.project->clearUndoHistory();
+
+        const auto volumeBefore = sample (edit, volume, 40.0), panBefore = sample (edit, pan, 40.0);
+        const auto volumePoints = volume.getCurve().getNumPoints(), panPoints = pan.getCurve().getNumPoints();
+
+        // What is the clip's: the dip, not the pan that passes under it.
+        const auto own = automation_pieces::copyOwn (*song.keys, 8.0, 12.0);
+        REQUIRE (own.lines.size() == 1);
+        CHECK (own.lines[0].parameter == volume.paramID);
+        CHECK (own.lengthBeats == doctest::Approx (4.0));
+        CHECK (automation_pieces::copy (*song.keys, 8.0, 12.0).lines.size() == 2);
+        CHECK (automation_pieces::copyOwn (*song.keys, 16.0, 20.0).isEmpty());      // nothing of its own there
+        CHECK (automation_pieces::copyOwn (*song.keys, 4.0, 8.0).isEmpty());        // the point at its end starts what comes next
+        CHECK (automation_pieces::copyOwn (*song.bass, 8.0, 12.0).isEmpty());
+        CHECK (sample (edit, volume, 40.0) == volumeBefore);
+
+        SUBCASE ("moved: the dip is where the clip is now; where it was the line runs straight; the pan is as it was")
+        {
+            song.project->beginGesture ("Move clips");
+            automation_pieces::carry ({ { song.keys, 8.0, 20.0, 4.0 } }, false);
+            const auto after = sample (edit, volume, 40.0);
+            checkSame (volumeBefore, 0.0, after, 0.0, 8.0);
+            checkSame (volumeBefore, 8.0, after, 20.0, 4.0);
+            checkSame (volumeBefore, 24.0, after, 24.0, 16.0);
+
+            for (double b = 8.25; b < 20.0; b += 0.5)
+                CHECK (after[sampleAt (b)] == doctest::Approx (0.8f).epsilon (1.0e-4));
+
+            CHECK (sample (edit, pan, 40.0) == panBefore);
+            CHECK (pan.getCurve().getNumPoints() == panPoints);
+
+            song.project->undo();
+            CHECK (sample (edit, volume, 40.0) == volumeBefore);
+            CHECK (volume.getCurve().getNumPoints() == volumePoints);
+        }
+
+        SUBCASE ("copied: the dip is in both places")
+        {
+            song.project->beginGesture ("Copy clips");
+            automation_pieces::carry ({ { song.keys, 8.0, 20.0, 4.0 } }, true);
+            const auto after = sample (edit, volume, 40.0);
+            checkSame (volumeBefore, 0.0, after, 0.0, 20.0);
+            checkSame (volumeBefore, 8.0, after, 20.0, 4.0);
+            checkSame (volumeBefore, 24.0, after, 24.0, 16.0);
+            CHECK (sample (edit, pan, 40.0) == panBefore);
+        }
+
+        SUBCASE ("moved a little, onto a part of where it was: the dip is a beat later")
+        {
+            song.project->beginGesture ("Move clips");
+            automation_pieces::carry ({ { song.keys, 8.0, 9.0, 4.0 } }, false);
+            const auto after = sample (edit, volume, 40.0);
+            checkSame (volumeBefore, 0.0, after, 0.0, 8.0);
+            checkSame (volumeBefore, 8.0, after, 9.0, 4.0);
+            checkSame (volumeBefore, 13.0, after, 13.0, 27.0);
+            CHECK (after[sampleAt (8.25)] == doctest::Approx (0.8f).epsilon (1.0e-4));
+        }
+
+        SUBCASE ("two clips that change places: each takes its own")
+        {
+            // A rise under beats 16..20 too.
+            for (auto [beat, value] : { std::pair { 16.0, 0.8f }, std::pair { 17.0, 0.9f }, std::pair { 19.0, 0.9f }, std::pair { 20.0, 0.8f } })
+                volume.getCurve().addPoint (at (beat), value, 0.0f, &edit.getUndoManager());
+
+            const auto before = sample (edit, volume, 40.0);
+            song.project->beginGesture ("Move clips");
+            automation_pieces::carry ({ { song.keys, 8.0, 16.0, 4.0 }, { song.keys, 16.0, 8.0, 4.0 } }, false);
+            const auto after = sample (edit, volume, 40.0);
+            checkSame (before, 0.0, after, 0.0, 8.0);
+            checkSame (before, 16.0, after, 8.0, 4.0);
+            checkSame (before, 12.0, after, 12.0, 4.0);
+            checkSame (before, 8.0, after, 16.0, 4.0);
+            checkSame (before, 20.0, after, 20.0, 20.0);
+        }
+
+        SUBCASE ("cut: where the clip was its own lines run straight, and the piece goes where it is pasted")
+        {
+            song.project->beginGesture ("Cut clips");
+            automation_pieces::clear (*song.keys, own, 8.0);
+            auto after = sample (edit, volume, 40.0);
+
+            for (double b = 0.25; b < 40.0; b += 0.5)
+                CHECK (after[sampleAt (b)] == doctest::Approx (0.8f).epsilon (1.0e-4));
+
+            CHECK (sample (edit, pan, 40.0) == panBefore);
+            CHECK (pan.getCurve().getNumPoints() == panPoints);
+
+            automation_pieces::paste (*song.keys, own, 24.0);
+            after = sample (edit, volume, 40.0);
+            checkSame (volumeBefore, 8.0, after, 24.0, 4.0);
+            CHECK (after[sampleAt (20.25)] == doctest::Approx (0.8f).epsilon (1.0e-4));
+            CHECK (after[sampleAt (30.25)] == doctest::Approx (0.8f).epsilon (1.0e-4));
+            CHECK (sample (edit, pan, 40.0) == panBefore);
+
+            // Not onto another track.
+            automation_pieces::clear (*song.bass, own, 8.0);
+            automation_pieces::paste (*song.bass, own, 8.0);
+            CHECK (song.bass->getVolumePlugin()->volParam->getCurve().getNumPoints() == 0);
+        }
+    }
 }

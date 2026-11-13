@@ -3,6 +3,7 @@
 #include "TestAudioFiles.h"
 #include "TestSession.h"
 #include "audio/Instruments.h"
+#include "core/AudioClips.h"
 #include "core/ClipLinks.h"
 #include "core/Clips.h"
 #include "core/NoteEditor.h"
@@ -146,6 +147,19 @@ namespace
         ArrangementModel model { *project };
         ArrangementView view;
         ArrangementGestures gestures { model, view };
+    };
+
+    /** The tests share the program's settings: "automation follows clips" is as the program
+        starts with it (on) before and after. */
+    struct FollowsClipsSetting
+    {
+        FollowsClipsSetting()     { forget(); }
+        ~FollowsClipsSetting()    { forget(); }
+
+        static void forget()
+        {
+            test::session().getEngine().getPropertyStorage().getPropertiesFile().removeValue ("automationFollowsClips");
+        }
     };
 }
 
@@ -657,6 +671,222 @@ TEST_SUITE ("arrangement: a piece of time")
         CHECK (curve.getNumPoints() == 2);
         CHECK (valueAt (6.0) == doctest::Approx (0.6f));
     }
+
+    TEST_CASE ("automation follows clips: moved, copied, repeated, cut and pasted along its row, a clip takes its automation; the switch in the Edit menu turns that off")
+    {
+        const FollowsClipsSetting setting;
+        TimeFixture f;
+        auto& edit = f.project->getEdit();
+        auto& curve = f.bass->getVolumePlugin()->volParam->getCurve();
+        const auto at = [&edit] (double beat) { return edit.tempoSequence.toTime (te::BeatPosition::fromBeats (beat)); };
+        const auto valueAt = [&] (double beat) { return curve.getValueAt (at (beat), 0.0f); };
+        const auto bassClip = [&f] { return clips::getClips (*f.bass).getFirst(); };
+
+        // The bass dips under its clip (beats 4..12): down over beat 5, up again over beat 10.
+        for (auto [beat, value] : { std::pair { 5.0, 0.8f }, std::pair { 6.0, 0.4f }, std::pair { 10.0, 0.4f }, std::pair { 11.0, 0.8f } })
+            curve.addPoint (at (beat), value, 0.0f, &edit.getUndoManager());
+
+        dispatch();
+        f.project->clearUndoHistory();
+        CHECK (f.model.automationFollowsClips());       // as the program starts
+        CHECK (valueAt (8.0) == doctest::Approx (0.4f));
+
+        // Dragged eight beats later by its name: the dip is under it there; one undo takes both back.
+        f.drag (f.onName (6.0, 1), f.onName (14.0, 1));
+        dispatch();
+        CHECK (f.spans (*f.bass) == "12-20");
+        CHECK (valueAt (16.0) == doctest::Approx (0.4f).epsilon (0.001));
+        CHECK (valueAt (13.5) == doctest::Approx (0.6f).epsilon (0.001));
+        CHECK (valueAt (8.0) == doctest::Approx (0.8f).epsilon (0.001));
+        f.project->undo();
+        dispatch();
+        CHECK (f.spans (*f.bass) == "4-12");
+        CHECK (valueAt (8.0) == doctest::Approx (0.4f));
+        CHECK (curve.getNumPoints() == 4);
+
+        // Onto another row: the clip goes, its automation stays (the other row has its own knobs).
+        f.drag (f.onName (6.0, 1), f.onName (6.0, 0));
+        dispatch();
+        CHECK (f.spans (*f.bass) == "");
+        CHECK (valueAt (8.0) == doctest::Approx (0.4f));
+        CHECK (curve.getNumPoints() == 4);
+        CHECK (f.keys->getVolumePlugin()->volParam->getCurve().getNumPoints() == 0);
+        f.project->undo();
+        dispatch();
+        CHECK (f.spans (*f.bass) == "4-12");
+
+        // Ctrl+drag: a copy, with a copy of the dip; the clip it was made of keeps its own.
+        f.drag (f.onName (6.0, 1), f.onName (18.0, 1), ctrl);
+        dispatch();
+        CHECK (f.spans (*f.bass) == "4-12, 16-24");
+        CHECK (valueAt (8.0) == doctest::Approx (0.4f).epsilon (0.001));
+        CHECK (valueAt (20.0) == doctest::Approx (0.4f).epsilon (0.001));
+        CHECK (valueAt (14.0) == doctest::Approx (0.8f).epsilon (0.001));
+        f.project->undo();
+        dispatch();
+        CHECK (f.spans (*f.bass) == "4-12");
+        CHECK (curve.getNumPoints() == 4);
+
+        // Ctrl+B: the copy right after the clip, with the dip.
+        f.model.setSelection ({ bassClip() });
+        f.model.duplicateSelected (true);
+        dispatch();
+        CHECK (f.spans (*f.bass) == "4-12, 12-20");
+        CHECK (valueAt (8.0) == doctest::Approx (0.4f).epsilon (0.001));
+        CHECK (valueAt (16.0) == doctest::Approx (0.4f).epsilon (0.001));
+        f.project->undo();
+        dispatch();
+        CHECK (f.spans (*f.bass) == "4-12");
+        CHECK (curve.getNumPoints() == 4);
+
+        // Cut, and pasted at beat 16: the dip went with the clip; where it was the line is level.
+        f.model.setSelection ({ bassClip() });
+        CHECK (f.model.cutSelected() == 1);
+        dispatch();
+        CHECK (f.spans (*f.bass) == "");
+        CHECK (valueAt (8.0) == doctest::Approx (0.8f).epsilon (0.001));
+        CHECK (f.model.paste (16.0, 1) == 1);
+        dispatch();
+        CHECK (f.spans (*f.bass) == "16-24");
+        CHECK (valueAt (20.0) == doctest::Approx (0.4f).epsilon (0.001));
+        CHECK (valueAt (8.0) == doctest::Approx (0.8f).epsilon (0.001));
+        f.project->undo();
+        f.project->undo();
+        dispatch();
+        CHECK (f.spans (*f.bass) == "4-12");
+        CHECK (valueAt (8.0) == doctest::Approx (0.4f));
+        CHECK (curve.getNumPoints() == 4);
+
+        // Copied and pasted: the clip it was copied from keeps its dip, the new one has it too.
+        f.model.setSelection ({ bassClip() });
+        CHECK (f.model.copySelected() == 1);
+        CHECK (f.model.paste (16.0, 1) == 1);
+        dispatch();
+        CHECK (f.spans (*f.bass) == "4-12, 16-24");
+        CHECK (valueAt (8.0) == doctest::Approx (0.4f).epsilon (0.001));
+        CHECK (valueAt (20.0) == doctest::Approx (0.4f).epsilon (0.001));
+        f.project->undo();
+        dispatch();
+        CHECK (curve.getNumPoints() == 4);
+
+        // Deleted: the line stays (a line isn't a clip).
+        f.model.setSelection ({ bassClip() });
+        f.model.deleteSelected();
+        dispatch();
+        CHECK (f.spans (*f.bass) == "");
+        CHECK (curve.getNumPoints() == 4);
+        CHECK (valueAt (8.0) == doctest::Approx (0.4f));
+        f.project->undo();
+        dispatch();
+        CHECK (f.spans (*f.bass) == "4-12");
+
+        // The switch is in the Edit menu, ticked while automation follows.
+        auto main = std::make_unique<ui::MainComponent> (test::session(), *f.project);
+        main->setBounds (0, 0, 1280, 800);
+        dispatch();
+
+        const auto findSwitch = [&main]() -> std::optional<juce::PopupMenu::Item>
+        {
+            const auto editMenu = main->getMainMenu().createEditMenu();
+
+            for (juce::PopupMenu::MenuItemIterator it (editMenu, false); it.next();)
+                if (it.getItem().text == "Automation follows clips")
+                    return it.getItem();
+
+            return {};
+        };
+
+        auto item = findSwitch();
+        REQUIRE (item.has_value());
+        CHECK (item->isTicked);
+        REQUIRE (item->action != nullptr);
+        item->action();
+        dispatch();
+        CHECK_FALSE (f.model.automationFollowsClips());
+        item = findSwitch();
+        REQUIRE (item.has_value());
+        CHECK_FALSE (item->isTicked);
+        main.reset();
+        f.project->clearUndoHistory();
+
+        // Switched off, the lines stay where they are in the song whatever the clips do...
+        f.drag (f.onName (6.0, 1), f.onName (14.0, 1));
+        dispatch();
+        CHECK (f.spans (*f.bass) == "12-20");
+        CHECK (valueAt (8.0) == doctest::Approx (0.4f));
+        CHECK (curve.getNumPoints() == 4);
+        f.project->undo();
+        dispatch();
+        CHECK (f.spans (*f.bass) == "4-12");
+
+        f.model.setSelection ({ bassClip() });
+        CHECK (f.model.cutSelected() == 1);
+        CHECK (f.model.paste (16.0, 1) == 1);
+        dispatch();
+        CHECK (valueAt (8.0) == doctest::Approx (0.4f));
+        CHECK (curve.getNumPoints() == 4);
+        f.project->undo();
+        f.project->undo();
+        dispatch();
+        CHECK (f.spans (*f.bass) == "4-12");
+
+        // ...and whatever a piece of time does.
+        f.model.setTimeSelection (4.0, 12.0, 1, 1);
+        CHECK (f.model.moveTime (8.0, 0, false).isEmpty());
+        dispatch();
+        CHECK (f.spans (*f.bass) == "12-20");
+        CHECK (valueAt (8.0) == doctest::Approx (0.4f));
+        CHECK (curve.getNumPoints() == 4);
+    }
+
+
+    TEST_CASE ("Ctrl+Shift+drag on a clip of sound slides the sound under it: on the grid (Alt: freely), as far as the file goes, one undo step")
+    {
+        TimeFixture f;
+        auto* guitar = dynamic_cast<te::WaveAudioClip*> (f.guitarClip);
+        REQUIRE (guitar != nullptr);
+        const auto offset = [guitar] { return guitar->getPosition().getOffset().inSeconds(); };
+        constexpr int both = ctrl | shift;
+
+        // Two beats earlier (a second at 120 BPM): the clip stays, and plays its file from a second in.
+        f.drag (f.at (3.0, 2), f.at (1.0, 2), both);
+        dispatch();
+        CHECK (offset() == doctest::Approx (1.0));
+        CHECK (f.spans (*f.guitar) == "0-8");
+        CHECK (f.piece() == "none");
+        CHECK (f.project->getUndoDescription() == "Slide the sound");
+
+        // Later again, and further than the file starts: it stops where the file starts.
+        f.drag (f.at (3.0, 2), f.at (7.0, 2), both);
+        CHECK (offset() == doctest::Approx (0.0));
+        f.project->undo();
+        CHECK (offset() == doctest::Approx (1.0));
+        f.project->undo();
+        CHECK (offset() == doctest::Approx (0.0));
+
+        // On the grid the sound goes by whole beats; with Alt, where the mouse is.
+        f.drag (f.at (3.0, 2), f.at (1.6, 2), both);
+        CHECK (offset() == doctest::Approx (0.5));
+        f.project->undo();
+        f.drag (f.at (3.0, 2), f.at (1.6, 2), both | alt);
+        CHECK (offset() == doctest::Approx (0.7).epsilon (0.01));
+        f.project->undo();
+        CHECK (offset() == doctest::Approx (0.0));
+
+        // A clip of notes is not slid: the drag selects time, as it does without the keys.
+        f.drag (f.at (5.0, 1), f.at (7.0, 1), both);
+        CHECK (f.piece() == "5-7 rows 1-1");
+        f.model.clearTimeSelection();
+
+        // Nor is a sound that repeats.
+        f.project->beginGesture ("Loop");
+        core::audio_clips::setLooping (*guitar, true);
+        dispatch();
+        const auto was = offset();
+        f.drag (f.at (3.0, 2), f.at (1.0, 2), both);
+        CHECK (offset() == doctest::Approx (was));
+    }
+
 
     TEST_CASE ("frozen tracks and folded folders are left alone; rows that go away take the piece with them")
     {
