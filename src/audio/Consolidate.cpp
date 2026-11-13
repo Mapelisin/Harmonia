@@ -136,29 +136,71 @@ namespace harmonia::audio::consolidate
         return getClipsIn (track, fromBeat, toBeat).size();
     }
 
+    namespace
+    {
+        class Preparation final : public PrepareJob
+        {
+        public:
+            Preparation (te::AudioTrack& t, double from, double to)
+                : track (t), fromBeat (from), toBeat (to)
+            {
+                begin (run());
+            }
+
+            ~Preparation() override
+            {
+                stop();
+            }
+
+        private:
+            te::AudioTrack& track;
+            const double fromBeat, toBeat;
+
+            Steps run()
+            {
+                const auto in = getClipsIn (track, fromBeat, toBeat);
+
+                if (in.isEmpty() || toBeat - fromBeat < smallestPieceBeats)
+                    co_return;
+
+                Piece piece { &track, fromBeat, toBeat, {}, false };
+
+                if (core::tracks::isAudio (track))
+                {
+                    for (auto* clip : in)
+                        if (auto* audio = dynamic_cast<te::AudioClipBase*> (clip))
+                            piece.followsTempo = piece.followsTempo || core::audio_tempo::followsTempo (*audio);
+
+                    auto& edit = track.edit;
+                    piece.sound = edit.engine.getEngineBehaviour().getFileForNewAudioRecording (track, ".wav");
+                    say ("Consolidating " + track.getName());
+
+                    const auto render = ExportJob::clips (track, piece.sound, { toTime (edit, fromBeat), toTime (edit, toBeat) });
+                    co_yield *render;
+
+                    if (render->getError().isNotEmpty())
+                    {
+                        fail (render->getError());
+                        co_return;
+                    }
+                }
+
+                result = piece;
+            }
+        };
+    }
+
+    std::unique_ptr<PrepareJob> makePrepareJob (te::AudioTrack& track, double fromBeat, double toBeat)
+    {
+        return std::make_unique<Preparation> (track, fromBeat, toBeat);
+    }
+
     std::optional<Piece> prepare (te::AudioTrack& track, double fromBeat, double toBeat, juce::String& error)
     {
-        const auto in = getClipsIn (track, fromBeat, toBeat);
-
-        if (in.isEmpty() || toBeat - fromBeat < smallestPieceBeats)
-            return std::nullopt;
-
-        Piece piece { &track, fromBeat, toBeat, {}, false };
-
-        if (! core::tracks::isAudio (track))
-            return piece;
-
-        for (auto* clip : in)
-            if (auto* audio = dynamic_cast<te::AudioClipBase*> (clip))
-                piece.followsTempo = piece.followsTempo || core::audio_tempo::followsTempo (*audio);
-
-        auto& edit = track.edit;
-        piece.sound = edit.engine.getEngineBehaviour().getFileForNewAudioRecording (track, ".wav");
-
-        if (error = renderClips (track, piece.sound, { toTime (edit, fromBeat), toTime (edit, toBeat) }); error.isNotEmpty())
-            return std::nullopt;
-
-        return piece;
+        const auto job = makePrepareJob (track, fromBeat, toBeat);
+        job->finish();
+        error = job->getError();
+        return job->getResult();
     }
 
     te::Clip* apply (core::Project& project, const Piece& piece)

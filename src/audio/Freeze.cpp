@@ -2,6 +2,7 @@
 #include "audio/Effects.h"
 #include "audio/Export.h"
 #include "audio/Instruments.h"
+#include "audio/RoutineJob.h"
 #include "core/AudioClips.h"
 #include "core/Clips.h"
 #include "core/Tracks.h"
@@ -51,82 +52,139 @@ namespace harmonia::audio::freeze
         return clip != nullptr ? clip->getSourceFileReference().getFile() : juce::File();
     }
 
-    juce::String freeze (core::Project& project, te::AudioTrack& track)
+    namespace
     {
-        if (isFrozen (track))
-            return {};
-
-        const auto clips = core::clips::getClips (track);
-
-        if (core::tracks::isBus (track) || clips.isEmpty())
-            return "Nothing to freeze: " + track.getName() + " has no clips";
-
-        auto start = std::numeric_limits<double>::max(), end = 0.0;
-
-        for (auto* clip : clips)
+        /** The track plays `file` (its sound before the fader, from `startBeat`) instead of its
+            clips and what they went through. One undo step. An error message, or empty. */
+        juce::String playFile (core::Project& project, te::AudioTrack& track, const juce::File& file, double startBeat)
         {
-            start = std::min (start, core::clips::getStartBeat (*clip));
-            end = std::max (end, core::clips::getEndBeat (*clip));
-        }
+            auto* undoManager = &track.edit.getUndoManager();
+            project.beginGesture ("Freeze track");
 
-        // From its first clip to its last, and a moment for the sound to ring out.
-        auto& edit = track.edit;
-        const auto& tempo = edit.tempoSequence;
-        const te::TimeRange range (tempo.toTime (te::BeatPosition::fromBeats (start)),
-                                   tempo.toTime (te::BeatPosition::fromBeats (end)) + te::TimeDuration::fromSeconds (exportTailSeconds));
-        const auto file = edit.engine.getEngineBehaviour().getFileForNewAudioRecording (track, ".wav");
-
-        if (const auto error = renderTrack (track, file, range, true); error.isNotEmpty())
-            return error;
-
-        auto* undoManager = &edit.getUndoManager();
-        project.beginGesture ("Freeze track");
-
-        // The file plays instead of the clips and what they went through.
-        for (auto* clip : clips)
-        {
-            if (! clip->isMuted())
+            for (auto* clip : core::clips::getClips (track))
             {
-                clip->state.setProperty (mutedByFreezeId, true, undoManager);
-                clip->setMuted (true);
-            }
-        }
-
-        for (auto* plugin : getSoundPlugins (track))
-        {
-            if (plugin->isEnabled())
-            {
-                plugin->state.setProperty (offByFreezeId, true, undoManager);
-                plugin->setEnabled (false);
-            }
-        }
-
-        juce::String error;
-        auto* frozen = project.addAudioClip (track, file, start, error);
-
-        if (frozen == nullptr)
-        {
-            // As it was: the half-made step taken back.
-            project.undo();
-            return error.isNotEmpty() ? error : juce::String ("Couldn't freeze " + track.getName());
-        }
-
-        core::clips::setFreezeClip (*frozen);
-
-        // Before the track's other clips, where the engine keeps the earliest: it would put it
-        // there itself a moment later, as an undo step of its own.
-        if (auto parent = frozen->state.getParent(); parent.isValid())
-            for (int i = 0; i < parent.getNumChildren(); ++i)
-                if (te::Clip::isClipState (parent.getChild (i)))
+                if (! clip->isMuted())
                 {
-                    parent.moveChild (parent.indexOf (frozen->state), i, undoManager);
-                    break;
+                    clip->state.setProperty (mutedByFreezeId, true, undoManager);
+                    clip->setMuted (true);
+                }
+            }
+
+            for (auto* plugin : getSoundPlugins (track))
+            {
+                if (plugin->isEnabled())
+                {
+                    plugin->state.setProperty (offByFreezeId, true, undoManager);
+                    plugin->setEnabled (false);
+                }
+            }
+
+            juce::String error;
+            auto* frozen = project.addAudioClip (track, file, startBeat, error);
+
+            if (frozen == nullptr)
+            {
+                // As it was: the half-made step taken back.
+                project.undo();
+                return error.isNotEmpty() ? error : juce::String ("Couldn't freeze " + track.getName());
+            }
+
+            core::clips::setFreezeClip (*frozen);
+
+            // Before the track's other clips, where the engine keeps the earliest: it would put it
+            // there itself a moment later, as an undo step of its own.
+            if (auto parent = frozen->state.getParent(); parent.isValid())
+                for (int i = 0; i < parent.getNumChildren(); ++i)
+                    if (te::Clip::isClipState (parent.getChild (i)))
+                    {
+                        parent.moveChild (parent.indexOf (frozen->state), i, undoManager);
+                        break;
+                    }
+
+            frozen->setName (track.getName() + " (frozen)");
+            core::audio_clips::setCrossfades (*frozen, false);
+            track.state.setProperty (frozenId, true, undoManager);
+            return {};
+        }
+
+        class Job final : public RoutineJob
+        {
+        public:
+            Job (core::Project& p, te::AudioTrack& t)
+                : project (p), track (t)
+            {
+                begin (run());
+            }
+
+            ~Job() override
+            {
+                stop();
+            }
+
+        private:
+            core::Project& project;
+            te::AudioTrack& track;
+
+            Steps run()
+            {
+                if (isFrozen (track))
+                    co_return;
+
+                const auto clips = core::clips::getClips (track);
+
+                if (core::tracks::isBus (track) || clips.isEmpty())
+                {
+                    fail ("Nothing to freeze: " + track.getName() + " has no clips");
+                    co_return;
                 }
 
-        frozen->setName (track.getName() + " (frozen)");
-        core::audio_clips::setCrossfades (*frozen, false);
-        track.state.setProperty (frozenId, true, undoManager);
-        return {};
+                auto start = std::numeric_limits<double>::max(), end = 0.0;
+
+                for (auto* clip : clips)
+                {
+                    start = std::min (start, core::clips::getStartBeat (*clip));
+                    end = std::max (end, core::clips::getEndBeat (*clip));
+                }
+
+                // From its first clip to its last, and a moment for the sound to ring out.
+                auto& edit = track.edit;
+                const te::TimeRange range (edit.tempoSequence.toTime (te::BeatPosition::fromBeats (start)),
+                                           edit.tempoSequence.toTime (te::BeatPosition::fromBeats (end))
+                                               + te::TimeDuration::fromSeconds (exportTailSeconds));
+                const auto file = edit.engine.getEngineBehaviour().getFileForNewAudioRecording (track, ".wav");
+                say ("Freezing " + track.getName());
+
+                {
+                    const auto render = ExportJob::track (track, file, range, true);
+                    co_yield *render;
+
+                    if (render->getError().isNotEmpty())
+                    {
+                        fail (render->getError());
+                        co_return;
+                    }
+                }
+
+                fail (playFile (project, track, file, start));
+
+                if (error.isEmpty())
+                    files.add (file);
+                else
+                    file.deleteFile();
+            }
+        };
+    }
+
+    std::unique_ptr<ExportJob> makeJob (core::Project& project, te::AudioTrack& track)
+    {
+        return std::make_unique<Job> (project, track);
+    }
+
+    juce::String freeze (core::Project& project, te::AudioTrack& track)
+    {
+        const auto job = makeJob (project, track);
+        job->finish();
+        return job->getError();
     }
 
     void unfreeze (core::Project& project, te::AudioTrack& track)

@@ -147,6 +147,13 @@ namespace harmonia::ui
                 statusBar.setMessage (text);
         };
 
+        // What takes long there (a freeze, a render, one clip of several) goes on under the progress panel.
+        arrangement.onRunJob = [this] (std::unique_ptr<audio::ExportJob> job, std::function<void (audio::ExportJob&)> onDone,
+                                       std::function<void()> onCancelled)
+        {
+            runExport (std::move (job), std::move (onDone), std::move (onCancelled));
+        };
+
         for (auto* c : std::initializer_list<juce::Component*> { &shortcutsButton, &soundsTab, &pianoRollTab, &automationTab, &mixerTab })
             c->setWantsKeyboardFocus (false);
 
@@ -186,6 +193,7 @@ namespace harmonia::ui
     {
         arrangementModel.onCurrentChanged = nullptr;
         arrangement.onViewChanged = nullptr;
+        arrangement.onRunJob = nullptr;
         arrangementModel.removeListener (this);
         pianoRollModel.removeListener (this);
         pianoRollModel.setAuditioner (nullptr);
@@ -563,11 +571,15 @@ namespace harmonia::ui
         }
     }
 
-    void MainComponent::runExport (std::unique_ptr<audio::ExportJob> job, std::function<void (audio::ExportJob&)> onDone)
+    void MainComponent::runExport (std::unique_ptr<audio::ExportJob> job, std::function<void (audio::ExportJob&)> onDone,
+                                   std::function<void()> onCancelled)
     {
-        // Rendering takes over the engine: stop first, or playback would resume over it.
-        transport.stop();
-        exportProgress.run (std::move (job), std::move (onDone));
+        // Rendering takes over the engine: stop first, or playback would resume over it. (A job
+        // that had nothing to render has finished already: it stops nothing.)
+        if (job != nullptr && ! job->isFinished())
+            transport.stop();
+
+        exportProgress.run (std::move (job), std::move (onDone), std::move (onCancelled));
     }
 
     bool MainComponent::keyPressed (const juce::KeyPress& key)
@@ -1181,19 +1193,18 @@ namespace harmonia::ui
 
     void MainComponent::checkLoudness()
     {
-        // Rendering takes over the engine: stop first, or playback would resume over it.
-        transport.stop();
-
-        juce::String error;
-        const auto measured = audio::loudness::measureSong (project.getEdit(), error);
-
-        if (! measured.has_value())
+        runJob (audio::loudness::makeMeasureJob (project.getEdit()), [this] (audio::loudness::MeasureJob& job)
         {
-            showWarning (error);
-            return;
-        }
+            if (const auto& measured = job.getResult())
+                showLoudnessAdvice (*measured);
+            else
+                showWarning (job.getError());
+        }, [this] { showMessage ("Loudness check cancelled"); });
+    }
 
-        const auto advice = audio::loudness::advise (*measured);
+    void MainComponent::showLoudnessAdvice (const audio::loudness::Measurement& measured)
+    {
+        const auto advice = audio::loudness::advise (measured);
         const auto canApply = std::abs (advice.gainDb) >= 0.1f;
         auto options = juce::MessageBoxOptions().withIconType (juce::MessageBoxIconType::InfoIcon)
                                                 .withTitle ("Loudness for streaming")
@@ -1235,64 +1246,51 @@ namespace harmonia::ui
 
     void MainComponent::raiseWithLimiter()
     {
-        transport.stop();
-
-        // It renders the song a few times: say how far it got.
-        juce::MouseCursor::showWaitCursor();
+        // It sets the limiter and measures the song, a few times over: all of it one undo step,
+        // taken back if it is stopped or fails half way.
         project.beginGesture ("Limiter for streaming");
-        juce::String error;
-        const auto result = audio::loudness::raiseWithLimiter (project.getEdit(), error, audio::loudness::streamingLufs,
-                                                               [this] (const juce::String& step)
-        {
-            showMessage (step);
 
-            if (auto* peer = getPeer())
-                peer->performAnyPendingRepaintsNow();
+        runJob (audio::loudness::makeLimiterJob (project.getEdit()), [this] (audio::loudness::LimiterJob& job)
+        {
+            const auto& result = job.getResult();
+
+            if (! result.has_value())
+            {
+                project.takeBackGesture();
+                showWarning (job.getError());
+                return;
+            }
+
+            showMessage ("Limiter on the master at +" + juce::String (result->gainDb, 1) + " dB: the song is now "
+                         + juce::String (result->after.lufs, 1) + " LUFS (was " + juce::String (result->before.lufs, 1)
+                         + "), peaks at " + juce::String (result->after.peakDb, 1) + " dB");
+        }, [this]
+        {
+            project.takeBackGesture();
+            showMessage ("Limiter cancelled: the song is as it was");
         });
-
-        juce::MouseCursor::hideWaitCursor();
-
-        if (! result.has_value())
-        {
-            showWarning (error);
-            return;
-        }
-
-        showMessage ("Limiter on the master at +" + juce::String (result->gainDb, 1) + " dB: the song is now "
-                     + juce::String (result->after.lufs, 1) + " LUFS (was " + juce::String (result->before.lufs, 1)
-                     + "), peaks at " + juce::String (result->after.peakDb, 1) + " dB");
     }
 
     void MainComponent::checkMix()
     {
-        // Rendering takes over the engine: stop first, or playback would resume over it.
-        transport.stop();
-
-        // It holds the window up for a while (the song, then each track): say how far it got.
-        juce::MouseCursor::showWaitCursor();
-        juce::String error;
-        const auto report = audio::mix_check::check (project.getEdit(), error, [this] (const juce::String& step)
+        // The song, then each track: it says how far it is, and can be stopped.
+        runJob (audio::mix_check::makeCheckJob (project.getEdit()), [this] (audio::mix_check::CheckJob& job)
         {
-            showMessage (step);
+            if (const auto& report = job.getResult())
+                showMixReport (*report);
+            else
+                showWarning (job.getError());
+        }, [this] { showMessage ("Mix Doctor cancelled"); });
+    }
 
-            if (auto* peer = getPeer())
-                peer->performAnyPendingRepaintsNow();
-        });
-
-        juce::MouseCursor::hideWaitCursor();
-
-        if (! report.has_value())
-        {
-            showWarning (error);
-            return;
-        }
-
-        const auto problems = audio::mix_check::findProblems (*report).size();
+    void MainComponent::showMixReport (const audio::mix_check::Report& report)
+    {
+        const auto problems = audio::mix_check::findProblems (report).size();
         showMessage (problems == 0 ? juce::String ("Mix Doctor: nothing stands out")
                                    : "Mix Doctor: " + juce::String (problems) + (problems == 1 ? " thing" : " things") + " to look at");
 
-        const auto fixes = audio::mix_check::findFixes (*report, project.getEdit());
-        auto text = audio::mix_check::describe (*report);
+        const auto fixes = audio::mix_check::findFixes (report, project.getEdit());
+        auto text = audio::mix_check::describe (report);
 
         if (! fixes.isEmpty())
             text << "\n\n\"Fix the levels\" will " << fixes.descriptions.joinIntoString ("; ") << " (Ctrl+Z puts it back).";
@@ -1316,26 +1314,24 @@ namespace harmonia::ui
 
     void MainComponent::fixMix (const audio::mix_check::Fixes& fixes)
     {
-        transport.stop();
-        juce::MouseCursor::showWaitCursor();
+        // The faders, then the song measured until its peaks are right: all of it one undo step,
+        // taken back if it is stopped half way.
         project.beginGesture ("Mix Doctor fixes");
 
-        juce::String error;
-        const auto done = audio::mix_check::applyFixes (project.getEdit(), fixes, error, [this] (const juce::String& step)
+        runJob (audio::mix_check::makeFixJob (project.getEdit(), fixes), [this] (audio::mix_check::FixJob& job)
         {
-            showMessage (step);
+            const auto& done = job.getResult();
 
-            if (auto* peer = getPeer())
-                peer->performAnyPendingRepaintsNow();
+            if (job.getError().isNotEmpty())
+                showWarning (job.getError());
+            else
+                showMessage (done.isEmpty() ? juce::String ("Mix Doctor: nothing needed changing")
+                                            : "Mix Doctor: " + done.joinIntoString (", ") + " (Ctrl+Z puts it back)");
+        }, [this]
+        {
+            project.takeBackGesture();
+            showMessage ("Mix Doctor's fixes cancelled: the song is as it was");
         });
-
-        juce::MouseCursor::hideWaitCursor();
-
-        if (error.isNotEmpty())
-            showWarning (error);
-        else
-            showMessage (done.isEmpty() ? juce::String ("Mix Doctor: nothing needed changing")
-                                        : "Mix Doctor: " + done.joinIntoString (", ") + " (Ctrl+Z puts it back)");
     }
 
     void MainComponent::chooseMidiExport()

@@ -560,32 +560,64 @@ namespace harmonia::ui::arrangement
         return result;
     }
 
-    ArrangementModel::Consolidated ArrangementModel::consolidate()
+    //==============================================================================
+    class ArrangementModel::Consolidation final : public ArrangementModel::ConsolidateJob
     {
-        // The stretch of each row: the selected time, or from the first to the last of the
-        // clips selected on a track.
+    public:
+        explicit Consolidation (ArrangementModel& m)
+            : model (m)
+        {
+            begin (run());
+        }
+
+        ~Consolidation() override
+        {
+            stop();
+        }
+
+    private:
         struct Stretch
         {
             te::AudioTrack* track;
             double from, to;
         };
 
-        std::vector<Stretch> stretches;
-        const auto time = getTimeSelection();
+        /** The sound rendered so far: nobody's until the clips are made of it. */
+        struct Sounds
+        {
+            std::vector<audio::consolidate::Piece> pieces;
+            bool used = false;
 
-        if (time.has_value())
+            ~Sounds()
+            {
+                if (! used)
+                    for (const auto& piece : pieces)
+                        piece.sound.deleteFile();
+            }
+        };
+
+        ArrangementModel& model;
+
+        /** The stretch of each row: the selected time, or from the first to the last of the
+            clips selected on a track. */
+        std::vector<Stretch> findStretches (const std::optional<TimeSelection>& time) const
         {
-            for (int row = time->firstRow; row <= time->lastRow; ++row)
-                if (auto* track = getTrack (row); track != nullptr && ! isLockedRow (track))
-                    stretches.push_back ({ track, time->startBeat, time->endBeat });
-        }
-        else
-        {
-            for (auto* clip : getSelectedClips())
+            std::vector<Stretch> stretches;
+
+            if (time.has_value())
+            {
+                for (int row = time->firstRow; row <= time->lastRow; ++row)
+                    if (auto* track = model.getTrack (row); track != nullptr && ! model.isLockedRow (track))
+                        stretches.push_back ({ track, time->startBeat, time->endBeat });
+
+                return stretches;
+            }
+
+            for (auto* clip : model.getSelectedClips())
             {
                 auto* track = dynamic_cast<te::AudioTrack*> (clip->getTrack());
 
-                if (track == nullptr || isLockedRow (track))
+                if (track == nullptr || model.isLockedRow (track))
                     continue;
 
                 const auto start = clips::getStartBeat (*clip), end = clips::getEndBeat (*clip);
@@ -596,52 +628,72 @@ namespace harmonia::ui::arrangement
                 else
                     *known = { track, std::min (known->from, start), std::max (known->to, end) };
             }
+
+            return stretches;
         }
 
-        // What can fail (rendering sound) first, the song untouched.
-        Consolidated result;
-        std::vector<audio::consolidate::Piece> pieces;
-
-        for (const auto& stretch : stretches)
+        audio::Steps run()
         {
-            juce::String error;
-            const auto count = audio::consolidate::countClips (*stretch.track, stretch.from, stretch.to);
+            const auto time = model.getTimeSelection();
+            const auto stretches = findStretches (time);
 
-            if (auto piece = audio::consolidate::prepare (*stretch.track, stretch.from, stretch.to, error))
-            {
-                pieces.push_back (*piece);
-                result.clipsBefore += count;
-            }
-            else if (error.isNotEmpty())
-            {
-                // The files rendered so far are nobody's.
-                for (const auto& made : pieces)
-                    made.sound.deleteFile();
+            // What can fail, and takes long (rendering sound), first: the song untouched.
+            Sounds sounds;
+            int clipsBefore = 0, row = 0;
 
-                result = {};
-                result.problem = error;
-                return result;
+            for (const auto& stretch : stretches)
+            {
+                say ("Consolidating " + stretch.track->getName(), row++, (int) stretches.size());
+                const auto count = audio::consolidate::countClips (*stretch.track, stretch.from, stretch.to);
+                const auto prepared = audio::consolidate::makePrepareJob (*stretch.track, stretch.from, stretch.to);
+                co_yield *prepared;
+
+                if (const auto& piece = prepared->getResult())
+                {
+                    sounds.pieces.push_back (*piece);
+                    clipsBefore += count;
+                }
+                else if (prepared->getError().isNotEmpty())
+                {
+                    // The files rendered so far are nobody's: they go with `sounds`.
+                    result.problem = prepared->getError();
+                    fail (result.problem);
+                    co_return;
+                }
             }
+
+            if (sounds.pieces.empty())
+                co_return;
+
+            model.project.beginGesture ("Consolidate");
+            juce::Array<te::Clip*> joined;
+
+            for (const auto& piece : sounds.pieces)
+                if (auto* clip = audio::consolidate::apply (model.project, piece))
+                    joined.add (clip);
+
+            sounds.used = true;
+            result.rows = joined.size();
+            result.clipsBefore = clipsBefore;
+            model.clipsDirty = true;
+            model.validateCurrent();
+
+            if (! time.has_value())
+                model.setSelection (joined);
+
+            model.changed();
         }
+    };
 
-        if (pieces.empty())
-            return result;
+    std::unique_ptr<ArrangementModel::ConsolidateJob> ArrangementModel::consolidateJob()
+    {
+        return std::make_unique<Consolidation> (*this);
+    }
 
-        project.beginGesture ("Consolidate");
-        juce::Array<te::Clip*> joined;
-
-        for (const auto& piece : pieces)
-            if (auto* clip = audio::consolidate::apply (project, piece))
-                joined.add (clip);
-
-        result.rows = joined.size();
-        clipsDirty = true;
-        validateCurrent();
-
-        if (! time.has_value())
-            setSelection (joined);
-
-        changed();
-        return result;
+    ArrangementModel::Consolidated ArrangementModel::consolidate()
+    {
+        const auto job = consolidateJob();
+        job->finish();
+        return job->getResult();
     }
 }

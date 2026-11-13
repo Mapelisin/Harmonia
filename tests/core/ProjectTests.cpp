@@ -365,4 +365,32 @@ TEST_SUITE ("core::Project")
             REQUIRE_FALSE (project->isSettling());
         }
     }
+
+    TEST_CASE ("a command stopped half way is taken back: what it changed itself, never an earlier step")
+    {
+        auto project = Project::createEmpty (harmonia::test::session());
+
+        project->beginGesture ("Change tempo");
+        project->setTempoBpm (140.0);
+
+        // Nothing changed since the step began: nothing is taken back.
+        project->beginGesture ("Time signature");
+        project->takeBackGesture();
+        CHECK (project->getTempoBpm() == doctest::Approx (140.0));
+        CHECK (project->getUndoDescription() == "Change tempo");
+
+        // All of what the step changed.
+        project->beginGesture ("Time signature");
+        project->setBeatsPerBar (3);
+        project->setTempoBpm (90.0);
+        project->takeBackGesture();
+        CHECK (project->getBeatsPerBar() == 4);
+        CHECK (project->getTempoBpm() == doctest::Approx (140.0));
+        CHECK (project->getUndoDescription() == "Change tempo");
+
+        // Once more: there is nothing more of it to take back.
+        project->takeBackGesture();
+        CHECK (project->getTempoBpm() == doctest::Approx (140.0));
+        CHECK (project->getUndoDescription() == "Change tempo");
+    }
 }

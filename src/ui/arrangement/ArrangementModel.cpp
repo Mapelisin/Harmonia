@@ -131,21 +131,28 @@ namespace harmonia::ui::arrangement
         return isFoldedRow (track) || isFrozen (track);
     }
 
+    std::unique_ptr<audio::ExportJob> ArrangementModel::freezeTrackJob (te::AudioTrack& track)
+    {
+        return audio::followedBy (audio::freeze::makeJob (project, track), [this, &track]
+        {
+            // Its notes aren't heard while it's frozen: nothing of it stays open or selected.
+            if (auto* open = getOpenClip(); open != nullptr && open->getClipTrack() == &track)
+                openClip (nullptr);
+
+            auto stillSelected = getSelectedClips();
+            stillSelected.removeIf ([&] (te::Clip* clip) { return clip->getClipTrack() == &track; });
+            setSelection (stillSelected);
+            clipsDirty = true;
+            changed();
+            return juce::String();
+        });
+    }
+
     juce::String ArrangementModel::freezeTrack (te::AudioTrack& track)
     {
-        if (const auto error = audio::freeze::freeze (project, track); error.isNotEmpty())
-            return error;
-
-        // Its notes aren't heard while it's frozen: nothing of it stays open or selected.
-        if (auto* open = getOpenClip(); open != nullptr && open->getClipTrack() == &track)
-            openClip (nullptr);
-
-        auto stillSelected = getSelectedClips();
-        stillSelected.removeIf ([&] (te::Clip* clip) { return clip->getClipTrack() == &track; });
-        setSelection (stillSelected);
-        clipsDirty = true;
-        changed();
-        return {};
+        const auto job = freezeTrackJob (track);
+        job->finish();
+        return job->getError();
     }
 
     void ArrangementModel::unfreezeTrack (te::AudioTrack& track)
@@ -1142,12 +1149,12 @@ namespace harmonia::ui::arrangement
         changed();
     }
 
-    juce::String ArrangementModel::renderToAudio (te::AudioTrack& track)
+    std::unique_ptr<audio::ExportJob> ArrangementModel::renderToAudioJob (te::AudioTrack& track)
     {
         const auto onTrack = clips::getClips (track);
 
         if (onTrack.isEmpty())
-            return "Nothing to render: " + track.getName() + " has no clips";
+            return audio::ExportJob::failed ("Nothing to render: " + track.getName() + " has no clips");
 
         auto start = std::numeric_limits<double>::max(), end = 0.0;
 
@@ -1163,24 +1170,41 @@ namespace harmonia::ui::arrangement
                                        + te::TimeDuration::fromSeconds (audio::exportTailSeconds));
         const auto file = edit.engine.getEngineBehaviour().getFileForNewAudioRecording (track, ".wav");
 
-        if (const auto error = audio::renderTrack (track, file, range); error.isNotEmpty())
-            return error;
+        // The song changes once the sound is there.
+        return audio::followedBy (audio::ExportJob::track (track, file, range), [this, &track, file, start]
+        {
+            const auto problem = addRendered (track, file, start);
 
+            if (problem.isNotEmpty())
+                file.deleteFile();
+
+            return problem;
+        });
+    }
+
+    juce::String ArrangementModel::renderToAudio (te::AudioTrack& track)
+    {
+        const auto job = renderToAudioJob (track);
+        job->finish();
+        return job->getError();
+    }
+
+    juce::String ArrangementModel::addRendered (te::AudioTrack& track, const juce::File& sound, double startBeat)
+    {
         project.beginGesture ("Render to audio");
         const auto name = track.getName() + " (audio)";
         auto* audioTrack = createAudioTrack (name, &track);
 
-        if (audioTrack != nullptr)
-            core::tracks::setColour (*audioTrack, core::tracks::getColour (track));
-
         if (audioTrack == nullptr)
             return "Couldn't add a track for the audio";
 
+        core::tracks::setColour (*audioTrack, core::tracks::getColour (track));
+
         juce::String error;
-        auto* clip = project.addAudioClip (*audioTrack, file, start, error);
+        auto* clip = project.addAudioClip (*audioTrack, sound, startBeat, error);
 
         if (clip == nullptr)
-            return error;
+            return error.isNotEmpty() ? error : juce::String ("Couldn't put the audio on its track");
 
         clip->setName (name);
 
@@ -1193,7 +1217,7 @@ namespace harmonia::ui::arrangement
         audio::groups::setGroup (*audioTrack, audio::groups::getGroup (track));
 
         // Tracktion's mute isn't undoable: set it so that undo unmutes the track again.
-        track.state.setProperty (te::IDs::mute, true, &edit.getUndoManager());
+        track.state.setProperty (te::IDs::mute, true, &getEdit().getUndoManager());
         setSelection ({ clip });
         setCurrentTrack (audioTrack);
         clipsDirty = true;

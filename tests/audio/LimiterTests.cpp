@@ -277,7 +277,7 @@ TEST_SUITE ("audio::limiter")
         CHECK (result->after.peakDb < -0.95f);
         CHECK (result->gainDb > 5.0f);
         REQUIRE (! steps.empty());
-        CHECK (steps.front() == "Measuring the song...");
+        CHECK (steps.front() == "Measuring the song");
 
         // The limiter is the master's last effect; the fader is at 0 dB, so its ceiling holds.
         auto* added = findLimiter (project->getEdit());
@@ -298,5 +298,90 @@ TEST_SUITE ("audio::limiter")
         project->undo();
         CHECK (findLimiter (project->getEdit()) == nullptr);
         CHECK (project->getEdit().getMasterVolumePlugin()->getVolumeDb() == doctest::Approx (faderBefore));
+    }
+
+    TEST_CASE ("the limiter set a bit at a time, the window's other work going on in between: still one undo step; stopped half way, the step is taken back")
+    {
+        test::TempFolder temp;
+        auto project = core::Project::createEmpty (test::session());
+        auto* track = project->addTrack ("Peaks");
+        REQUIRE (track != nullptr);
+        core::tracks::setKind (*track, core::tracks::Kind::audio);
+        juce::String error;
+        REQUIRE (project->addAudioClip (*track, writePeaky (temp.getFile ("Peaky.wav"), 8.0), 0.0, error) != nullptr);
+        project->clearUndoHistory();
+
+        auto& edit = project->getEdit();
+        const auto faderBefore = edit.getMasterVolumePlugin()->getVolumeDb();
+        const auto pump = [] (int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil (ms); };
+
+        // Measuring alone, a block at a time: what measuring in one go says, and nothing changed.
+        const auto inOneGo = loudness::measureSong (edit, error);
+        REQUIRE_MESSAGE (inOneGo.has_value(), error.toStdString());
+
+        const auto measure = loudness::makeMeasureJob (edit);
+        CHECK (measure->getStage() == "Measuring the song");
+        int steps = 0;
+
+        while (measure->step (0))
+            ++steps;
+
+        CHECK (steps > 10);
+        REQUIRE (measure->getResult().has_value());
+        CHECK (measure->getResult()->lufs == doctest::Approx (inOneGo->lufs).epsilon (0.001));
+        CHECK (measure->getResult()->peakDb == doctest::Approx (inOneGo->peakDb).epsilon (0.01));
+        CHECK_FALSE (project->canUndo());
+
+        // Stopped once the limiter is on the master.
+        project->beginGesture ("Limiter for streaming");
+        auto job = loudness::makeLimiterJob (edit);
+        CHECK (job->getStage() == "Measuring the song");
+
+        while (findLimiter (edit) == nullptr)
+            REQUIRE (job->step (5));
+
+        CHECK (job->getStage().startsWith ("Limiter at +"));
+        CHECK (job->getStage().endsWith ("measuring the song again"));
+        CHECK (job->getProgress() > 0.19f);
+        job.reset();
+
+        // What it had changed is in the step begun for it: taken back, the song is as it was.
+        CHECK (findLimiter (edit) != nullptr);
+        project->takeBackGesture();
+        CHECK (findLimiter (edit) == nullptr);
+        CHECK (edit.getMasterVolumePlugin()->getVolumeDb() == doctest::Approx (faderBefore));
+        CHECK_FALSE (project->canUndo());
+
+        // To its end, with time going by in between: long enough for the engine to begin a new
+        // undo step by itself (350 ms after a change), were it not held back.
+        project->beginGesture ("Limiter for streaming");
+        job = loudness::makeLimiterJob (edit);
+        auto waited = false;
+
+        for (int step = 0; job->step (5); ++step)
+        {
+            if (step % 20 == 0)
+                pump (1);
+
+            if (! waited && findLimiter (edit) != nullptr)
+            {
+                waited = true;
+                pump (500);
+            }
+        }
+
+        CHECK (waited);
+        REQUIRE_MESSAGE (job->getResult().has_value(), job->getError().toStdString());
+        CHECK (job->getResult()->before.lufs == doctest::Approx (inOneGo->lufs).epsilon (0.01));
+        CHECK (job->getResult()->after.lufs == doctest::Approx (loudness::streamingLufs).epsilon (0.04));
+        CHECK (job->getResult()->after.peakDb < -0.95f);
+        CHECK (findLimiter (edit) != nullptr);
+        CHECK (edit.getMasterVolumePlugin()->getVolumeDb() == doctest::Approx (0.0f));
+
+        pump (500);
+        CHECK (project->getUndoDescription() == "Limiter for streaming");
+        project->undo();
+        CHECK (findLimiter (edit) == nullptr);
+        CHECK (edit.getMasterVolumePlugin()->getVolumeDb() == doctest::Approx (faderBefore));
     }
 }

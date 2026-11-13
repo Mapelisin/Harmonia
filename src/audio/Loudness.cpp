@@ -1,7 +1,7 @@
 #include "audio/Loudness.h"
 
 #include "audio/Effects.h"
-#include "audio/Export.h"
+#include "audio/ExportJob.h"
 #include "audio/Limiter.h"
 
 #include <numeric>
@@ -223,19 +223,60 @@ namespace harmonia::audio::loudness
         return meter.finish();
     }
 
+    namespace
+    {
+        class SongMeasure final : public MeasureJob
+        {
+        public:
+            explicit SongMeasure (te::Edit& e)
+                : edit (e)
+            {
+                begin (run());
+            }
+
+            ~SongMeasure() override
+            {
+                stop();
+            }
+
+        private:
+            te::Edit& edit;
+
+            Steps run()
+            {
+                const juce::TemporaryFile temp (".wav");
+                say ("Measuring the song");
+
+                {
+                    const auto render = ExportJob::song (edit, temp.getFile(), {});
+                    co_yield *render;
+
+                    if (render->getError().isNotEmpty())
+                    {
+                        fail (render->getError());
+                        co_return;
+                    }
+                }
+
+                result = measureFile (temp.getFile());      // done with the file before it is deleted
+
+                if (! result.has_value())
+                    fail ("Nothing to measure: the song is silent");
+            }
+        };
+    }
+
+    std::unique_ptr<MeasureJob> makeMeasureJob (te::Edit& edit)
+    {
+        return std::make_unique<SongMeasure> (edit);
+    }
+
     std::optional<Measurement> measureSong (te::Edit& edit, juce::String& error)
     {
-        const juce::TemporaryFile temp (".wav");
-
-        if (error = exportWav (edit, temp.getFile()); error.isNotEmpty())
-            return std::nullopt;
-
-        auto result = measureFile (temp.getFile());     // done with the file before it is deleted
-
-        if (! result.has_value())
-            error = "Nothing to measure: the song is silent";
-
-        return result;
+        const auto job = makeMeasureJob (edit);
+        job->finish();
+        error = job->getError();
+        return job->getResult();
     }
 
     Advice advise (const Measurement& m, double targetLufs, float ceilingDb)
@@ -284,77 +325,128 @@ namespace harmonia::audio::loudness
         return advice;
     }
 
+    namespace
+    {
+        class LimiterRaise final : public LimiterJob
+        {
+        public:
+            LimiterRaise (te::Edit& e, double target)
+                : edit (e), targetLufs (target)
+            {
+                begin (run());
+            }
+
+            ~LimiterRaise() override
+            {
+                stop();
+            }
+
+        private:
+            // Limiting takes some of each step up away again: measure, correct, measure.
+            static constexpr int maxPasses = 4;
+
+            te::Edit& edit;
+            const double targetLufs;
+
+            Steps run()
+            {
+                // However long the measuring takes, what is changed stays one undo step.
+                const te::Edit::UndoTransactionInhibitor oneStep (edit);
+
+                say ("Measuring the song", 0, maxPasses + 1);
+                Measurement before;
+
+                {
+                    const auto measure = makeMeasureJob (edit);
+                    co_yield *measure;
+
+                    if (! measure->getResult().has_value())
+                    {
+                        fail (measure->getError());
+                        co_return;
+                    }
+
+                    before = *measure->getResult();
+                }
+
+                // Harmonia's limiter on the master (the last one, if there are several); added if there's none.
+                auto& chain = edit.getMasterPluginList();
+                limiter::Plugin* found = nullptr;
+
+                for (auto* plugin : effects::get (chain))
+                    if (auto* l = dynamic_cast<limiter::Plugin*> (plugin))
+                        found = l;
+
+                if (found == nullptr)
+                {
+                    auto& undoManager = edit.getUndoManager();
+                    const auto stepName = undoManager.getCurrentTransactionName();
+                    juce::String problem;
+                    found = dynamic_cast<limiter::Plugin*> (effects::add (chain, { "Limiter", limiter::Plugin::xmlTypeName, {} }, problem));
+
+                    if (found == nullptr)
+                    {
+                        fail (problem.isNotEmpty() ? problem : juce::String ("The limiter couldn't be added"));
+                        co_return;
+                    }
+
+                    if (stepName.isNotEmpty())
+                        undoManager.setCurrentTransactionName (stepName);      // adding began a step of its own: keep the caller's name
+                }
+
+                float faderChange = 0.0f;
+
+                if (auto master = edit.getMasterVolumePlugin())
+                {
+                    faderChange = -master->getVolumeDb();
+                    master->setVolumeDb (0.0f);
+                }
+
+                auto gain = juce::jlimit (0.0f, limiter::maxGainDb,
+                                          found->gain->getCurrentValue() + (float) (targetLufs - before.lufs) - faderChange);
+                auto now = before;
+
+                for (int pass = 1;; ++pass)
+                {
+                    found->gain->setParameter (gain, juce::sendNotificationSync);
+                    say ("Limiter at " + dbText (gain) + ": measuring the song again", pass, maxPasses + 1);
+
+                    const auto measure = makeMeasureJob (edit);
+                    co_yield *measure;
+
+                    if (! measure->getResult().has_value())
+                    {
+                        fail (measure->getError());
+                        co_return;
+                    }
+
+                    now = *measure->getResult();
+                    const auto miss = (float) (targetLufs - now.lufs);
+                    const auto next = juce::jlimit (0.0f, limiter::maxGainDb, gain + miss);
+
+                    if (std::abs (miss) < 0.25f || std::abs (next - gain) < 0.05f || pass == maxPasses)
+                        break;
+
+                    gain = next;
+                }
+
+                result = LimiterResult { before, now, gain };
+            }
+        };
+    }
+
+    std::unique_ptr<LimiterJob> makeLimiterJob (te::Edit& edit, double targetLufs)
+    {
+        return std::make_unique<LimiterRaise> (edit, targetLufs);
+    }
+
     std::optional<LimiterResult> raiseWithLimiter (te::Edit& edit, juce::String& error, double targetLufs,
                                                    const std::function<void (const juce::String&)>& progress)
     {
-        const auto say = [&progress] (const juce::String& step)
-        {
-            if (progress != nullptr)
-                progress (step);
-        };
-
-        say ("Measuring the song...");
-        const auto before = measureSong (edit, error);
-
-        if (! before.has_value())
-            return std::nullopt;
-
-        // Harmonia's limiter on the master (the last one, if there are several); added if there's none.
-        auto& chain = edit.getMasterPluginList();
-        limiter::Plugin* found = nullptr;
-
-        for (auto* plugin : effects::get (chain))
-            if (auto* l = dynamic_cast<limiter::Plugin*> (plugin))
-                found = l;
-
-        if (found == nullptr)
-        {
-            auto& undoManager = edit.getUndoManager();
-            const auto stepName = undoManager.getCurrentTransactionName();
-            found = dynamic_cast<limiter::Plugin*> (effects::add (chain, { "Limiter", limiter::Plugin::xmlTypeName, {} }, error));
-
-            if (found == nullptr)
-                return std::nullopt;
-
-            if (stepName.isNotEmpty())
-                undoManager.setCurrentTransactionName (stepName);      // adding began a step of its own: keep the caller's name
-        }
-
-        float faderChange = 0.0f;
-
-        if (auto master = edit.getMasterVolumePlugin())
-        {
-            faderChange = -master->getVolumeDb();
-            master->setVolumeDb (0.0f);
-        }
-
-        // Limiting takes some of each step up away again: measure, correct, measure.
-        constexpr int maxPasses = 4;
-        auto gain = juce::jlimit (0.0f, limiter::maxGainDb,
-                                  found->gain->getCurrentValue() + (float) (targetLufs - before->lufs) - faderChange);
-        auto now = *before;
-
-        for (int pass = 1;; ++pass)
-        {
-            found->gain->setParameter (gain, juce::sendNotificationSync);
-            say ("Limiter at " + dbText (gain) + ": measuring the song again...");
-
-            const auto measured = measureSong (edit, error);
-
-            if (! measured.has_value())
-                return std::nullopt;
-
-            now = *measured;
-            const auto miss = (float) (targetLufs - now.lufs);
-            const auto next = juce::jlimit (0.0f, limiter::maxGainDb, gain + miss);
-
-            if (std::abs (miss) < 0.25f || std::abs (next - gain) < 0.05f || pass == maxPasses)
-                break;
-
-            gain = next;
-        }
-
-        return LimiterResult { *before, now, gain };
+        const auto job = makeLimiterJob (edit, targetLufs);
+        job->finish (progress);
+        error = job->getError();
+        return job->getResult();
     }
 
     float addToMasterVolume (te::Edit& edit, float gainDb)

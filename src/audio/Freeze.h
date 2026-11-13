@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/ExportJob.h"
 #include "core/Project.h"
 
 /** Freezing a track: its sound through its instrument and effects is written to a file, and the
@@ -19,6 +20,10 @@ namespace harmonia::audio::freeze
 
     /** Renders and freezes the track. Blocks until done. Returns an error message, empty on success. */
     juce::String freeze (core::Project&, te::AudioTrack&);
+
+    /** freeze a bit at a time (audio::ExportJob). The song changes only at its very end: stopped
+        before, the track is as it was and nothing is left of the file. */
+    std::unique_ptr<ExportJob> makeJob (core::Project&, te::AudioTrack&);
 
     /** The track plays its clips through its instrument and effects again. */
     void unfreeze (core::Project&, te::AudioTrack&);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ui/JobRunner.h"
 #include "ui/arrangement/ArrangementModel.h"
 #include "ui/arrangement/ArrangementView.h"
 
@@ -43,6 +44,10 @@ namespace harmonia::ui::arrangement
         /** Something to tell the user (a problem if `isProblem`). */
         std::function<void (const juce::String&, bool isProblem)> onMessage;
 
+        /** Who does what takes long (freezing, rendering to audio); without one it is done on
+            the spot (ui::runJob). */
+        JobRunner onRunJob;
+
         /** Dragging a header up or down moves its track: while dragged (y in this component),
             a line shows the gap it would go into. */
         void dragHeader (int trackIndex, float y);
@@ -59,7 +64,7 @@ namespace harmonia::ui::arrangement
         /** The track menu's commands (also for tests). */
         void renderToAudio (te::AudioTrack&);
 
-        /** Freezes the track, or unfreezes a frozen one; says what happened. */
+        /** Freezes the track (a job for onRunJob), or unfreezes a frozen one; says what happened. */
         void toggleFrozen (te::AudioTrack&);
 
         /** The track's menu: right-click on its header, or Track in the menu bar. For the row

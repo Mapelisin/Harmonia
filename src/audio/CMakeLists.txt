@@ -19,6 +19,8 @@ add_library(harmonia_audio STATIC
     Export.cpp
     ExportJob.h
     ExportJob.cpp
+    RoutineJob.h
+    RoutineJob.cpp
     ExportRender.h
     ExportRender.cpp
     ExportTail.h

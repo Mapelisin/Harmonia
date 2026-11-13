@@ -11,11 +11,35 @@ namespace harmonia::audio
 
     bool ExportJob::step (int milliseconds)
     {
+        return stepUntil (juce::Time::getMillisecondCounterHiRes() + juce::jmax (0, milliseconds));
+    }
+
+    bool ExportJob::stepUntil (double untilMs)
+    {
         if (finished)
             return false;
 
-        finished = work (juce::Time::getMillisecondCounterHiRes() + juce::jmax (0, milliseconds));
+        finished = work (untilMs);
         return ! finished;
+    }
+
+    void ExportJob::finish (const std::function<void (const juce::String&)>& said)
+    {
+        juce::String told;
+
+        while (! finished)
+        {
+            if (said != nullptr)
+            {
+                if (const auto stage = getStage(); stage != told)
+                {
+                    told = stage;
+                    said (stage);
+                }
+            }
+
+            step (1000);
+        }
     }
 
     namespace
@@ -321,6 +345,121 @@ namespace harmonia::audio
                 return true;
             }
         };
+
+        //==============================================================================
+        /** One track alone: as it sounds, or only what its clips play. */
+        class TrackJob final : public ExportJob
+        {
+        public:
+            enum class Sound { whole, beforeFader, clipsOnly };
+
+            TrackJob (te::AudioTrack& track, const juce::File& f, te::TimeRange range, Sound sound)
+                : file (f), name (track.getName())
+            {
+                // Heard even while it's muted or another track is soloed.
+                auto& edit = track.edit;
+                temporary = std::make_unique<TemporaryState> (edit);
+                temporary->hear (track);
+                temporary->playToMaster (track);
+
+                juce::Array<te::Track*> tracks;
+                juce::Array<te::AudioTrack*> sources;
+
+                if (sound == Sound::clipsOnly)
+                {
+                    temporary->bypassPlugins (track);
+                    tracks.add (&track);
+                }
+                else
+                {
+                    if (sound == Sound::beforeFader)
+                        temporary->bypassFader (track);
+
+                    // Effects listening to other tracks (sidechain) still hear them.
+                    tracks = getOtherTracks (edit);
+                    tracks.add (&track);
+                    sources = keepSources (*temporary, { &track }, tracks);
+                }
+
+                render = std::make_unique<Render> (edit, file, tracks, range, false, sources);
+            }
+
+            ~TrackJob() override
+            {
+                release();
+            }
+
+            float getProgress() const override
+            {
+                return finished ? 1.0f : render != nullptr ? render->getProgress() : 0.0f;
+            }
+
+            juce::String getStage() const override
+            {
+                if (finished)
+                    return error.isEmpty() ? "Done" : "Failed";
+
+                return "Rendering " + name;
+            }
+
+        private:
+            const juce::File file;
+            const juce::String name;
+            std::unique_ptr<TemporaryState> temporary;      // put back after the render is gone
+            std::unique_ptr<Render> render;
+
+            bool work (double untilMs) override
+            {
+                if (! render->run (untilMs))
+                    return false;
+
+                error = render->getError();
+                release();
+
+                if (error.isEmpty())
+                    files.add (file);
+
+                return true;
+            }
+
+            void release()
+            {
+                render.reset();
+                temporary.reset();
+            }
+        };
+
+        //==============================================================================
+        class FailedJob final : public ExportJob
+        {
+        public:
+            explicit FailedJob (const juce::String& problem)
+            {
+                error = problem;
+                finished = true;
+            }
+
+            float getProgress() const override          { return 1.0f; }
+            juce::String getStage() const override      { return "Failed"; }
+
+        private:
+            bool work (double) override                 { return true; }
+        };
+    }
+
+    std::unique_ptr<ExportJob> ExportJob::track (te::AudioTrack& track, const juce::File& file, te::TimeRange range, bool beforeFader)
+    {
+        return std::make_unique<TrackJob> (track, file, range, beforeFader ? TrackJob::Sound::beforeFader : TrackJob::Sound::whole);
+    }
+
+    std::unique_ptr<ExportJob> ExportJob::clips (te::AudioTrack& track, const juce::File& file, te::TimeRange range)
+    {
+        return std::make_unique<TrackJob> (track, file, range, TrackJob::Sound::clipsOnly);
+    }
+
+    std::unique_ptr<ExportJob> ExportJob::failed (const juce::String& problem)
+    {
+        return std::make_unique<FailedJob> (problem);
     }
 
     std::unique_ptr<ExportJob> ExportJob::song (te::Edit& edit, const juce::File& file, const ExportFormat& format,

@@ -313,17 +313,6 @@ namespace harmonia::audio::export_render
         return wav != nullptr ? renderedShare * 0.9f : renderedShare;
     }
 
-    juce::String renderNow (te::Edit& edit, const juce::File& file, const juce::Array<te::Track*>& tracks, te::TimeRange range,
-                            bool withMaster, const juce::Array<te::AudioTrack*>& silentSources)
-    {
-        Render render (edit, file, tracks, range, withMaster, silentSources);
-
-        while (! render.run (std::numeric_limits<double>::max()))
-        {}
-
-        return render.getError();
-    }
-
     //==============================================================================
     PastEndRender::PastEndRender (te::Edit& e, const juce::File& t, const juce::Array<te::Track*>& tracks, bool withMaster,
                                   const juce::Array<te::AudioTrack*>& silentSources, const ExportFormat& wanted)

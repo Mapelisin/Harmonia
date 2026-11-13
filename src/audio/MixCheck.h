@@ -62,6 +62,11 @@ namespace harmonia::audio::mix_check
     std::optional<Report> check (te::Edit&, juce::String& error,
                                  const std::function<void (const juce::String& step)>& progress = {});
 
+    /** check a bit at a time (audio::ExportJob): its result is nothing if there was nothing to
+        hear (getError then says so). Changes nothing in the song. */
+    using CheckJob = ResultJob<std::optional<Report>>;
+    std::unique_ptr<CheckJob> makeCheckJob (te::Edit&);
+
     /** What to look at, most important first; empty if nothing stands out. */
     juce::StringArray findProblems (const Report&);
 
@@ -94,4 +99,11 @@ namespace harmonia::audio::mix_check
         if it couldn't measure the song, says why in `error`. */
     juce::StringArray applyFixes (te::Edit&, const Fixes&, juce::String& error,
                                   const std::function<void (const juce::String& step)>& progress = {});
+
+    /** applyFixes a bit at a time (audio::ExportJob): its result is what it did. However long it
+        takes, what it changes stays in the undo step begun before it was made. Stopped half way,
+        it leaves what it has changed so far in that step: take the step back
+        (core::Project::takeBackGesture). */
+    using FixJob = ResultJob<juce::StringArray>;
+    std::unique_ptr<FixJob> makeFixJob (te::Edit&, const Fixes&);
 }

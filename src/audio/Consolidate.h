@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/RoutineJob.h"
 #include "core/Project.h"
 
 /** One clip of what a track has in a stretch of time (Ctrl+J): its clips there, and the parts of
@@ -31,6 +32,11 @@ namespace harmonia::audio::consolidate
     /** Nothing if the track has no clips there, or its sound couldn't be rendered (`error` then
         says why). Blocks while an audio track is rendered. Changes nothing in the song. */
     std::optional<Piece> prepare (te::AudioTrack&, double fromBeat, double toBeat, juce::String& error);
+
+    /** prepare a bit at a time (audio::ExportJob): its result is the piece, or nothing (if its
+        getError is empty, the track has no clips there). Stopped half way, no file is left. */
+    using PrepareJob = ResultJob<std::optional<Piece>>;
+    std::unique_ptr<PrepareJob> makePrepareJob (te::AudioTrack&, double fromBeat, double toBeat);
 
     /** Puts the one clip in place of what the track has in the stretch. Into the current undo
         step. Returns it (nullptr if it couldn't be made: nothing is taken out then). */

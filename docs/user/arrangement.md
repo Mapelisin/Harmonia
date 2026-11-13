@@ -102,6 +102,8 @@ one clip and end in the middle of another, notes and sound alike. (A clip itself
   clips sounded together: their gain, fades, stretching and crossfades are in it; the track's effects,
   volume and pan are not (they go on working on the new clip, so the song sounds the same). If one of the
   clips followed the tempo, so does the new one. With no time selected, Ctrl+J joins the selected clips.
+  While the sound is being written, a panel shows how far it is; **Esc** stops it and the clips stay as
+  they were.
 - **Automation goes with the piece.** When a piece is moved, copied, repeated (Ctrl+B) or cut and pasted on
   its own rows, the rows' automation lines (volume, pan, effect knobs) over that time go with it; where the
   piece was taken from, a line runs straight from edge to edge. **Del** leaves the lines alone. Onto other
@@ -290,7 +292,7 @@ Not possible yet: your own length of the way in, several punch takes in a row.
     its instrument and effects are turned off and stop loading the computer. "Frozen" appears in the header.
     The volume, pan, sends and group keep working. While a track is frozen, its clips and notes cannot be
     edited; **Unfreeze** in the same menu puts everything back. Unlike Render to audio track, no new track
-    appears.
+    appears. While it freezes, a panel shows how far it is; **Esc** stops it and the track stays as it was.
   - **Track delay: 0 ms...**: make the track play a little **later** or **earlier** than the rest of the
     song. Type a number of milliseconds: `12` is 12 ms later, `-12` is 12 ms earlier (up to 100 either
     way), `0` is no delay. For a part that drags or rushes, or a sound with a slow attack (strings, a pad)
@@ -303,7 +305,7 @@ Not possible yet: your own length of the way in, several punch takes in a row.
     a WAV next to the project and placed on a new audio track "… (audio)" below it, at the same place; the
     sends (reverb) are carried over, and the original track is muted (M), so the song sounds as before.
     Handy when a heavy plugin loads the computer, or when you want to cut and reverse a part as audio.
-    **Ctrl+Z** puts everything back (the file stays).
+    **Ctrl+Z** puts everything back (the file stays). **Esc** while it renders stops it: nothing is added.
   - **Output (master or a group)**: where the track's sound goes: straight to the master or into a group
     (one fader for several tracks, see the [mixer](mixer.md) cheat sheet), or **New group with this track**.
   - **Colour**: the track colour (16 colours). **Automatic** is the colour by the track's place in the song,
@@ -598,6 +600,10 @@ Drums", "Writing Song.mp3") and how far it is. **Cancel**, or **Esc**, stops the
 file is left and the song is as it was. Until the export ends, the song can't be played or changed and the
 window can't be closed. (A file of the same name that is being replaced is removed when the export starts:
 cancelling doesn't bring it back.)
+
+The same panel, with the same **Cancel** and **Esc**, is shown by everything else that takes time: Freeze,
+Render to audio track, Consolidate (Ctrl+J), Check loudness, the limiter and Mix Doctor. Stopped half way,
+none of them leaves anything half-done: the song is as it was before the command.
 
 **How long the exported file is.** The export doesn't stop at the last clip: it goes on while the song
 still rings (a long reverb, a delay that repeats), and ends half a second after the sound has died away,

@@ -144,6 +144,22 @@ TEST_SUITE ("audio::effects")
         CHECK (effects::get (t.chain()).size() == all.size());
     }
 
+    TEST_CASE ("an effect added by a command that began its own undo step leaves no other step behind: one undo, and nothing more to undo")
+    {
+        SynthTrack t;
+        t.project->clearUndoHistory();
+
+        // As a command does that adds an effect among other things (the limiter for streaming).
+        t.project->beginGesture ("A command");
+        t.add ("EQ");
+        CHECK (effects::get (t.chain()).size() == 1);
+        CHECK (t.project->canUndo());
+
+        t.project->undo();
+        CHECK (effects::get (t.chain()).isEmpty());
+        CHECK_FALSE (t.project->canUndo());
+    }
+
     TEST_CASE ("an effect moves up and down its chain, one undo step each")
     {
         SynthTrack t;

@@ -16,7 +16,7 @@ namespace harmonia::ui
     {
         setWantsKeyboardFocus (true);
         setInterceptsMouseClicks (true, true);
-        cancelButton.setTooltip ("Stop the export: nothing is left of it (Esc)");
+        cancelButton.setTooltip ("Stop it: nothing is left half-done (Esc)");
         cancelButton.onClick = [this] { cancel(); };
         addAndMakeVisible (cancelButton);
         setVisible (false);
@@ -31,7 +31,8 @@ namespace harmonia::ui
             exitModalState (0);
     }
 
-    bool ExportProgress::run (std::unique_ptr<audio::ExportJob> newJob, std::function<void (audio::ExportJob&)> onDone)
+    bool ExportProgress::run (std::unique_ptr<audio::ExportJob> newJob, std::function<void (audio::ExportJob&)> onDone,
+                              std::function<void()> onJobCancelled)
     {
         if (job != nullptr || newJob == nullptr)
             return false;
@@ -47,6 +48,7 @@ namespace harmonia::ui
 
         job = std::move (newJob);
         done = std::move (onDone);
+        cancelled = std::move (onJobCancelled);
         shownStage.clear();
         shownPercent = -1;
 
@@ -80,9 +82,12 @@ namespace harmonia::ui
         // What it has written goes with it; the song is put back as it was.
         job.reset();
         done = nullptr;
+        const auto tell = std::exchange (cancelled, nullptr);
         close();
 
-        if (onCancelled != nullptr)
+        if (tell != nullptr)
+            tell();
+        else if (onCancelled != nullptr)
             onCancelled();
     }
 
@@ -110,6 +115,7 @@ namespace harmonia::ui
         const auto finished = std::move (job);
         const auto tell = std::move (done);
         done = nullptr;
+        cancelled = nullptr;
         close();
 
         if (tell != nullptr)
@@ -172,7 +178,7 @@ namespace harmonia::ui
         hint.removeFromRight (cancelButtonWidth + theme::size::padding);
         g.setColour (theme::colour::textSecondary);
         g.setFont (juce::FontOptions (theme::size::smallFontSize));
-        g.drawText ("Esc or Cancel stops it: no file is left half-written.", hint, juce::Justification::centredLeft, true);
+        g.drawText ("Esc or Cancel stops it: nothing is left half-done.", hint, juce::Justification::centredLeft, true);
     }
 
     void ExportProgress::resized()

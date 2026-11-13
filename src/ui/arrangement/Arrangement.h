@@ -59,6 +59,11 @@ namespace harmonia::ui::arrangement
         /** Something to tell the user (e.g. a dropped file couldn't be read). */
         std::function<void (const juce::String& text, bool isProblem)> onMessage;
 
+        /** Who does what takes long here and in the track headers (a freeze, a render, one clip
+            of several): the main window, under its progress panel. Without one it is done on the
+            spot (ui::runJob). */
+        JobRunner onRunJob;
+
         bool isInterestedInFileDrag (const juce::StringArray&) override;
         void fileDragEnter (const juce::StringArray&, int x, int y) override;
         void fileDragMove (const juce::StringArray&, int x, int y) override;
@@ -138,6 +143,7 @@ namespace harmonia::ui::arrangement
         void askToRename (te::Clip&);
         double getPlayheadBeat() const;
         void tell (const juce::String&, bool isProblem);
+        void tellConsolidated (const ArrangementModel::Consolidated&, bool ofSelectedTime);
         static bool areAllMidi (const juce::StringArray&);
         std::unique_ptr<juce::FileChooser> midiChooser;
     };

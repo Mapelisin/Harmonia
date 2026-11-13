@@ -118,8 +118,8 @@ on the slot starts it again. Details: [`plugins.md`](plugins.md).
 ## Loudness for streaming (the first step of mastering)
 
 **File → Check loudness for streaming...**: Harmonia plays the song "to itself" (like an export, a few
-seconds) and measures it the same way Spotify, YouTube and Apple Music do: **integrated loudness in LUFS**
-(the EBU R128 standard) and the **peak** in dB. These services bring all songs to about **−14 LUFS**: if
+seconds; a panel shows how far it is, **Esc** cancels) and measures it the same way Spotify, YouTube and
+Apple Music do: **integrated loudness in LUFS** (the EBU R128 standard) and the **peak** in dB. These services bring all songs to about **−14 LUFS**: if
 yours is quieter, it will sound quieter than the songs around it; if louder, it will simply be turned down.
 
 The window tells you what to do and offers a button:
@@ -127,7 +127,8 @@ The window tells you what to do and offers a button:
 - quiet, but the peaks are already at the ceiling: it raises only until the peaks reach −1 dB; and the
   **Use the limiter** button does everything itself: it puts a **Limiter** as the last effect on the master
   (ceiling −1 dB), sets the master fader to 0 dB, and finds the limiter gain that makes the song −14 LUFS
-  (it measures again several times; the progress is shown at the bottom);
+  (it measures again several times; the panel says which try it is, and **Esc** stops it and takes the
+  limiter back off);
 - loud: **Lower the master** (the services will turn it down anyway; this way you hear how it will sound
   there);
 - peaks above −1 dB: turn down, so MP3 and streaming do not distort (or **Use the limiter** here too).
@@ -138,8 +139,8 @@ volume of the master do.
 ## Mix Doctor: what is wrong in the mix
 
 **File → Check the mix (Mix Doctor)...**: Harmonia plays the song "to itself", then every track separately
-(like stems: with its effects and its sends to the reverb / delay; at the bottom you see "listening to track
-2 of 5..."), and shows a report:
+(like stems: with its effects and its sends to the reverb / delay; a panel says "Mix Doctor: listening to
+track 2 of 5", and **Esc** cancels), and shows a report:
 - the **loudness** of the song (LUFS) and the peak; the **correlation** of the left and right channels (1 is
   mono, 0 is completely different, below 0 the channels cancel each other); the **lows** (below 120 Hz) and
   the **highs** (above 6 kHz) in dB relative to the mids;
@@ -159,7 +160,8 @@ itself it changes nothing. But if the problem is in the levels, the window has a
 - **buried tracks** are raised with the fader to 10 LU below the loudest one (as far as the fader allows, up
   to +6 dB);
 - **overload**: it lowers the master until the peaks sit at −1 dB. It listens to the song once more (or
-  several times: from a peak above 0 dB you cannot tell how far it went over), so it takes a few seconds.
+  several times: from a peak above 0 dB you cannot tell how far it went over), so it takes a few seconds;
+  **Esc** stops it and puts the faders back.
 All of it together is one **Ctrl+Z** step. Loudness for Spotify / YouTube is separate:
 *Check loudness for streaming*.
 

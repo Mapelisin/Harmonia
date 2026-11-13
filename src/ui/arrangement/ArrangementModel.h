@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/RoutineJob.h"
 #include "core/Markers.h"
 #include "core/TempoChanges.h"
 #include "core/TrackFolders.h"
@@ -91,6 +92,10 @@ namespace harmonia::ui::arrangement
         /** Renders and freezes the track (blocks until done). Returns an error message, empty on
             success. A clip of it open in the piano roll is closed. */
         juce::String freezeTrack (te::AudioTrack&);
+
+        /** freezeTrack a bit at a time (audio::ExportJob), for the window to show how far it is
+            and to stop it: stopped, the track is as it was. */
+        std::unique_ptr<audio::ExportJob> freezeTrackJob (te::AudioTrack&);
         void unfreezeTrack (te::AudioTrack&);
 
         /** A new folder of the track (and the tracks of the selected clips), named by the next
@@ -273,6 +278,12 @@ namespace harmonia::ui::arrangement
             clips, on each track from its first to its last. One undo step. */
         Consolidated consolidate();
 
+        /** consolidate a bit at a time (audio::ExportJob; its result is what consolidate
+            returns). Notes alone are joined before it is even returned; sound is rendered first:
+            stopped then, the clips are as they were and no file is left. */
+        using ConsolidateJob = audio::ResultJob<Consolidated>;
+        std::unique_ptr<ConsolidateJob> consolidateJob();
+
         //==============================================================================
         // Snap (FL's playlist snap; "Line" follows the zoom)
 
@@ -342,6 +353,10 @@ namespace harmonia::ui::arrangement
             track below it that sends to the return tracks what the track did. The track is muted,
             so the song sounds as before. One undo step (the file stays). Returns what went wrong. */
         juce::String renderToAudio (te::AudioTrack&);
+
+        /** renderToAudio a bit at a time (audio::ExportJob): stopped, nothing is added and no
+            file is left. */
+        std::unique_ptr<audio::ExportJob> renderToAudioJob (te::AudioTrack&);
 
         /** How much later (above zero) or earlier (below) the track plays than the rest of the
             song, in milliseconds (audio::track_delay). One undo step. */
@@ -570,6 +585,8 @@ namespace harmonia::ui::arrangement
         void setCurrent (te::AudioTrack*, te::MidiClip*);
         void removeTracks (const juce::Array<te::AudioTrack*>&);
         te::AudioTrack* createAudioTrack (const juce::String& name, te::Track* after);
+        juce::String addRendered (te::AudioTrack& from, const juce::File& sound, double startBeat);
+        class Consolidation;
         void changed();
         void validateCurrent();
 

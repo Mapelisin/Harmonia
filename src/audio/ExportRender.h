@@ -119,10 +119,6 @@ namespace harmonia::audio::export_render
         JUCE_DECLARE_NON_COPYABLE (Render)
     };
 
-    /** A Render run to its end right here: an error message, or empty. */
-    juce::String renderNow (te::Edit&, const juce::File&, const juce::Array<te::Track*>& tracks, te::TimeRange, bool withMaster,
-                            const juce::Array<te::AudioTrack*>& silentSources = {});
-
     //==============================================================================
     /** Tracks rendered from the song's start to well past its end, a bit at a time, to be cut
         where their sound has died away (audio::export_tail). */

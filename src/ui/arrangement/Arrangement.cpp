@@ -48,6 +48,11 @@ namespace harmonia::ui::arrangement
         clipArea.onProblem = [this] (const juce::String& text) { tell (text, true); };
         headers.onViewChanged = [this] { viewChanged(); };
         headers.onMessage = [this] (const juce::String& text, bool isProblem) { tell (text, isProblem); };
+        headers.onRunJob = [this] (std::unique_ptr<audio::ExportJob> job, std::function<void (audio::ExportJob&)> onDone,
+                                   std::function<void()> onCancelled)
+        {
+            runJob (onRunJob, std::move (job), std::move (onDone), std::move (onCancelled));
+        };
         clipArea.getGestures().onClipMenuRequested = [this] (te::Clip& clip, juce::Point<float> position)
         {
             showClipMenu (clip, position);
@@ -363,14 +368,30 @@ namespace harmonia::ui::arrangement
 
     void Arrangement::consolidate()
     {
-        const auto time = model.getTimeSelection().has_value();
-        const auto done = model.consolidate();
+        // Sound is rendered first: that is a job (notes alone are joined at once).
+        const auto ofSelectedTime = model.getTimeSelection().has_value();
+        auto job = model.consolidateJob();
+        auto* consolidation = job.get();
+        const auto safe = juce::Component::SafePointer<Arrangement> (this);
 
+        runJob (onRunJob, std::move (job), [safe, consolidation, ofSelectedTime] (audio::ExportJob&)
+        {
+            if (safe != nullptr)
+                safe->tellConsolidated (consolidation->getResult(), ofSelectedTime);
+        }, [safe]
+        {
+            if (safe != nullptr)
+                safe->tell ("Consolidating was cancelled: the clips are as they were", false);
+        });
+    }
+
+    void Arrangement::tellConsolidated (const ArrangementModel::Consolidated& done, bool ofSelectedTime)
+    {
         if (done.problem.isNotEmpty())
             tell (done.problem, true);
         else if (done.rows == 0)
-            tell (time ? "Nothing to consolidate: the selected time is empty"
-                       : "Nothing to consolidate: select the clips to make one of, or a piece of time (drag in a track's row)", true);
+            tell (ofSelectedTime ? "Nothing to consolidate: the selected time is empty"
+                                 : "Nothing to consolidate: select the clips to make one of, or a piece of time (drag in a track's row)", true);
         else
             tell ("One clip made of " + juce::String (done.clipsBefore) + (done.clipsBefore == 1 ? " clip" : " clips")
                       + (done.rows > 1 ? " on each of " + juce::String (done.rows) + " rows" : juce::String())

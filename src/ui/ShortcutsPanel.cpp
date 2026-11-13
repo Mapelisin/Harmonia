@@ -35,7 +35,7 @@ namespace harmonia::ui
                 { "File > Templates", "A new song from a template; this song saved as one; the one Ctrl+N starts from" },
                 { "Ctrl+S / Ctrl+Shift+S", "Save / save as" },
                 { "Ctrl+R", "Export the song: WAV, FLAC or MP3 (the File menu also exports the loop region)" },
-                { "Esc while it exports", "Cancel the export: no file is left half-written" },
+                { "Esc while it renders", "Cancel the export, freeze, Mix Doctor...: nothing is left half-done" },
                 { "F6 / F7 / F8 / F9", "Sounds / piano roll (audio clip on an audio track) / automation / mixer below" },
                 { "F12", "Close all plugin windows (View > Plugin windows: the open ones, and keeping them on top)" },
                 { "Click the CPU meter", "Which plugin takes how much of the audio time, the heaviest first" },

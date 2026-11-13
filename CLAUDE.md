@@ -185,6 +185,20 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   время закрыта от правок. `exportSong` / `exportStems` — те же задачи за один раз (тесты, анализ). Новый
   долгий рендер из окна — так же, не блокирующим вызовом. Пока задача жива, песня временно изменена
   (`export_render::TemporaryState`): не сохранять, не копировать, не давать править (`MainWindow::isExporting`).
+- Всё долгое из окна — задача (решение 65): заморозка `audio::freeze::makeJob`, рендер дорожки и клипов
+  `ExportJob::track / clips`, склейка `consolidate::makePrepareJob`, громкость `loudness::makeMeasureJob /
+  makeLimiterJob`, Mix Doctor `mix_check::makeCheckJob / makeFixJob`; в аранжировке —
+  `ArrangementModel::freezeTrackJob / renderToAudioJob / consolidateJob`. Запуск: `MainComponent::runExport
+  (job, onDone, onCancelled)` или `runJob` (итог нужного типа); компоненты аранжировки — через `ui::JobRunner`
+  (`onRunJob`, свободная `ui::runJob`). Прежние функции (`freeze`, `renderTrack`, `measureSong`, `check`…) —
+  те же задачи, доведённые до конца (`ExportJob::finish`): для тестов и анализа, не для окна.
+- Задача из нескольких рендеров пишется обычной функцией-сопрограммой: `audio::RoutineJob` + `Steps`
+  (`co_yield *job` — ждать другую задачу, пока окно живёт; `begin (run())` последней строкой конструктора,
+  `stop()` первой строкой деструктора; итог — `ResultJob<T>`; «потом сделать ещё вот это» — `followedBy`).
+  Задача, которая по дороге меняет песню (лимитер, правки Mix Doctor), держит `te::Edit::UndoTransactionInhibitor`
+  — иначе таймер движка разобьёт её на несколько шагов undo; при отмене и ошибке окно зовёт
+  `core::Project::takeBackGesture()`. Шаг undo начинать до первого изменения: `effects::add` начинает его до
+  создания плагина (движок пишет в undo уже при создании).
 - Настройки — `ui::SettingsPanel` (вкладки в `src/ui/settings`). MIDI-клавиатуры вкл/выкл — `MidiInputs::setKeyboardOn`
   (хранит Tracktion); плагины в своих процессах вкл/выкл — `Session::setPluginSandboxOn` (в тестах включено на
   старте). Скан плагинов — один на программу (`PluginScanner::startScan` вернёт false).

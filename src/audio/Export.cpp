@@ -9,39 +9,22 @@ namespace harmonia::audio
 
     juce::String renderTrack (te::AudioTrack& track, const juce::File& file, te::TimeRange range, bool beforeFader)
     {
-        TemporaryState temporary (track.edit);
-        temporary.hear (track);
-        temporary.playToMaster (track);
-
-        if (beforeFader)
-            temporary.bypassFader (track);
-
-        auto tracks = getOtherTracks (track.edit);
-        tracks.add (&track);
-
-        const auto sources = keepSources (temporary, { &track }, tracks);
-        return renderNow (track.edit, file, tracks, range, false, sources);
+        const auto job = ExportJob::track (track, file, range, beforeFader);
+        job->finish();
+        return job->getError();
     }
 
     juce::String renderClips (te::AudioTrack& track, const juce::File& file, te::TimeRange range)
     {
-        TemporaryState temporary (track.edit);
-        temporary.hear (track);
-        temporary.playToMaster (track);
-        temporary.bypassPlugins (track);
-
-        juce::Array<te::Track*> tracks;
-        tracks.add (&track);
-        return renderNow (track.edit, file, tracks, range, false);
+        const auto job = ExportJob::clips (track, file, range);
+        job->finish();
+        return job->getError();
     }
 
     juce::String exportSong (te::Edit& edit, const juce::File& file, const ExportFormat& format, std::optional<te::TimeRange> part)
     {
         const auto job = ExportJob::song (edit, file, format, part);
-
-        while (job->step (1000))
-        {}
-
+        job->finish();
         return job->getError();
     }
 

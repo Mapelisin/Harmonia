@@ -214,8 +214,8 @@ TEST_SUITE ("audio::mix_check")
         CHECK (report->tracks[0].level->lufs - report->tracks[1].level->lufs > 20.0);
         CHECK (problemsOf (*report).contains ("\"Whisper\" is"));
 
-        CHECK (steps == std::vector<juce::String> { "Mix Doctor: listening to the mix...", "Mix Doctor: listening to track 1 of 2...",
-                                                    "Mix Doctor: listening to track 2 of 2..." });
+        CHECK (steps == std::vector<juce::String> { "Mix Doctor: listening to the mix", "Mix Doctor: listening to track 1 of 2",
+                                                    "Mix Doctor: listening to track 2 of 2" });
 
         // Nothing to hear: says so.
         auto empty = core::Project::createEmpty (test::session());
@@ -307,5 +307,126 @@ TEST_SUITE ("audio::mix_check")
         juce::String error;
         CHECK (mix_check::applyFixes (project->getEdit(), {}, error).isEmpty());
         CHECK (error.isEmpty());
+    }
+
+    TEST_CASE ("Mix Doctor a bit at a time: it names the track it listens to and finds what it finds in one go; its fixes stay one undo step")
+    {
+        test::TempFolder temp;
+        auto project = core::Project::createEmpty (test::session());
+        auto& edit = project->getEdit();
+
+        // Steady tones: every render of them is the same.
+        const auto addPart = [&project, &temp] (te::AudioTrack* track, const juce::String& name) -> te::AudioTrack&
+        {
+            if (track == nullptr)
+                track = project->addTrack (name);
+
+            REQUIRE (track != nullptr);
+            track->setName (name);
+            core::tracks::setKind (*track, core::tracks::Kind::audio);
+            juce::String problem;
+            REQUIRE (project->addAudioClip (*track, test::writeTone (temp.getFile (name + ".wav"), 4.0, 0.9f, 2), 0.0, problem) != nullptr);
+            return *track;
+        };
+
+        // Loud chords that clip with the master at +6 dB; a pad far under them.
+        auto& chords = addPart (project->getTracks().getFirst(), "Chords");
+        auto& pad = addPart (nullptr, "Pad");
+        pad.getVolumePlugin()->setVolumeDb (-20.0f);
+        edit.getMasterVolumePlugin()->setVolumeDb (6.0f);
+        project->clearUndoHistory();
+
+        const auto pump = [] (int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil (ms); };
+        juce::String error;
+        const auto inOneGo = mix_check::check (edit, error);
+        REQUIRE_MESSAGE (inOneGo.has_value(), error.toStdString());
+
+        // Stopped while it listens to the second track: the song is as it was.
+        auto job = mix_check::makeCheckJob (edit);
+        CHECK (job->getStage() == "Mix Doctor: listening to the mix");
+        CHECK (job->getProgress() == 0.0f);
+
+        while (job->getStage() != "Mix Doctor: listening to track 2 of 2")
+            REQUIRE (job->step (5));
+
+        REQUIRE (job->step (0));
+        CHECK (job->getProgress() > 0.6f);
+        job.reset();
+        CHECK_FALSE (edit.isRendering());
+        CHECK_FALSE (project->canUndo());
+        CHECK_FALSE (chords.isMuted (false));
+        CHECK_FALSE (pad.isMuted (false));
+
+        // To its end.
+        job = mix_check::makeCheckJob (edit);
+        juce::StringArray stages;
+        auto last = 0.0f;
+
+        do
+        {
+            stages.addIfNotAlreadyThere (job->getStage());
+            CHECK (job->getProgress() >= last);
+            last = job->getProgress();
+        }
+        while (job->step (5));
+
+        CHECK (stages == juce::StringArray { "Mix Doctor: listening to the mix", "Mix Doctor: listening to track 1 of 2",
+                                             "Mix Doctor: listening to track 2 of 2" });
+        REQUIRE_MESSAGE (job->getResult().has_value(), job->getError().toStdString());
+        const auto report = *job->getResult();
+        CHECK (report.mix.lufs == doctest::Approx (inOneGo->mix.lufs).epsilon (0.001));
+        CHECK (report.mix.peakDb == doctest::Approx (inOneGo->mix.peakDb).epsilon (0.01));
+        REQUIRE (report.tracks.size() == 2);
+        CHECK (report.tracks[0].name == "Chords");
+        CHECK (report.tracks[1].name == "Pad");
+        REQUIRE (report.tracks[1].level.has_value());
+        CHECK (report.tracks[1].level->lufs == doctest::Approx (inOneGo->tracks[1].level->lufs).epsilon (0.001));
+        CHECK_FALSE (project->canUndo());
+
+        const auto fixes = mix_check::findFixes (report, edit);
+        REQUIRE (fixes.clips);
+        REQUIRE (fixes.raise.size() == 1);
+
+        // The fixes stopped while the song is listened to again: the pad is up already. The step
+        // begun for them taken back, all is as it was.
+        project->beginGesture ("Mix Doctor fixes");
+        auto fix = mix_check::makeFixJob (edit, fixes);
+        CHECK (fix->getStage() == "Mix Doctor: listening to the mix again");
+        CHECK (pad.getVolumePlugin()->getVolumeDb() > -19.0f);
+        REQUIRE (fix->step (5));
+        fix.reset();
+        project->takeBackGesture();
+        CHECK (pad.getVolumePlugin()->getVolumeDb() == doctest::Approx (-20.0f));
+        CHECK (edit.getMasterVolumePlugin()->getVolumeDb() == doctest::Approx (6.0f));
+
+        // To their end, with time going by in between (the engine would begin a new undo step by
+        // itself 350 ms after a change, were it not held back): one undo step all the same.
+        project->beginGesture ("Mix Doctor fixes");
+        fix = mix_check::makeFixJob (edit, fixes);
+        auto waited = false;
+
+        for (int step = 0; fix->step (5); ++step)
+        {
+            if (step % 20 == 0)
+                pump (1);
+
+            if (! waited)
+            {
+                waited = true;
+                pump (500);
+            }
+        }
+
+        CHECK (waited);
+        CHECK (fix->getError().isEmpty());
+        REQUIRE (fix->getResult().size() == 2);
+        CHECK (fix->getResult()[0].startsWith ("master -"));
+        CHECK (fix->getResult()[1].startsWith ("\"Pad\" +"));
+        CHECK (edit.getMasterVolumePlugin()->getVolumeDb() < 6.0f);
+
+        pump (500);
+        project->undo();
+        CHECK (pad.getVolumePlugin()->getVolumeDb() == doctest::Approx (-20.0f));
+        CHECK (edit.getMasterVolumePlugin()->getVolumeDb() == doctest::Approx (6.0f));
     }
 }

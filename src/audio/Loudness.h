@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/RoutineJob.h"
 #include "core/Session.h"
 
 /** How loud the song is, the way streaming services measure it (integrated loudness in LUFS, by
@@ -43,6 +44,11 @@ namespace harmonia::audio::loudness
         Nothing, with the reason in `error`, if there is nothing to hear. */
     std::optional<Measurement> measureSong (te::Edit&, juce::String& error);
 
+    /** measureSong a bit at a time (audio::ExportJob): its result is nothing if there was
+        nothing to hear (getError then says so). */
+    using MeasureJob = ResultJob<std::optional<Measurement>>;
+    std::unique_ptr<MeasureJob> makeMeasureJob (te::Edit&);
+
     /** Where streaming services (Spotify, YouTube, Apple Music...) bring songs to. */
     inline constexpr double streamingLufs = -14.0;
 
@@ -77,4 +83,11 @@ namespace harmonia::audio::loudness
         already begun. Nothing, with the reason in `error`, if there's nothing to hear. */
     std::optional<LimiterResult> raiseWithLimiter (te::Edit&, juce::String& error, double targetLufs = streamingLufs,
                                                    const std::function<void (const juce::String& step)>& progress = {});
+
+    /** raiseWithLimiter a bit at a time (audio::ExportJob). However long it takes, what it
+        changes stays in the undo step begun before it was made. Stopped half way (or failed),
+        it leaves what it has changed so far in that step: take the step back
+        (core::Project::takeBackGesture). */
+    using LimiterJob = ResultJob<std::optional<LimiterResult>>;
+    std::unique_ptr<LimiterJob> makeLimiterJob (te::Edit&, double targetLufs = streamingLufs);
 }

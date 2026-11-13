@@ -115,93 +115,140 @@ namespace harmonia::audio::mix_check
     }
 
     //==============================================================================
+    namespace
+    {
+        class SongCheck final : public CheckJob
+        {
+        public:
+            explicit SongCheck (te::Edit& e)
+                : edit (e)
+            {
+                begin (run());
+            }
+
+            ~SongCheck() override
+            {
+                stop();
+            }
+
+            juce::String getStage() const override
+            {
+                if (isFinished() || listeningTo == nullptr)
+                    return CheckJob::getStage();
+
+                const auto total = juce::jmax (1, listeningTo->getNumParts());
+                return "Mix Doctor: listening to track " + juce::String (juce::jmin (listeningTo->getNumPartsDone() + 1, total))
+                           + " of " + juce::String (total);
+            }
+
+        private:
+            te::Edit& edit;
+            const ExportJob* listeningTo = nullptr;     // the tracks' job, while it is waited for
+
+            Steps run()
+            {
+                Report report;
+
+                // Each track as it is heard: with its effects and what it sends to the reverb or
+                // delay. (Made first, though done second: how many there are says how long this is.)
+                const TemporaryFolder folder;
+                const juce::String prefix ("Check");
+                StemsOptions options;
+                options.songName = prefix;
+                const auto tracks = ExportJob::stems (edit, folder.folder, options);
+                const auto numTracks = juce::jmax (1, tracks->getNumParts());
+
+                // The mix: its loudness and balance, in one pass over the rendered song.
+                say ("Mix Doctor: listening to the mix", 0, numTracks + 1);
+
+                {
+                    const juce::TemporaryFile mixFile (".wav");
+
+                    {
+                        const auto render = ExportJob::song (edit, mixFile.getFile(), {});
+                        co_yield *render;
+
+                        if (render->getError().isNotEmpty())
+                        {
+                            fail (render->getError().replace ("Nothing to export", "Nothing to check"));
+                            co_return;
+                        }
+                    }
+
+                    juce::AudioFormatManager formats;
+                    formats.registerBasicFormats();
+                    std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (mixFile.getFile()));
+
+                    if (reader == nullptr || reader->sampleRate <= 0.0 || reader->numChannels == 0)
+                    {
+                        fail ("Can't read the rendered song back");
+                        co_return;
+                    }
+
+                    loudness::Meter loudnessMeter (reader->sampleRate, (int) reader->numChannels);
+                    BalanceMeter balanceMeter (reader->sampleRate);
+                    juce::AudioBuffer<float> block ((int) reader->numChannels, blockSize);
+
+                    for (juce::int64 position = 0; position < reader->lengthInSamples; position += blockSize)
+                    {
+                        const auto count = (int) std::min ((juce::int64) blockSize, reader->lengthInSamples - position);
+                        reader->read (&block, 0, count, position, true, true);
+                        loudnessMeter.process (block, count);
+                        balanceMeter.process (block, count);
+                    }
+
+                    reader.reset();     // let go of the file before it is deleted
+                    const auto measured = loudnessMeter.finish();
+
+                    if (! measured.has_value())
+                    {
+                        fail ("Nothing to check: the song is silent");
+                        co_return;
+                    }
+
+                    report.mix = *measured;
+                    report.balance = balanceMeter.getBalance();
+                }
+
+                say ({}, 1, numTracks + 1, numTracks);
+                listeningTo = tracks.get();
+                co_yield *tracks;
+                listeningTo = nullptr;
+
+                if (tracks->getError().isNotEmpty())
+                {
+                    fail (tracks->getError().replace ("Nothing to export", "Nothing to check"));
+                    co_return;
+                }
+
+                for (const auto& file : tracks->getFiles())
+                {
+                    const auto [name, id] = trackOfStem (edit, file, prefix);
+                    report.tracks.push_back ({ name, loudness::measureFile (file), id });
+                }
+
+                std::stable_sort (report.tracks.begin(), report.tracks.end(), [] (const TrackLevel& a, const TrackLevel& b)
+                {
+                    const auto levelOf = [] (const TrackLevel& t) { return t.level.has_value() ? t.level->lufs : -1000.0; };
+                    return levelOf (a) > levelOf (b);
+                });
+
+                result = std::move (report);
+            }
+        };
+    }
+
+    std::unique_ptr<CheckJob> makeCheckJob (te::Edit& edit)
+    {
+        return std::make_unique<SongCheck> (edit);
+    }
+
     std::optional<Report> check (te::Edit& edit, juce::String& error, const std::function<void (const juce::String&)>& progress)
     {
-        const auto say = [&progress] (const juce::String& step)
-        {
-            if (progress != nullptr)
-                progress (step);
-        };
-
-        Report report;
-
-        // The mix: its loudness and balance, in one pass over the rendered song.
-        say ("Mix Doctor: listening to the mix...");
-
-        {
-            const juce::TemporaryFile mixFile (".wav");
-
-            if (error = exportWav (edit, mixFile.getFile()); error.isNotEmpty())
-            {
-                error = error.replace ("Nothing to export", "Nothing to check");
-                return std::nullopt;
-            }
-
-            juce::AudioFormatManager formats;
-            formats.registerBasicFormats();
-            std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (mixFile.getFile()));
-
-            if (reader == nullptr || reader->sampleRate <= 0.0 || reader->numChannels == 0)
-            {
-                error = "Can't read the rendered song back";
-                return std::nullopt;
-            }
-
-            loudness::Meter loudnessMeter (reader->sampleRate, (int) reader->numChannels);
-            BalanceMeter balanceMeter (reader->sampleRate);
-            juce::AudioBuffer<float> block ((int) reader->numChannels, blockSize);
-
-            for (juce::int64 position = 0; position < reader->lengthInSamples; position += blockSize)
-            {
-                const auto count = (int) std::min ((juce::int64) blockSize, reader->lengthInSamples - position);
-                reader->read (&block, 0, count, position, true, true);
-                loudnessMeter.process (block, count);
-                balanceMeter.process (block, count);
-            }
-
-            reader.reset();     // let go of the file before it is deleted
-            const auto measured = loudnessMeter.finish();
-
-            if (! measured.has_value())
-            {
-                error = "Nothing to check: the song is silent";
-                return std::nullopt;
-            }
-
-            report.mix = *measured;
-            report.balance = balanceMeter.getBalance();
-        }
-
-        // Each track as it is heard: with its effects and what it sends to the reverb or delay.
-        {
-            const TemporaryFolder stems;
-            const juce::String prefix ("Check");
-            const auto result = exportStems (edit, stems.folder, prefix, [&say] (int done, int total)
-            {
-                if (done < total)
-                    say ("Mix Doctor: listening to track " + juce::String (done + 1) + " of " + juce::String (total) + "...");
-            });
-
-            if (result.error.isNotEmpty())
-            {
-                error = result.error.replace ("Nothing to export", "Nothing to check");
-                return std::nullopt;
-            }
-
-            for (const auto& file : result.files)
-            {
-                const auto [name, id] = trackOfStem (edit, file, prefix);
-                report.tracks.push_back ({ name, loudness::measureFile (file), id });
-            }
-        }
-
-        std::stable_sort (report.tracks.begin(), report.tracks.end(), [] (const TrackLevel& a, const TrackLevel& b)
-        {
-            const auto levelOf = [] (const TrackLevel& t) { return t.level.has_value() ? t.level->lufs : -1000.0; };
-            return levelOf (a) > levelOf (b);
-        });
-
-        return report;
+        const auto job = makeCheckJob (edit);
+        job->finish (progress);
+        error = job->getError();
+        return job->getResult();
     }
 
     Fixes findFixes (const Report& report, te::Edit& edit)
@@ -250,86 +297,133 @@ namespace harmonia::audio::mix_check
         return fixes;
     }
 
+    namespace
+    {
+        class LevelFix final : public FixJob
+        {
+        public:
+            LevelFix (te::Edit& e, const Fixes& f)
+                : edit (e), fixes (f)
+            {
+                begin (run());
+            }
+
+            ~LevelFix() override
+            {
+                stop();
+            }
+
+        private:
+            static constexpr int maxAttempts = 6;
+
+            te::Edit& edit;
+            const Fixes fixes;
+
+            /** The lost tracks up. True if any went. */
+            bool raiseTracks()
+            {
+                bool raised = false;
+
+                for (const auto& [id, gainDb] : fixes.raise)
+                {
+                    auto* track = dynamic_cast<te::AudioTrack*> (te::findTrackForID (edit, id));
+                    auto* volume = track != nullptr ? track->getVolumePlugin() : nullptr;
+
+                    if (volume == nullptr)
+                        continue;
+
+                    const auto before = volume->getVolumeDb();
+                    volume->setVolumeDb (std::min (maxFaderDb, before + gainDb));
+
+                    if (const auto added = volume->getVolumeDb() - before; added > 0.05f)
+                    {
+                        result.add ("\"" + track->getName() + "\" " + dbText (added));
+                        raised = true;
+                    }
+                }
+
+                return raised;
+            }
+
+            Steps run()
+            {
+                // However long the listening takes, what is changed stays one undo step.
+                const te::Edit::UndoTransactionInhibitor oneStep (edit);
+
+                if (const auto raised = raiseTracks(); ! fixes.clips && ! raised)
+                    co_return;
+
+                // The peaks to the ceiling: over 0 dB the render can't say by how much, so down 3 dB, then
+                // 6, then 12, listening again each time; under it, exactly to the ceiling (back up a little
+                // if it went down too far, never above where the master was). Then once more to be sure:
+                // synths start their notes at random phases, so the peaks differ a little from render to
+                // render; a louder one brings the master down again (never up).
+                auto lowered = 0.0f, step = 3.0f;
+                auto settled = false;
+
+                for (int attempt = 0; attempt < maxAttempts; ++attempt)
+                {
+                    say ("Mix Doctor: listening to the mix again", attempt, maxAttempts);
+
+                    const auto measure = loudness::makeMeasureJob (edit);
+                    co_yield *measure;
+                    const auto measured = measure->getResult();
+
+                    if (! measured.has_value())
+                    {
+                        fail (measure->getError());
+                        break;
+                    }
+
+                    if (measured->peakDb > clipDb)
+                    {
+                        lowered -= loudness::addToMasterVolume (edit, -step);
+                        step *= 2.0f;
+                        continue;
+                    }
+
+                    const auto over = measured->peakDb - loudness::peakCeilingDb;
+
+                    if (settled)
+                    {
+                        if (over > 0.1f)
+                        {
+                            lowered -= loudness::addToMasterVolume (edit, -over);
+                            continue;
+                        }
+
+                        break;
+                    }
+
+                    settled = true;
+
+                    if (over > 0.05f || lowered > 0.05f)
+                    {
+                        lowered -= loudness::addToMasterVolume (edit, std::min (-over, lowered));
+                        continue;
+                    }
+
+                    break;
+                }
+
+                if (lowered > 0.05f)
+                    result.insert (0, "master " + dbText (-lowered));
+            }
+        };
+    }
+
+    std::unique_ptr<FixJob> makeFixJob (te::Edit& edit, const Fixes& fixes)
+    {
+        return std::make_unique<LevelFix> (edit, fixes);
+    }
+
     juce::StringArray applyFixes (te::Edit& edit, const Fixes& fixes, juce::String& error,
                                   const std::function<void (const juce::String&)>& progress)
     {
-        juce::StringArray done;
-        bool raised = false;
-
-        for (const auto& [id, gainDb] : fixes.raise)
-        {
-            auto* track = dynamic_cast<te::AudioTrack*> (te::findTrackForID (edit, id));
-            auto* volume = track != nullptr ? track->getVolumePlugin() : nullptr;
-
-            if (volume == nullptr)
-                continue;
-
-            const auto before = volume->getVolumeDb();
-            volume->setVolumeDb (std::min (maxFaderDb, before + gainDb));
-
-            if (const auto added = volume->getVolumeDb() - before; added > 0.05f)
-            {
-                done.add ("\"" + track->getName() + "\" " + dbText (added));
-                raised = true;
-            }
-        }
-
-        if (! fixes.clips && ! raised)
-            return done;
-
-        // The peaks to the ceiling: over 0 dB the render can't say by how much, so down 3 dB, then
-        // 6, then 12, listening again each time; under it, exactly to the ceiling (back up a little
-        // if it went down too far, never above where the master was). Then once more to be sure:
-        // synths start their notes at random phases, so the peaks differ a little from render to
-        // render; a louder one brings the master down again (never up).
-        auto lowered = 0.0f, step = 3.0f;
-        auto settled = false;
-
-        for (int attempt = 0; attempt < 6; ++attempt)
-        {
-            if (progress != nullptr)
-                progress ("Mix Doctor: listening to the mix again...");
-
-            const auto measured = loudness::measureSong (edit, error);
-
-            if (! measured.has_value())
-                break;
-
-            if (measured->peakDb > clipDb)
-            {
-                lowered -= loudness::addToMasterVolume (edit, -step);
-                step *= 2.0f;
-                continue;
-            }
-
-            const auto over = measured->peakDb - loudness::peakCeilingDb;
-
-            if (settled)
-            {
-                if (over > 0.1f)
-                {
-                    lowered -= loudness::addToMasterVolume (edit, -over);
-                    continue;
-                }
-
-                break;
-            }
-
-            settled = true;
-
-            if (over > 0.05f || lowered > 0.05f)
-            {
-                lowered -= loudness::addToMasterVolume (edit, std::min (-over, lowered));
-                continue;
-            }
-
-            break;
-        }
-
-        if (lowered > 0.05f)
-            done.insert (0, "master " + dbText (-lowered));
-
-        return done;
+        const auto job = makeFixJob (edit, fixes);
+        job->finish (progress);
+        error = job->getError();
+        return job->getResult();
     }
 
     juce::StringArray findProblems (const Report& report)

@@ -79,8 +79,9 @@ namespace harmonia::ui
         StatusBar& getStatusBar() noexcept                              { return statusBar; }
         arrangement::ArrangementModel& getArrangementModel() noexcept   { return arrangementModel; }
 
-        /** File -> Check loudness: renders the song, measures it the way streaming services do and
-            says how to bring it to their level (offering to change the master volume). */
+        /** File -> Check loudness: renders the song (under the progress panel), measures it the
+            way streaming services do and says how to bring it to their level (offering to change
+            the master volume). */
         void checkLoudness();
 
         /** Adds `gainDb` to the master volume (one undo step) and says what changed. */
@@ -199,10 +200,22 @@ namespace harmonia::ui
         /** Which plugin takes how much of the sound's time: a bubble at the CPU meter. */
         void showPluginLoad();
 
-        /** Runs an export with its progress over the whole window (ui::ExportProgress): playback
-            stops, the window stays alive and Cancel or Esc stops the export. `onDone` hears of
-            its end, well or not, unless it was cancelled. */
-        void runExport (std::unique_ptr<audio::ExportJob>, std::function<void (audio::ExportJob&)> onDone);
+        /** Runs an export, or any other job that renders the song, with its progress over the
+            whole window (ui::ExportProgress): playback stops, the window stays alive and Cancel
+            or Esc stops the job. `onDone` hears of its end, well or not, unless it was cancelled:
+            then `onCancelled` does (without one, the status bar says the export was cancelled). */
+        void runExport (std::unique_ptr<audio::ExportJob>, std::function<void (audio::ExportJob&)> onDone,
+                        std::function<void()> onCancelled = {});
+
+        /** runExport for a job that gives something back: `onDone` gets it as what it is. */
+        template <typename Job>
+        void runJob (std::unique_ptr<Job> job, std::type_identity_t<std::function<void (Job&)>> onDone,
+                     std::function<void()> onCancelled = {})
+        {
+            auto* typed = job.get();
+            runExport (std::move (job), [typed, done = std::move (onDone)] (audio::ExportJob&) { done (*typed); },
+                       std::move (onCancelled));
+        }
         bool isExporting() const noexcept                               { return exportProgress.isRunning(); }
         ExportProgress& getExportProgress() noexcept                    { return exportProgress; }
 
@@ -291,6 +304,8 @@ namespace harmonia::ui
             and the instrument row follow. */
         void currentChanged();
         void updateLoop();
+        void showLoudnessAdvice (const audio::loudness::Measurement&);
+        void showMixReport (const audio::mix_check::Report&);
 
         /** A take made clips for what was played where the track had none: with no clip open,
             the first of them opens in the piano roll; the status bar says where they are. */

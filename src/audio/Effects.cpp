@@ -133,7 +133,11 @@ namespace harmonia::audio::effects
             return nullptr;
         }
 
+        // The step begins before the plugin is made: the engine writes a property of the new plugin
+        // with undo, and after a step begun by whoever called (but not yet used) that would be a
+        // step of its own, one Ctrl+Z that takes nothing back.
         auto& edit = chain.getEdit();
+        edit.getUndoManager().beginNewTransaction ("Add " + type.name);
         const auto plugin = type.isBuiltIn()
                               ? edit.getPluginCache().createNewPlugin (type.builtInType, {})
                               : edit.getPluginCache().createNewPlugin (te::ExternalPlugin::xmlTypeName, type.description);
@@ -159,7 +163,6 @@ namespace harmonia::audio::effects
             return nullptr;
         }
 
-        edit.getUndoManager().beginNewTransaction ("Add " + type.name);
         chain.insertPlugin (plugin, getInsertIndex (chain, position), nullptr);
 
         if (! chain.contains (plugin.get()))

@@ -701,10 +701,20 @@ namespace harmonia::ui::arrangement
             return;
         }
 
-        const auto error = model.freezeTrack (track);
+        const auto safe = juce::Component::SafePointer<TrackHeaders> (this);
 
-        if (onMessage != nullptr)
-            onMessage (error.isNotEmpty() ? error : trackName + " frozen: it plays as audio, its instrument and effects are off", error.isNotEmpty());
+        runJob (onRunJob, model.freezeTrackJob (track), [safe, trackName] (audio::ExportJob& job)
+        {
+            const auto error = job.getError();
+
+            if (safe != nullptr && safe->onMessage != nullptr)
+                safe->onMessage (error.isNotEmpty() ? error : trackName + " frozen: it plays as audio, its instrument and effects are off",
+                                 error.isNotEmpty());
+        }, [safe, trackName]
+        {
+            if (safe != nullptr && safe->onMessage != nullptr)
+                safe->onMessage ("Freezing " + trackName + " was cancelled: the track is as it was", false);
+        });
     }
 
     void TrackHeaders::startRenaming (te::AudioTrack& track)
@@ -853,13 +863,20 @@ namespace harmonia::ui::arrangement
 
     void TrackHeaders::renderToAudio (te::AudioTrack& track)
     {
-        juce::MouseCursor::showWaitCursor();
         const auto name = track.getName();
-        const auto error = model.renderToAudio (track);
-        juce::MouseCursor::hideWaitCursor();
+        const auto safe = juce::Component::SafePointer<TrackHeaders> (this);
 
-        if (onMessage != nullptr)
-            onMessage (error.isNotEmpty() ? error : "Rendered " + name + " to audio (the track is muted)", error.isNotEmpty());
+        runJob (onRunJob, model.renderToAudioJob (track), [safe, name] (audio::ExportJob& job)
+        {
+            const auto error = job.getError();
+
+            if (safe != nullptr && safe->onMessage != nullptr)
+                safe->onMessage (error.isNotEmpty() ? error : "Rendered " + name + " to audio (the track is muted)", error.isNotEmpty());
+        }, [safe, name]
+        {
+            if (safe != nullptr && safe->onMessage != nullptr)
+                safe->onMessage ("Rendering " + name + " to audio was cancelled: nothing was added", false);
+        });
     }
 
     void TrackHeaders::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)

@@ -523,6 +523,12 @@ namespace harmonia::core
         edit->getUndoManager().beginNewTransaction (name);
     }
 
+    void Project::takeBackGesture()
+    {
+        if (edit->getUndoManager().getNumActionsInCurrentTransaction() > 0)
+            undo();
+    }
+
     void Project::clearUndoHistory()
     {
         edit->getUndoManager().clearUndoHistory();

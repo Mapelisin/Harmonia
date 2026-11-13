@@ -113,6 +113,11 @@ namespace harmonia::core
         /** Starts a new undo transaction; everything changed until the next call is undone together. */
         void beginGesture (const juce::String& name);
 
+        /** Takes back what has been changed since beginGesture: for a command stopped half way.
+            If nothing has, it does nothing (an earlier step is never taken back). Like any undo,
+            what it took back can be done again with redo. */
+        void takeBackGesture();
+
         /** Forgets all undo steps, e.g. after setting up a new project's defaults. The project
             then counts as unchanged. */
         void clearUndoHistory();
