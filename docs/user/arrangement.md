@@ -572,7 +572,7 @@ The **File** menu (it also has **Settings...** for the sound card, MIDI keyboard
 | — | Earlier versions: the song as it was before each of the last saves (see below) |
 | — | Collect all files into the song's folder: copy the sounds the song uses next to it (see below) |
 | — | Find missing files...: sounds that were moved or deleted (see below) |
-| Ctrl+R | Export the song (the whole song, until its reverbs and delays have died away), as in FL: first choose the format (see below), then where to save. It sounds as it does in playback: muted (M) tracks are left out; with solo (S), only the soloed ones are included |
+| Ctrl+R | Export the song (the whole song, until its reverbs and delays have died away), as in FL: first choose the format - and, if you like, the sample rate, a loudness and a second file without some tracks (see below) - then where to save. It sounds as it does in playback: muted (M) tracks are left out; with solo (S), only the soloed ones are included |
 | Ctrl+, | Settings: sound card and buffer, MIDI keyboards, plugin folders |
 | — | Import audio or MIDI...: add audio or MIDI files (see "Audio clips", "MIDI files") |
 | — | Export stems (a file per track or group)...: the tracks you tick, each into a file of its own (see below) |
@@ -592,11 +592,23 @@ The **File** menu (it also has **Settings...** for the sound card, MIDI keyboard
 MP3 is made by the Windows encoder. If MP3 is not in the list, this Windows does not have it (this happens
 in "N" editions: the Media Feature Pack from Windows Settings will help).
 
+**What else the export window asks** (for the song; all three can be left as they are, and then the file is
+what it always was):
+
+| Row | What it does |
+|---|---|
+| **Sample rate** | *As the audio device plays* (the usual), or 44100 Hz (CD, streaming), 48000 Hz (video), 88200, 96000 Hz. The song is rendered at that rate straight away. An MP3 can't have more than 48000 Hz: the window says what the file will be |
+| **Loudness** | *As the song is*, or **−14 LUFS** (Spotify, YouTube, Tidal), **−16 LUFS** (Apple Music, podcasts), **−23 LUFS** (TV and radio). The whole file is turned up or down by as much as that takes, but never so far that its peaks go over −1 dB. **The song itself is not changed**: no fader moves, no limiter is added. When the export is done, the line at the bottom of the window says what came out ("-14.0 LUFS (raised by 3.2 dB)"). If the peaks did not let it get there, it says how far it got: the limiter of *Check loudness for streaming* (see [Mixer](mixer.md)) takes a song all the way |
+| **Second file** | Click it and tick tracks or groups: next to the song a second file is written, **the song without them**, as it sounds with them muted - an instrumental, a "minus one". It is called "Song (no Vocals).wav" (several tracks: "Song (minus).wav") and is as loud as the first file. *No second file* in the same list takes the ticks away |
+
+The format, the sample rate and the loudness are remembered for the next export; the tracks of the second
+file are not.
+
 By default files go to "Documents\Harmonia". An asterisk in the window title means there are unsaved
 changes; when you close, start a new project or open another one, Harmonia asks whether to save them.
 
-**While it exports.** A panel over the window says what is being done ("Rendering the song", "Stem 2 of 5:
-Drums", "Writing Song.mp3") and how far it is. **Cancel**, or **Esc**, stops the export: no half-written
+**While it exports.** A panel over the window says what is being done ("Rendering the song", "Measuring how
+loud it is", "Stem 2 of 5: Drums", "Writing Song.mp3") and how far it is. **Cancel**, or **Esc**, stops the export: no half-written
 file is left and the song is as it was. Until the export ends, the song can't be played or changed and the
 window can't be closed. (A file of the same name that is being replaced is removed when the export starts:
 cancelling doesn't bring it back.)
@@ -614,13 +626,14 @@ fading to nothing. It waits 30 seconds at the most. There is nothing to set.
   group. A group's stem is all its tracks together in one file ("the drums as one file");
 - **file names**: a pattern, with an example under it. `{song}`, `{n}` (the track's place from top to
   bottom), `{track}`, `{bpm}` and `{date}` are filled in. The usual one gives "Song - 01 Bass.wav";
-- **format**: WAV, FLAC or MP3, as for the song.
+- **format**: WAV, FLAC or MP3, as for the song;
+- **sample rate**: as the audio device plays, or 44100 / 48000 / 88200 / 96000 Hz, as for the song.
 
 Then choose a folder. Each file holds the track with its own effects and its own reverb/delay (sends), but
 without the effects and volume of the master. All the files are as long as each other: in another program
 you put them at the start and they line up, and the tracks' stems together sound like the mix. Muted (M)
-tracks are left out; with solo (S), only the soloed ones are included. The pattern and the format are
-remembered. The folder opens by itself.
+tracks are left out; with solo (S), only the soloed ones are included. The pattern, the format and the
+sample rate are remembered. The folder opens by itself.
 
 **A loop as a file** (File → Export the loop region): first mark a loop: **Ctrl + drag** on the ruler
 above the clips (or *Loop this section* in a marker's menu). Choose the format (WAV, FLAC or MP3: the loop

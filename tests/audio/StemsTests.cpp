@@ -262,6 +262,37 @@ TEST_SUITE ("audio::exportStems")
         CHECK_FALSE (band.project->canUndo());
     }
 
+    TEST_CASE ("the stems at a sample rate of their own: each file at that rate, as long and as loud as at the device's")
+    {
+        Band band;
+        auto& edit = band.project->getEdit();
+
+        audio::StemsOptions usual;
+        usual.songName = "Song";
+        const auto atDevice = audio::exportStems (edit, band.temp.getFile ("Usual"), usual);
+        REQUIRE_MESSAGE (atDevice.error.isEmpty(), atDevice.error.toStdString());
+        REQUIRE (atDevice.files.size() == 2);
+        const auto usualBass = read (atDevice.files[1]);
+
+        // A rate that isn't the device's.
+        const auto rate = std::abs (usualBass.sampleRate - 96000.0) < 1.0 ? 44100.0 : 96000.0;
+        audio::StemsOptions chosen;
+        chosen.songName = "Song";
+        chosen.sampleRate = rate;
+        const auto result = audio::exportStems (edit, band.temp.getFile ("At a rate"), chosen);
+        REQUIRE_MESSAGE (result.error.isEmpty(), result.error.toStdString());
+        REQUIRE (result.files.size() == 2);
+
+        for (const auto& file : result.files)
+            CHECK (read (file).sampleRate == doctest::Approx (rate));
+
+        const auto bass = read (result.files[1]);
+        CHECK (std::abs (bass.getSeconds() - usualBass.getSeconds()) < 0.25);
+        CHECK (bass.getRms (4.0, 5.0) == doctest::Approx (usualBass.getRms (4.0, 5.0)).epsilon (0.1));
+        CHECK (bass.getRms (0.0, 1.0) < 0.0005f);
+        CHECK_FALSE (band.project->canUndo());
+    }
+
     TEST_CASE ("a stem's file name by a pattern; what a file name can't have is left out")
     {
         const audio::ExportFormat mp3 { audio::ExportFormat::Type::mp3, 24, 320 };

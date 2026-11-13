@@ -21,9 +21,9 @@ namespace harmonia::audio
         return job->getError();
     }
 
-    juce::String exportSong (te::Edit& edit, const juce::File& file, const ExportFormat& format, std::optional<te::TimeRange> part)
+    juce::String exportSong (te::Edit& edit, const juce::File& file, const SongExport& how, std::optional<te::TimeRange> part)
     {
-        const auto job = ExportJob::song (edit, file, format, part);
+        const auto job = ExportJob::song (edit, file, how, part);
         job->finish();
         return job->getError();
     }

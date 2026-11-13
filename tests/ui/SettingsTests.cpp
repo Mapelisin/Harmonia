@@ -188,7 +188,7 @@ TEST_SUITE ("ui::Settings")
 
     TEST_CASE ("the export window paints")
     {
-        ui::ExportOptions options ({ audio::ExportFormat::Type::mp3, 16, 320 });
+        ui::ExportOptions options (audio::ExportFormat { audio::ExportFormat::Type::mp3, 16, 320 });
         const auto image = options.createComponentSnapshot (options.getLocalBounds());
         CHECK (image.isValid());
 

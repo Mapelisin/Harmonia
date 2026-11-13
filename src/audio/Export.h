@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/ExportFormat.h"
+#include "audio/SongExport.h"
 #include "core/Session.h"
 
 namespace harmonia::audio
@@ -15,8 +16,10 @@ namespace harmonia::audio
 
     /** exportWav in another format: WAV of another bit depth, FLAC or MP3. 16-bit files get a
         little noise (dither), so quiet endings fade out smoothly; an MP3 is rendered at 44.1 or
-        48 kHz (the audio interface's rate if it is one of them). */
-    juce::String exportSong (te::Edit&, const juce::File&, const ExportFormat&, std::optional<te::TimeRange> part = std::nullopt);
+        48 kHz (the audio interface's rate if it is one of them). With more than a format
+        (audio::SongExport): at a sample rate of its own, brought to a loudness, and with a
+        second file of the song without some of its tracks. */
+    juce::String exportSong (te::Edit&, const juce::File&, const SongExport&, std::optional<te::TimeRange> part = std::nullopt);
 
     /** How long a track rendered to audio or frozen is let ring out after its last clip ends. (An
         export of the song waits for silence instead: audio::export_tail.) */
@@ -42,6 +45,7 @@ namespace harmonia::audio
         juce::String songName;                              // for {song}
         juce::String namePattern = defaultStemPattern;      // getStemFileName
         ExportFormat format;                                // WAV 24-bit unless chosen otherwise
+        double sampleRate = 0.0;                            // 0: as the audio device plays
     };
 
     /** What stems can be made of, top to bottom: the song tracks that would be heard in exportWav

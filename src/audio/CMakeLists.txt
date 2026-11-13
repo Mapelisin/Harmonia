@@ -31,6 +31,8 @@ add_library(harmonia_audio STATIC
     Slices.cpp
     ExportFormat.h
     ExportFormat.cpp
+    SongExport.h
+    SongExport.cpp
     Mp3Encoder.h
     FilePreview.h
     FilePreview.cpp

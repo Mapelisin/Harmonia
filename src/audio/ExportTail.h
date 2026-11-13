@@ -31,7 +31,9 @@ namespace harmonia::audio::export_tail
 
     /** Writes the first `seconds` of a WAV (all of it, if it is shorter) to `target` in `format`,
         the last `keptSeconds` fading to nothing. The WAV is to be of the bit depth of `format` (a
-        32-bit float one for an MP3): its samples are written as they are. Returns an error
-        message, empty on success. */
-    juce::String writeCut (te::Engine&, const juce::File& wav, const juce::File& target, const ExportFormat& format, double seconds);
+        32-bit float one for an MP3): its samples are written as they are. Or a float one for any
+        format: its samples are then turned by `gainDb` first, and a 16-bit file gets its dither
+        here. Returns an error message, empty on success. */
+    juce::String writeCut (te::Engine&, const juce::File& wav, const juce::File& target, const ExportFormat& format, double seconds,
+                           float gainDb = 0.0f);
 }

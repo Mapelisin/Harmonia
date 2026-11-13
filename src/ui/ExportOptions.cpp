@@ -1,13 +1,38 @@
 #include "ui/ExportOptions.h"
+#include "audio/Export.h"
+#include "audio/Loudness.h"
 #include "audio/Mp3Encoder.h"
+#include "core/Tracks.h"
 #include "ui/Theme.h"
 
 namespace harmonia::ui
 {
     using audio::ExportFormat;
+    using audio::SongExport;
 
-    ExportOptions::ExportOptions (const ExportFormat& initial, audio::ExportUse exported)
-        : use (exported), choices (ExportFormat::getChoices())
+    namespace
+    {
+        constexpr int labelWidth = 92;
+
+        juce::String describeTarget (const audio::LoudnessTarget& target)
+        {
+            return juce::String (target.lufs, 0) + " LUFS (" + target.usedBy + ")";
+        }
+
+        /** The item of the loudness list for `lufs`: its first is the song as it is. */
+        int findLoudnessId (const std::optional<double>& lufs)
+        {
+            for (size_t i = 0; i < audio::loudnessTargets.size(); ++i)
+                if (lufs == audio::loudnessTargets[i].lufs)
+                    return (int) i + 2;
+
+            return 1;
+        }
+    }
+
+    ExportOptions::ExportOptions (const SongExport& initial, audio::ExportUse exported, const juce::Array<te::AudioTrack*>& leftOut,
+                                  double rate)
+        : use (exported), tracks (leftOut), deviceRate (rate), choices (ExportFormat::getChoices()), sampleRateBox (rate)
     {
         title.setText (use == audio::ExportUse::loop ? "Export the loop region as" : "Export the song as", juce::dontSendNotification);
         title.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
@@ -27,15 +52,53 @@ namespace harmonia::ui
             formatBox.addItem (choices[i].describe(), i + 1);
         }
 
-        formatBox.onChange = [this] { updateHint(); };
-        exportButton.onClick = [this] { if (onExport != nullptr) onExport (getFormat()); };
+        loudnessBox.addItem ("As the song is", 1);
+
+        for (size_t i = 0; i < audio::loudnessTargets.size(); ++i)
+            loudnessBox.addItem (describeTarget (audio::loudnessTargets[i]), (int) i + 2);
+
+        sampleRateBox.setRate (initial.sampleRate);
+        loudnessBox.setSelectedId (findLoudnessId (initial.loudnessLufs), juce::dontSendNotification);
+
+        for (auto* track : tracks)
+            if (initial.without.contains (track))
+                without.add (track);
+
+        sampleRateLabel.setText ("Sample rate", juce::dontSendNotification);
+        loudnessLabel.setText ("Loudness", juce::dontSendNotification);
+        withoutLabel.setText ("Second file", juce::dontSendNotification);
+
+        for (auto* label : { &sampleRateLabel, &loudnessLabel, &withoutLabel })
+        {
+            label->setFont (juce::FontOptions (theme::size::fontSize));
+            label->setColour (juce::Label::textColourId, theme::colour::textPrimary);
+        }
+
+        withoutButton.setTooltip ("A second file next to the first: the song without the tracks you tick here (an instrumental, a minus one)");
+        withoutButton.setEnabled (! tracks.isEmpty());
+        withoutButton.onClick = [this]
+        {
+            createWithoutMenu().showMenuAsync (juce::PopupMenu::Options().withTargetComponent (withoutButton));
+        };
+
+        for (auto* box : std::initializer_list<juce::ComboBox*> { &formatBox, &sampleRateBox, &loudnessBox })
+            box->onChange = [this] { updateHint(); };
+
+        exportButton.onClick = [this] { if (onExport != nullptr) onExport (getOptions()); };
         cancelButton.onClick = [this] { if (onCancel != nullptr) onCancel(); };
 
         for (auto* c : std::initializer_list<juce::Component*> { &title, &hint, &formatBox, &exportButton, &cancelButton })
             addAndMakeVisible (c);
 
-        setFormat (initial);
-        setSize (440, 170);
+        // A loop is a sample: its format alone.
+        if (isForSong())
+            for (auto* c : std::initializer_list<juce::Component*> { &sampleRateLabel, &sampleRateBox, &loudnessLabel, &loudnessBox,
+                                                                     &withoutLabel, &withoutButton })
+                addAndMakeVisible (c);
+
+        updateWithoutButton();
+        setFormat (initial.format);
+        setSize (isForSong() ? 460 : 440, isForSong() ? 330 : 170);
     }
 
     ExportFormat ExportOptions::getFormat() const
@@ -48,6 +111,72 @@ namespace harmonia::ui
         const auto index = choices.indexOf (format);
         formatBox.setSelectedId (juce::jmax (0, index) + 1, juce::dontSendNotification);
         updateHint();
+    }
+
+    SongExport ExportOptions::getOptions() const
+    {
+        SongExport how (getFormat());
+
+        if (! isForSong())
+            return how;
+
+        how.sampleRate = sampleRateBox.getRate();
+
+        if (const auto index = loudnessBox.getSelectedId() - 2; index >= 0 && index < (int) audio::loudnessTargets.size())
+            how.loudnessLufs = audio::loudnessTargets[(size_t) index].lufs;
+
+        how.without = without;
+        return how;
+    }
+
+    void ExportOptions::setWithout (te::AudioTrack& track, bool leftOut)
+    {
+        // Kept top to bottom, as the song has them.
+        juce::Array<te::AudioTrack*> now;
+
+        for (auto* t : tracks)
+            if (t == &track ? leftOut : without.contains (t))
+                now.add (t);
+
+        without = now;
+        updateWithoutButton();
+        updateHint();
+    }
+
+    juce::PopupMenu ExportOptions::createWithoutMenu()
+    {
+        juce::PopupMenu menu;
+        const juce::Component::SafePointer<ExportOptions> safe (this);
+        menu.addSectionHeader ("A second file: the song without");
+
+        for (auto* track : tracks)
+        {
+            const auto isOut = without.contains (track);
+            menu.addItem (core::tracks::isGroup (*track) ? track->getName() + "  (group)" : track->getName(), true, isOut,
+                          [safe, track, isOut] { if (safe != nullptr) safe->setWithout (*track, ! isOut); });
+        }
+
+        menu.addSeparator();
+        menu.addItem ("No second file", ! without.isEmpty(), false, [safe]
+        {
+            if (safe == nullptr)
+                return;
+
+            safe->without.clear();
+            safe->updateWithoutButton();
+            safe->updateHint();
+        });
+
+        return menu;
+    }
+
+    void ExportOptions::updateWithoutButton()
+    {
+        if (without.isEmpty())
+            withoutButton.setButtonText ("None");
+        else
+            withoutButton.setButtonText ("The song without " + (without.size() == 1 ? without.getFirst()->getName()
+                                                                                   : juce::String (without.size()) + " tracks"));
     }
 
     juce::String ExportOptions::describeUse (const ExportFormat& format, audio::ExportUse use)
@@ -101,6 +230,25 @@ namespace harmonia::ui
         if (! audio::mp3::isAvailable (320))
             text << "\nMP3: this computer has no MP3 encoder (Windows' Media Foundation is missing).";
 
+        if (isForSong())
+        {
+            const auto how = getOptions();
+
+            if (const auto fileRate = audio::getFileSampleRate (how.format, how.sampleRate, deviceRate);
+                how.sampleRate > 0.0 && fileRate != how.sampleRate)
+                text << "\nAn MP3 can't have " << SampleRateBox::describe (how.sampleRate) << ": the file will be "
+                     << SampleRateBox::describe (fileRate) << ".";
+
+            if (how.loudnessLufs.has_value())
+                text << "\nLoudness: the whole file is turned up or down to " << juce::String (*how.loudnessLufs, 0)
+                     << " LUFS, as far as its peaks allow (they stay under " << juce::String (audio::loudness::peakCeilingDb, 0)
+                     << " dB). The song itself stays as it is.";
+
+            if (! how.without.isEmpty())
+                text << "\nSecond file: next to the first, its name with \"" << audio::getMinusSuffix (how.without).trim() << "\" added"
+                     << (how.loudnessLufs.has_value() ? ", turned up or down as the first is." : ".");
+        }
+
         hint.setText (text, juce::dontSendNotification);
     }
 
@@ -116,6 +264,21 @@ namespace harmonia::ui
         formatBox.setBounds (area.removeFromTop (theme::size::buttonHeight));
         area.removeFromTop (theme::size::padding);
 
+        if (isForSong())
+        {
+            const std::pair<juce::Label*, juce::Component*> rows[] { { &sampleRateLabel, &sampleRateBox },
+                                                                     { &loudnessLabel, &loudnessBox },
+                                                                     { &withoutLabel, &withoutButton } };
+
+            for (const auto& [label, control] : rows)
+            {
+                auto row = area.removeFromTop (theme::size::buttonHeight);
+                label->setBounds (row.removeFromLeft (labelWidth));
+                control->setBounds (row);
+                area.removeFromTop (theme::size::padding);
+            }
+        }
+
         auto buttons = area.removeFromBottom (theme::size::buttonHeight);
         cancelButton.setBounds (buttons.removeFromRight (90));
         buttons.removeFromRight (theme::size::padding);
@@ -125,9 +288,13 @@ namespace harmonia::ui
         hint.setBounds (area);
     }
 
-    void ExportOptions::show (core::Session& session, std::function<void (const ExportFormat&)> onChosen, audio::ExportUse use)
+    void ExportOptions::show (core::Session& session, te::Edit& edit, std::function<void (const SongExport&)> onChosen, audio::ExportUse use)
     {
-        auto options = std::make_unique<ExportOptions> (audio::getLastExportFormat (session, use), use);
+        // The song: as its last export was. A loop: its own format, and nothing else to choose.
+        auto options = use == audio::ExportUse::song
+                           ? std::make_unique<ExportOptions> (audio::getLastSongExport (session), use, audio::getStemChoices (edit),
+                                                              edit.engine.getDeviceManager().getSampleRate())
+                           : std::make_unique<ExportOptions> (SongExport (audio::getLastExportFormat (session, use)), use);
         juce::Component::SafePointer<ExportOptions> safe (options.get());
 
         const auto close = [safe]
@@ -138,13 +305,17 @@ namespace harmonia::ui
         };
 
         options->onCancel = close;
-        options->onExport = [&session, close, onChosen, use] (const ExportFormat& format)
+        options->onExport = [&session, close, onChosen, use] (const SongExport& how)
         {
-            setLastExportFormat (session, format, use);
+            if (use == audio::ExportUse::song)
+                audio::setLastSongExport (session, how);
+            else
+                audio::setLastExportFormat (session, how.format, use);
+
             close();
 
             // After the window has gone: the next step opens a file dialog.
-            juce::MessageManager::callAsync ([onChosen, format] { if (onChosen != nullptr) onChosen (format); });
+            juce::MessageManager::callAsync ([onChosen, how] { if (onChosen != nullptr) onChosen (how); });
         };
 
         juce::DialogWindow::LaunchOptions launch;

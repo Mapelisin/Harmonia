@@ -182,7 +182,7 @@ TEST_SUITE ("audio: an export rings out")
         // In another format it rings about as long (where a tail that wavers dips under silence
         // for good is a matter of a few samples' worth).
         const auto flacFile = temp.getFile ("Wet.flac");
-        REQUIRE (audio::exportSong (project->getEdit(), flacFile, { ExportFormat::Type::flac, 16 }).isEmpty());
+        REQUIRE (audio::exportSong (project->getEdit(), flacFile, ExportFormat { ExportFormat::Type::flac, 16 }).isEmpty());
         CHECK (std::abs (read (flacFile).getSeconds() - wet.getSeconds()) < 0.5);
 
         // A part of the song is that part and no more.

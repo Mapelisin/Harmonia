@@ -122,6 +122,9 @@ seconds; a panel shows how far it is, **Esc** cancels) and measures it the same 
 Apple Music do: **integrated loudness in LUFS** (the EBU R128 standard) and the **peak** in dB. These services bring all songs to about **−14 LUFS**: if
 yours is quieter, it will sound quieter than the songs around it; if louder, it will simply be turned down.
 
+(Only need a file at that loudness, without changing the song? The **Loudness** row of the export window does
+that: see *Export format* in [Arrangement](arrangement.md).)
+
 The window tells you what to do and offers a button:
 - quiet, and there is headroom: **Raise the master by … dB** (the master fader goes up; up to +6 dB);
 - quiet, but the peaks are already at the ceiling: it raises only until the peaks reach −1 dB; and the

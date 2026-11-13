@@ -94,8 +94,8 @@ namespace harmonia::app
         void writeTemplate (const juce::String& name);
         void showError (const juce::String& title, const juce::String& message);
 
-        /** Asks where to save `defaultName` in `format`, then exports the song (or `part` of it) there. */
-        void chooseExport (const juce::String& defaultName, std::optional<te::TimeRange> part, const audio::ExportFormat& format);
+        /** Asks where to save `defaultName` in the format chosen, then exports the song (or `part` of it) there. */
+        void chooseExport (const juce::String& defaultName, std::optional<te::TimeRange> part, const audio::SongExport&);
 
         /** The song is being exported: it is not to be replaced, closed or copied meanwhile. */
         bool isExporting() const;

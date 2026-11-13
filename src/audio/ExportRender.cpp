@@ -3,6 +3,7 @@
 #include "audio/Groups.h"
 #include "audio/Mp3Encoder.h"
 #include "audio/Sidechain.h"
+#include "audio/SongExport.h"
 #include "audio/TrackDelay.h"
 #include "core/Clips.h"
 #include "core/Tracks.h"
@@ -187,10 +188,8 @@ namespace harmonia::audio::export_render
             return;
         }
 
-        if (sampleRate <= 0)
-            sampleRate = edit.engine.getDeviceManager().getSampleRate();
-
         // An MP3 is made from a float WAV rendered next to it, at a rate an MP3 can have.
+        sampleRate = getFileSampleRate (format, sampleRate, edit.engine.getDeviceManager().getSampleRate());
         auto written = format;
 
         if (format.type == ExportFormat::Type::mp3)
@@ -204,7 +203,6 @@ namespace harmonia::audio::export_render
             wav = std::make_unique<juce::TemporaryFile> (file.withFileExtension (".wav"));
             rendered = wav->getFile();
             written = { ExportFormat::Type::wav, 32 };
-            sampleRate = mp3::canUseSampleRate (sampleRate) ? sampleRate : 44100.0;
         }
 
         renderStatus.emplace (edit, true);
@@ -315,7 +313,8 @@ namespace harmonia::audio::export_render
 
     //==============================================================================
     PastEndRender::PastEndRender (te::Edit& e, const juce::File& t, const juce::Array<te::Track*>& tracks, bool withMaster,
-                                  const juce::Array<te::AudioTrack*>& silentSources, const ExportFormat& wanted)
+                                  const juce::Array<te::AudioTrack*>& silentSources, const ExportFormat& wanted,
+                                  double sampleRate, bool forGain)
         : edit (e), target (t), format (wanted)
     {
         if (error = prepare (target); error.isNotEmpty())
@@ -324,10 +323,10 @@ namespace harmonia::audio::export_render
             return;
         }
 
-        // A WAV of the bit depth wanted, its samples then written as they are; for an MP3 a
-        // float one, at a rate an MP3 can have.
-        ExportFormat rendered { ExportFormat::Type::wav, format.bitDepth };
-        auto sampleRate = edit.engine.getDeviceManager().getSampleRate();
+        // A WAV of the bit depth wanted, its samples then written as they are; a float one for an
+        // MP3 (at a rate an MP3 can have) and for a file whose level is yet to be set.
+        ExportFormat rendered { ExportFormat::Type::wav, forGain ? 32 : format.bitDepth };
+        sampleRate = getFileSampleRate (format, sampleRate, edit.engine.getDeviceManager().getSampleRate());
 
         if (format.type == ExportFormat::Type::mp3)
         {
@@ -339,7 +338,6 @@ namespace harmonia::audio::export_render
             }
 
             rendered.bitDepth = 32;
-            sampleRate = mp3::canUseSampleRate (sampleRate) ? sampleRate : 44100.0;
         }
 
         const auto songEnd = getSongEnd (edit);
@@ -382,11 +380,11 @@ namespace harmonia::audio::export_render
         return finished ? 1.0f : render != nullptr ? render->getProgress() : 0.0f;
     }
 
-    juce::String PastEndRender::write (double seconds)
+    juce::String PastEndRender::write (double seconds, float gainDb)
     {
         if (! finished || error.isNotEmpty() || wav == nullptr)
             return error.isNotEmpty() ? error : juce::String ("Export failed: " + target.getFullPathName());
 
-        return export_tail::writeCut (edit.engine, wav->getFile(), target, format, seconds);
+        return export_tail::writeCut (edit.engine, wav->getFile(), target, format, seconds, gainDb);
     }
 }

@@ -69,7 +69,7 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Проверка интерфейса без окна: тесты «the main window paints…» рисуют главное окно в картинку; с переменной
   `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png`, `main-arrangement.png`, `main-mixer.png`,
   `main-automation.png`, `main-audio.png`, `main-audio-recording.png`, `main-tracks-selected.png`, `main-exporting.png`,
-  `main-punch.png` и `plugin-load.png`; браузер звуков — `main-sounds.png`, `main-sounds-loop.png`
+  `main-punch.png`, `export-song.png` и `plugin-load.png`; браузер звуков — `main-sounds.png`, `main-sounds-loop.png`
   (`-tc="*main window: *"`)
   (`harmonia_tests.exe -tc="*paints*"`). Живая проверка мышью (скрипт
   кликает по окну) захватывает настоящий курсор — только если пользователь не за компьютером или разрешил.
@@ -187,6 +187,13 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Экспорт песни — `audio::exportSong` с `audio::ExportFormat` (WAV 16/24/32, FLAC, MP3; `exportWav` — WAV 24).
   MP3 — `audio::mp3` (Windows: Media Foundation, `Mp3EncoderWindows.cpp`; решение 24). Окно формата —
   `ui::ExportOptions`, последний формат — `getLastExportFormat` (у песни и у лупа свой: `audio::ExportUse`).
+- Всё, что экспорт песни делает со звуком по дороге в файл, — `audio::SongExport` (`audio/SongExport.h`,
+  решение 67): формат, частота файла, громкость в LUFS, второй файл без выбранных дорожек. Частота файла —
+  только через `getFileSampleRate` (0 — частота звуковой карты; MP3 выше 48 кГц не бывает): рендер идёт сразу
+  на ней, а не пересчитывается потом. Имя второго файла — `getMinusFile`. Что запомнить с прошлого экспорта —
+  `getLastSongExport` / `setLastSongExport` (у стемов частота — `getLastExportSampleRate`). Список частот в
+  окнах — общий `ui::SampleRateBox`. Новая настройка экспорта песни — поле `SongExport`, а не ещё один
+  параметр `exportSong`.
 - Экспорт из окна не замораживает его (решение 60): задача `audio::ExportJob` (`song` / `stems`, по шагам)
   запускается через `MainComponent::runExport` — плашка `ui::ExportProgress` с ходом и отменой, песня на это
   время закрыта от правок. `exportSong` / `exportStems` — те же задачи за один раз (тесты, анализ). Новый

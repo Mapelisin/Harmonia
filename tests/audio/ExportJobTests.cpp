@@ -160,7 +160,7 @@ TEST_SUITE ("audio::ExportJob")
 
         // A second of it, exactly, as a FLAC.
         const auto flac = song.output.getFile ("Part.flac");
-        auto job = ExportJob::song (edit, flac, { ExportFormat::Type::flac, 16 },
+        auto job = ExportJob::song (edit, flac, ExportFormat { ExportFormat::Type::flac, 16 },
                                     te::TimeRange (te::TimePosition::fromSeconds (0.5), te::TimePosition::fromSeconds (1.5)));
         CHECK (job->getStage() == "Rendering the part of the song");
         finish (*job);

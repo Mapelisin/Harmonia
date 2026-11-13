@@ -53,6 +53,8 @@ add_library(harmonia_ui STATIC
     RecentProjects.cpp
     ExportOptions.h
     ExportOptions.cpp
+    SampleRateBox.h
+    SampleRateBox.cpp
     ExportProgress.h
     ExportProgress.cpp
     JobRunner.h

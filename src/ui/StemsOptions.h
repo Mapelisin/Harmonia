@@ -1,20 +1,23 @@
 #pragma once
 
 #include "audio/Export.h"
+#include "ui/SampleRateBox.h"
 
 namespace harmonia::ui
 {
     /** Which stems to export and how: a tick for each track and group that can be one, what the
-        files are called (a pattern, with an example of what it gives), and their format.
-        "Export..." hands the choice on (the caller then asks for the folder); the pattern and the
-        format are remembered. */
+        files are called (a pattern, with an example of what it gives), their format and their
+        sample rate. "Export..." hands the choice on (the caller then asks for the folder); the
+        pattern, the format and the sample rate are remembered. */
     class StemsOptions final : public juce::Component
     {
     public:
         /** `choices`: what stems can be made of (audio::getStemChoices), all ticked but the
-            groups. `songName` and `bpm` are for the example. */
+            groups. `songName` and `bpm` are for the example. `sampleRate` 0: as the audio device
+            plays, which is at `deviceRate`. */
         StemsOptions (const juce::Array<te::AudioTrack*>& choices, const juce::String& songName, double bpm,
-                      const juce::String& pattern, const audio::ExportFormat& format);
+                      const juce::String& pattern, const audio::ExportFormat& format, double sampleRate = 0.0,
+                      double deviceRate = 0.0);
 
         /** What is ticked and written in the window now. */
         audio::StemsOptions getOptions() const;
@@ -23,6 +26,7 @@ namespace harmonia::ui
         juce::ToggleButton& getTick (int index)                 { return *ticks[index]; }
         juce::TextEditor& getPatternEditor() noexcept           { return patternEditor; }
         juce::ComboBox& getFormatBox() noexcept                 { return formatBox; }
+        SampleRateBox& getSampleRateBox() noexcept              { return rateBox; }
         juce::TextButton& getExportButton() noexcept            { return exportButton; }
         juce::TextButton& getAllButton() noexcept               { return allButton; }
         juce::TextButton& getNoneButton() noexcept              { return noneButton; }
@@ -49,12 +53,13 @@ namespace harmonia::ui
         juce::String songName;
         double bpm = 120.0;
 
-        juce::Label title, patternLabel, formatLabel, example, hint;
+        juce::Label title, patternLabel, formatLabel, rateLabel, example, hint;
         juce::Viewport list;
         juce::Component rows;
         juce::OwnedArray<juce::ToggleButton> ticks;
         juce::TextEditor patternEditor;
         juce::ComboBox formatBox;
+        SampleRateBox rateBox;
         juce::TextButton allButton { "All" }, noneButton { "None" }, exportButton { "Export..." }, cancelButton { "Cancel" };
 
         void setAll (bool ticked);

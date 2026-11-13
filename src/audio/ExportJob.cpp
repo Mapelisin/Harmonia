@@ -45,131 +45,6 @@ namespace harmonia::audio
     namespace
     {
         //==============================================================================
-        class SongJob final : public ExportJob
-        {
-        public:
-            SongJob (te::Edit& e, const juce::File& f, const ExportFormat& wanted, std::optional<te::TimeRange> part)
-                : edit (e), file (f), format (wanted)
-            {
-                if (edit.getLength() <= te::TimeDuration())
-                {
-                    end ("Nothing to export: the song has no clips");
-                    return;
-                }
-
-                if (part.has_value() && (part->getLength() <= te::TimeDuration() || part->getStart() < te::TimePosition()))
-                {
-                    end ("Nothing to export: the part to export is empty");
-                    return;
-                }
-
-                // What you hear is what you get.
-                const auto audible = findAudible (edit);
-
-                if (audible.songTracks.isEmpty())
-                {
-                    end ("Nothing to export: every track is muted");
-                    return;
-                }
-
-                auto tracks = audible.others;
-                juce::Array<te::AudioTrack*> heard;
-
-                for (const auto* list : { &audible.songTracks, &audible.groupTracks, &audible.returnTracks })
-                    heard.addArray (*list);
-
-                for (auto* track : heard)
-                    tracks.add (track);
-
-                // A muted kick still ducks the bass, as it does while playing.
-                temporary = std::make_unique<TemporaryState> (edit);
-                const auto sources = keepSources (*temporary, heard, tracks);
-
-                // A part of the song: exactly that. The song: until it has rung out.
-                if (part.has_value())
-                    exact = std::make_unique<Render> (edit, file, tracks, *part, true, sources, format);
-                else
-                    pastEnd = std::make_unique<PastEndRender> (edit, file, tracks, true, sources, format);
-            }
-
-            ~SongJob() override
-            {
-                release();
-            }
-
-            float getProgress() const override
-            {
-                if (finished)
-                    return 1.0f;
-
-                if (exact != nullptr)
-                    return exact->getProgress();
-
-                return isRendered ? 0.97f : pastEnd != nullptr ? 0.95f * pastEnd->getProgress() : 0.0f;
-            }
-
-            juce::String getStage() const override
-            {
-                if (finished)
-                    return error.isEmpty() ? "Done" : "Failed";
-
-                if (isRendered || (exact != nullptr && exact->isEncoding()))
-                    return "Writing " + file.getFileName();
-
-                return exact != nullptr ? "Rendering the part of the song" : "Rendering the song";
-            }
-
-        private:
-            te::Edit& edit;
-            const juce::File file;
-            const ExportFormat format;
-            std::unique_ptr<TemporaryState> temporary;      // put back after the renders are gone
-            std::unique_ptr<Render> exact;
-            std::unique_ptr<PastEndRender> pastEnd;
-            bool isRendered = false;
-
-            bool work (double untilMs) override
-            {
-                if (exact != nullptr)
-                    return exact->run (untilMs) && end (exact->getError());
-
-                if (! isRendered)
-                {
-                    if (! pastEnd->run (untilMs))
-                        return false;
-
-                    if (pastEnd->getError().isNotEmpty())
-                        return end (pastEnd->getError());
-
-                    // The file is written by the next step: what is shown says so first.
-                    isRendered = true;
-                    return false;
-                }
-
-                return end (pastEnd->write (export_tail::getLength (getSongEnd (edit).inSeconds(), pastEnd->getLastSoundSeconds())));
-            }
-
-            void release()
-            {
-                exact.reset();
-                pastEnd.reset();
-                temporary.reset();
-            }
-
-            bool end (juce::String problem)
-            {
-                release();
-                error = problem;
-                finished = true;
-
-                if (error.isEmpty())
-                    files.add (file);
-
-                return true;
-            }
-        };
-
-        //==============================================================================
         class StemsJob final : public ExportJob
         {
         public:
@@ -297,7 +172,7 @@ namespace harmonia::audio
                             if (other != stem && groups::getGroup (*other) == group)
                                 temporary->keepAsSource (*other);
 
-                render = std::make_unique<PastEndRender> (edit, file, tracks, false, sources, options.format);
+                render = std::make_unique<PastEndRender> (edit, file, tracks, false, sources, options.format, options.sampleRate);
             }
 
             bool work (double untilMs) override
@@ -460,12 +335,6 @@ namespace harmonia::audio
     std::unique_ptr<ExportJob> ExportJob::failed (const juce::String& problem)
     {
         return std::make_unique<FailedJob> (problem);
-    }
-
-    std::unique_ptr<ExportJob> ExportJob::song (te::Edit& edit, const juce::File& file, const ExportFormat& format,
-                                                std::optional<te::TimeRange> part)
-    {
-        return std::make_unique<SongJob> (edit, file, format, part);
     }
 
     std::unique_ptr<ExportJob> ExportJob::stems (te::Edit& edit, const juce::File& folder, const StemsOptions& options)

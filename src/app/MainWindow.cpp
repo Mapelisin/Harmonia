@@ -531,10 +531,12 @@ namespace harmonia::app
 
     void MainWindow::exportSong()
     {
-        ui::ExportOptions::show (session, [safe = juce::Component::SafePointer<MainWindow> (this)] (const audio::ExportFormat& format)
+        // The format, and what else to do on the way (sample rate, loudness, a second file
+        // without some tracks) first; then where the file goes.
+        ui::ExportOptions::show (session, project->getEdit(), [safe = juce::Component::SafePointer<MainWindow> (this)] (const audio::SongExport& how)
         {
             if (safe != nullptr)
-                safe->chooseExport (safe->getProjectName(), std::nullopt, format);
+                safe->chooseExport (safe->getProjectName(), std::nullopt, how);
         });
     }
 
@@ -556,32 +558,33 @@ namespace harmonia::app
 
         // A loop is a sample for other songs: a WAV at full quality unless chosen otherwise (it
         // remembers its own format, not the song's).
-        ui::ExportOptions::show (session, [safe = juce::Component::SafePointer<MainWindow> (this), name, part] (const audio::ExportFormat& format)
+        ui::ExportOptions::show (session, project->getEdit(),
+                                 [safe = juce::Component::SafePointer<MainWindow> (this), name, part] (const audio::SongExport& how)
         {
             if (safe != nullptr)
-                safe->chooseExport (name, part, format);
+                safe->chooseExport (name, part, how);
         }, audio::ExportUse::loop);
     }
 
-    void MainWindow::chooseExport (const juce::String& defaultName, std::optional<te::TimeRange> part, const audio::ExportFormat& format)
+    void MainWindow::chooseExport (const juce::String& defaultName, std::optional<te::TimeRange> part, const audio::SongExport& how)
     {
         const auto folder = file != juce::File() ? file.getParentDirectory() : getDefaultFolder();
         folder.createDirectory();
 
-        const auto extension = format.getExtension();
-        chooser = std::make_unique<juce::FileChooser> ("Export " + format.describe(),
+        const auto extension = how.format.getExtension();
+        chooser = std::make_unique<juce::FileChooser> ("Export " + how.format.describe(),
                                                        folder.getChildFile (juce::File::createLegalFileName (defaultName + extension)),
                                                        "*" + extension);
         chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
                                   | juce::FileBrowserComponent::warnAboutOverwriting,
-                              [this, part, format] (const juce::FileChooser& fc)
+                              [this, part, how] (const juce::FileChooser& fc)
         {
             auto result = fc.getResult();
 
             if (result == juce::File())
                 return;
 
-            result = result.withFileExtension (format.getExtension());
+            result = result.withFileExtension (how.format.getExtension());
             auto* content = getMainComponent();
 
             if (content == nullptr)
@@ -591,12 +594,25 @@ namespace harmonia::app
             content->getTransport().stop();
 
             // A bit at a time, with its progress over the window: it can be cancelled.
-            content->runExport (audio::ExportJob::song (project->getEdit(), result, format, part), [this] (audio::ExportJob& job)
+            content->runExport (audio::ExportJob::song (project->getEdit(), result, how, part), [this] (audio::ExportJob& job)
             {
                 if (job.getError().isNotEmpty())
+                {
                     showError ("Export failed", job.getError());
-                else if (auto* c = getMainComponent())
-                    c->showMessage ("Exported " + job.getFiles().getFirst().getFullPathName());
+                    return;
+                }
+
+                // The file, what was done to its loudness, and the second file if there is one.
+                auto text = "Exported " + job.getFiles().getFirst().getFullPathName();
+
+                if (job.getNote().isNotEmpty())
+                    text << ": " << job.getNote();
+
+                if (job.getFiles().size() > 1)
+                    text << "; and " << job.getFiles()[1].getFileName();
+
+                if (auto* c = getMainComponent())
+                    c->showMessage (text);
             });
         });
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/ExportFormat.h"
+#include "audio/SongExport.h"
 #include "core/Session.h"
 
 namespace harmonia::audio
@@ -22,8 +23,9 @@ namespace harmonia::audio
     public:
         virtual ~ExportJob() = default;
 
-        /** The song, or `part` of it, into one file (see audio::exportSong). */
-        static std::unique_ptr<ExportJob> song (te::Edit&, const juce::File&, const ExportFormat&,
+        /** The song, or `part` of it, into one file (see audio::exportSong); with tracks to
+            leave out, a second file of the song without them next to it (audio::SongExport). */
+        static std::unique_ptr<ExportJob> song (te::Edit&, const juce::File&, const SongExport&,
                                                 std::optional<te::TimeRange> part = std::nullopt);
 
         /** Stems into a folder (see audio::exportStems). */
@@ -57,6 +59,10 @@ namespace harmonia::audio
         /** The files written (all of them once it has finished well). */
         const juce::Array<juce::File>& getFiles() const noexcept    { return files; }
 
+        /** What else there is to tell once it has finished well: of a song brought to a loudness,
+            where it is now and by how much it was turned. Empty if nothing. */
+        const juce::String& getNote() const noexcept        { return note; }
+
         /** 0..1. */
         virtual float getProgress() const = 0;
 
@@ -74,7 +80,7 @@ namespace harmonia::audio
             says `untilMs`. True once there is nothing left to do. */
         virtual bool work (double untilMs) = 0;
 
-        juce::String error;
+        juce::String error, note;
         juce::Array<juce::File> files;
         bool finished = false;
 

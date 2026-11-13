@@ -94,6 +94,32 @@ TEST_SUITE ("ui::StemsOptions")
         CHECK (exported->format == ExportFormat { ExportFormat::Type::flac, 24 });
     }
 
+    TEST_CASE ("the stems window asks the sample rate too: the device's at first, the one chosen goes with the rest")
+    {
+        Song song;
+        const auto choices = audio::getStemChoices (song.project->getEdit());
+        auto window = std::make_unique<ui::StemsOptions> (choices, "My song", 96.0, audio::defaultStemPattern, ExportFormat(), 0.0, 48000.0);
+        auto& rates = window->getSampleRateBox();
+        CHECK (rates.getRate() == 0.0);
+        CHECK (rates.getText() == "As the audio device plays (48000 Hz)");
+
+        std::optional<audio::StemsOptions> exported;
+        window->onExport = [&exported] (const audio::StemsOptions& options) { exported = options; };
+        window->getExportButton().onClick();
+        REQUIRE (exported.has_value());
+        CHECK (exported->sampleRate == 0.0);
+
+        rates.setRate (96000.0);
+        CHECK (rates.getText() == "96000 Hz");
+        window->getExportButton().onClick();
+        CHECK (exported->sampleRate == 96000.0);
+
+        // Opened again: as the last export was.
+        window = std::make_unique<ui::StemsOptions> (choices, "My song", 96.0, audio::defaultStemPattern, ExportFormat(), 44100.0, 48000.0);
+        CHECK (window->getSampleRateBox().getRate() == 44100.0);
+        CHECK (window->getSampleRateBox().getText() == "44100 Hz (CD, streaming)");
+    }
+
     TEST_CASE ("All and None tick every row or none; with nothing ticked there is nothing to export")
     {
         Song song;

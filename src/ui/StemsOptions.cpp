@@ -12,14 +12,14 @@ namespace harmonia::ui
     }
 
     StemsOptions::StemsOptions (const juce::Array<te::AudioTrack*>& c, const juce::String& song, double tempo,
-                                const juce::String& pattern, const ExportFormat& format)
-        : choices (c), formats (ExportFormat::getChoices()), songName (song), bpm (tempo)
+                                const juce::String& pattern, const ExportFormat& format, double sampleRate, double deviceRate)
+        : choices (c), formats (ExportFormat::getChoices()), songName (song), bpm (tempo), rateBox (deviceRate)
     {
         title.setText ("Export stems: a file for each track ticked", juce::dontSendNotification);
         title.setFont (juce::FontOptions (theme::size::fontSize, juce::Font::bold));
         title.setColour (juce::Label::textColourId, theme::colour::textPrimary);
 
-        for (auto* label : { &patternLabel, &formatLabel, &example, &hint })
+        for (auto* label : { &patternLabel, &formatLabel, &rateLabel, &example, &hint })
         {
             label->setFont (juce::FontOptions (theme::size::smallFontSize));
             label->setColour (juce::Label::textColourId, theme::colour::textSecondary);
@@ -28,6 +28,8 @@ namespace harmonia::ui
 
         patternLabel.setText ("File names", juce::dontSendNotification);
         formatLabel.setText ("Format", juce::dontSendNotification);
+        rateLabel.setText ("Sample rate", juce::dontSendNotification);
+        rateBox.setRate (sampleRate);
         hint.setText ("{song}  {n}  {track}  {bpm}  {date} are filled in.\nA group's stem is all its tracks in one file.",
                       juce::dontSendNotification);
         hint.setJustificationType (juce::Justification::topLeft);
@@ -66,11 +68,12 @@ namespace harmonia::ui
         cancelButton.onClick = [this] { if (onCancel != nullptr) onCancel(); };
 
         for (auto* component : std::initializer_list<juce::Component*> { &title, &list, &allButton, &noneButton, &patternLabel, &patternEditor,
-                                                                          &example, &hint, &formatLabel, &formatBox, &exportButton, &cancelButton })
+                                                                          &example, &hint, &formatLabel, &formatBox, &rateLabel, &rateBox,
+                                                                          &exportButton, &cancelButton })
             addAndMakeVisible (component);
 
         refresh();
-        setSize (480, 232 + rowHeight * juce::jlimit (2, mostRowsShown, choices.size()));
+        setSize (480, 232 + theme::size::buttonHeight + theme::size::padding + rowHeight * juce::jlimit (2, mostRowsShown, choices.size()));
     }
 
     audio::StemsOptions StemsOptions::getOptions() const
@@ -84,6 +87,7 @@ namespace harmonia::ui
         options.songName = songName;
         options.namePattern = patternEditor.getText().trim();
         options.format = formats[juce::jmax (0, formatBox.getSelectedId() - 1)];
+        options.sampleRate = rateBox.getRate();
         return options;
     }
 
@@ -126,9 +130,14 @@ namespace harmonia::ui
         exportButton.setBounds (buttons.removeFromRight (100));
         area.removeFromBottom (theme::size::padding);
 
+        auto rateRow = area.removeFromBottom (theme::size::buttonHeight);
+        rateLabel.setBounds (rateRow.removeFromLeft (80));
+        rateBox.setBounds (rateRow.removeFromLeft (260));
+        area.removeFromBottom (theme::size::padding);
+
         auto formatRow = area.removeFromBottom (theme::size::buttonHeight);
         formatLabel.setBounds (formatRow.removeFromLeft (80));
-        formatBox.setBounds (formatRow.removeFromLeft (220));
+        formatBox.setBounds (formatRow.removeFromLeft (260));
         area.removeFromBottom (theme::size::padding);
 
         hint.setBounds (area.removeFromBottom (34));
@@ -166,7 +175,9 @@ namespace harmonia::ui
         }
 
         auto options = std::make_unique<StemsOptions> (choices, songName, edit.tempoSequence.getBpmAt (te::TimePosition()),
-                                                       audio::getLastStemPattern (session), audio::getLastExportFormat (session));
+                                                       audio::getLastStemPattern (session), audio::getLastExportFormat (session),
+                                                       audio::getLastExportSampleRate (session),
+                                                       edit.engine.getDeviceManager().getSampleRate());
         juce::Component::SafePointer<StemsOptions> safe (options.get());
 
         const auto close = [safe]
@@ -181,6 +192,7 @@ namespace harmonia::ui
         {
             audio::setLastStemPattern (session, chosen.namePattern);
             audio::setLastExportFormat (session, chosen.format);
+            audio::setLastExportSampleRate (session, chosen.sampleRate);
             close();
 
             // After the window has gone: the next step opens a folder dialog.

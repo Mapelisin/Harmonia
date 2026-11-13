@@ -125,8 +125,11 @@ namespace harmonia::audio::export_render
     class PastEndRender final
     {
     public:
+        /** `sampleRate` 0: the audio device's. `forGain`: the file will be turned up or down as
+            it is written (write), so it is rendered with nothing clipped and no dither yet. */
         PastEndRender (te::Edit&, const juce::File& target, const juce::Array<te::Track*>& tracks, bool withMaster,
-                       const juce::Array<te::AudioTrack*>& silentSources, const ExportFormat&);
+                       const juce::Array<te::AudioTrack*>& silentSources, const ExportFormat&, double sampleRate = 0,
+                       bool forGain = false);
         ~PastEndRender();
 
         /** As Render::run. */
@@ -137,10 +140,14 @@ namespace harmonia::audio::export_render
         /** Where its sound ends (once run said true, without an error). */
         double getLastSoundSeconds() const noexcept         { return lastSoundSeconds; }
 
-        /** Writes the target file of what was rendered, `seconds` long: an error, or empty. */
-        juce::String write (double seconds);
+        /** Writes the target file of what was rendered, `seconds` long, turned by `gainDb` (only
+            what was made `forGain`): an error, or empty. */
+        juce::String write (double seconds, float gainDb = 0.0f);
 
         const juce::File& getTarget() const noexcept        { return target; }
+
+        /** What was rendered, past the song's end and all (once run said true): to measure it. */
+        juce::File getRendered() const                      { return wav != nullptr ? wav->getFile() : juce::File(); }
 
     private:
         te::Edit& edit;
