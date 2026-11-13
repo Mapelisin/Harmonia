@@ -6,6 +6,7 @@
 #include "core/Clips.h"
 #include "core/SongFiles.h"
 #include "core/Templates.h"
+#include "core/TempoChanges.h"
 #include "core/Drums.h"
 #include "core/Markers.h"
 #include "core/MidiFiles.h"
@@ -99,6 +100,14 @@ namespace harmonia::ui
         mixerTab.onClick = [this] { showLowerPanel (LowerPanel::mixer); };
         soundsTab.onClick = [this] { showLowerPanel (LowerPanel::sounds); };
         soundBrowser.onAddToSong = [this] (const juce::File& file) { addFilesAtPlayhead ({ file }); };
+
+        // Loops are heard at the tempo the song has where they would go: at the playhead.
+        soundBrowser.getSongBpm = [this]
+        {
+            auto& edit = project.getEdit();
+            const auto playhead = edit.tempoSequence.toBeats (te::TimePosition::fromSeconds (transport.getPositionSeconds()));
+            return core::tempo_changes::getBpmAt (edit, playhead.inBeats());
+        };
         soundBrowser.onSoundMenu = [this] (juce::PopupMenu& menu, const juce::File& file)
         {
             addSamplerItems (menu, file);

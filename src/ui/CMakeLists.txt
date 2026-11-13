@@ -136,6 +136,8 @@ add_library(harmonia_ui STATIC
     automation/AutomationPanel.cpp
     browser/SoundBrowser.h
     browser/SoundBrowser.cpp
+    browser/SoundFavourites.h
+    browser/SoundFavourites.cpp
     MainMenu.h
     MainMenu.cpp
     MainComponent.h

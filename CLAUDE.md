@@ -69,7 +69,8 @@ Harmonia — бесплатная DAW с открытым кодом и лока
 - Проверка интерфейса без окна: тесты «the main window paints…» рисуют главное окно в картинку; с переменной
   `HARMONIA_SNAPSHOT_DIR=<папка>` сохраняют `main-recording.png`, `main-arrangement.png`, `main-mixer.png`,
   `main-automation.png`, `main-audio.png`, `main-audio-recording.png`, `main-tracks-selected.png`, `main-exporting.png`,
-  `main-punch.png` и `plugin-load.png`
+  `main-punch.png` и `plugin-load.png`; браузер звуков — `main-sounds.png`, `main-sounds-loop.png`
+  (`-tc="*main window: *"`)
   (`harmonia_tests.exe -tc="*paints*"`). Живая проверка мышью (скрипт
   кликает по окну) захватывает настоящий курсор — только если пользователь не за компьютером или разрешил.
 - Самопроверка без звука в динамиках: `--selftest --quiet` (громкость мастера в ноль, уровни меряются на дорожке).
@@ -134,6 +135,12 @@ Harmonia — бесплатная DAW с открытым кодом и лока
   нужно сразу: `Plugin::updateSampleNow()`. Звук в памяти — `audio::SampleData` (общий с драм-машиной;
   годится ли файл — `SampleData::check`). Дорожка-сэмплер — `ArrangementModel::addSamplerTrack`, окно —
   `ui::SamplerPanel`, в piano roll — `PianoRollModel::getSampler / setSamplerSound / setSamplerRoot`.
+- Браузер звуков (`ui::browser::SoundBrowser`): избранное — `browser::Favourites` (настройки программы, не песня),
+  в тестах чистить ключи `soundBrowserFavourites` и `soundBrowserInTempo`. Прослушивание — только через
+  `SoundBrowser::listen` → `audio::FilePreview::play (file, songBpm)`: луп, который знает свой темп
+  (`core::audio_tempo::findLoopBpm` — те же звуки, что в песне следуют за темпом), играет в темпе песни через
+  `audio::StretchedSource` (растяжение — на потоке упреждающего чтения, не в звуковом). Темп песни браузеру
+  даёт окно (`getSongBpm`). Темпы в строках ищутся по таймеру, понемногу: не читать файлы в `paint`.
 - Что можно выбрать дорожке (инструменты и эффекты, свои и найденные сканом) — `audio::plugin_catalog`:
   поиск, избранное и недавние (хранятся в настройках программы, не в песне). Окно выбора — `ui::PluginChooser`
   (`show`), инструмент по выбору — `InstrumentPanel::choose`, эффект — `ChannelStrip::addEffect (Entry)`.

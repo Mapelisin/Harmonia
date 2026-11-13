@@ -75,6 +75,18 @@ namespace harmonia::test
         return file;
     }
 
+    /** A loop of `beats` beats at `bpm`, a click on each: named "Drums 95 BPM.wav", a file that
+        says its tempo. */
+    inline juce::File writeLoop (const juce::File& file, double bpm, int beats)
+    {
+        std::vector<double> seconds;
+
+        for (int beat = 0; beat < beats; ++beat)
+            seconds.push_back (beat * 60.0 / bpm);
+
+        return writeClicks (file, seconds, 60.0 / bpm);
+    }
+
     /** Where the clicks of a sound file start, in seconds: louder than `threshold` after a tenth
         of a second that wasn't. */
     inline std::vector<double> findClicks (const juce::File& file, float threshold = 0.2f)

@@ -69,6 +69,7 @@ add_executable(harmonia_tests
     audio/SlicesTests.cpp
     audio/FreezeTests.cpp
     audio/TrackDelayTests.cpp
+    audio/StretchedSourceTests.cpp
     ui/PianoRollTests.cpp
     ui/PianoRollViewTests.cpp
     ui/NoteInputTests.cpp

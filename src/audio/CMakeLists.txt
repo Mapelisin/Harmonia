@@ -34,6 +34,8 @@ add_library(harmonia_audio STATIC
     Mp3Encoder.h
     FilePreview.h
     FilePreview.cpp
+    StretchedSource.h
+    StretchedSource.cpp
     MidiRender.h
     MidiRender.cpp
     Loudness.h

@@ -1,6 +1,8 @@
 #include "audio/FilePreview.h"
 
 #include "audio/MidiRender.h"
+#include "audio/StretchedSource.h"
+#include "core/AudioTempo.h"
 #include "core/MidiFiles.h"
 
 namespace harmonia::audio
@@ -9,6 +11,7 @@ namespace harmonia::audio
     {
         constexpr int readAheadSamples = 32768;
         constexpr float previewGain = 0.8f;     // a little under the song: previews are often loud
+        constexpr double sameTempo = 0.002;     // a loop this near the song's tempo plays as it is
     }
 
     FilePreview::FilePreview (core::Session& s)
@@ -46,7 +49,23 @@ namespace harmonia::audio
         return core::midi_files::isMidiFile (f) || formats.findFormatForFileExtension (f.getFileExtension()) != nullptr;
     }
 
-    bool FilePreview::play (const juce::File& f)
+    std::optional<FilePreview::Tempo> FilePreview::findTempo (const juce::File& f, std::optional<double> songBpm) const
+    {
+        if (! songBpm.has_value() || *songBpm <= 0.0)
+            return std::nullopt;
+
+        const auto own = core::audio_tempo::findLoopBpm (session.getEngine(), f, *songBpm);
+
+        if (! own.has_value() || *own <= 0.0)
+            return std::nullopt;
+
+        // Not a loop four times as fast or as slow: it wouldn't be the loop any more.
+        const auto speed = *songBpm / *own;
+        return speed >= StretchedSource::minSpeed && speed <= StretchedSource::maxSpeed ? std::optional<Tempo> (Tempo { *own, *songBpm })
+                                                                                     : std::nullopt;
+    }
+
+    bool FilePreview::play (const juce::File& f, std::optional<double> songBpm)
     {
         const auto wasPlaying = source != nullptr;
         release();
@@ -77,7 +96,22 @@ namespace harmonia::audio
         {
             sampleRate = reader->sampleRate;
             lengthSeconds = sampleRate > 0.0 ? (double) reader->lengthInSamples / sampleRate : 0.0;
-            source = std::make_unique<juce::AudioFormatReaderSource> (reader.release(), true);
+            const auto numChannels = (int) reader->numChannels;
+            auto sound = std::make_unique<juce::AudioFormatReaderSource> (reader.release(), true);
+            tempo = findTempo (f, songBpm);
+
+            // A loop at the song's tempo: stretched as it is read ahead (on the read-ahead thread).
+            if (const auto speed = tempo.has_value() ? tempo->heard / tempo->own : 1.0;
+                sampleRate > 0.0 && std::abs (speed - 1.0) > sameTempo)
+            {
+                source = std::make_unique<StretchedSource> (std::move (sound), sampleRate, numChannels, speed);
+                lengthSeconds /= speed;
+            }
+            else
+            {
+                source = std::move (sound);
+            }
+
             readAhead = readAheadSamples;
             thread = &readAheadThread;
         }
@@ -132,6 +166,7 @@ namespace harmonia::audio
         renderedMidi = {};
         file = juce::File();
         lengthSeconds = 0.0;
+        tempo.reset();
     }
 
     void FilePreview::changeListenerCallback (juce::ChangeBroadcaster*)

@@ -1,4 +1,5 @@
 #include "ui/browser/SoundBrowser.h"
+#include "core/AudioTempo.h"
 #include "core/MidiFiles.h"
 #include "ui/FileDrag.h"
 #include "ui/Theme.h"
@@ -8,9 +9,14 @@ namespace harmonia::ui::browser
     namespace
     {
         constexpr int listRowHeight = 22, placesWidth = 180, hintHeight = 18;
+        constexpr int starWidth = 24, rowRightMargin = 6, sizeWidth = 72, tempoWidth = 120;
         constexpr juce::uint32 doubleClickAfterFolderMs = 800;
+        constexpr int tempoTimerMs = 30;
+        constexpr double tempoSliceMs = 4.0;        // how long the loops' tempi are looked for at a time
+        constexpr size_t maxKnownTempi = 20000;
         const char* const placesKey = "soundBrowserPlaces";
         const char* const folderKey = "soundBrowserFolder";
+        const char* const inTempoKey = "soundBrowserInTempo";
 
         juce::String describeSize (juce::int64 bytes)
         {
@@ -62,6 +68,24 @@ namespace harmonia::ui::browser
                     g.fillRect (box.getX() + 4.0f, box.getCentreY() - 1.0f, 7.0f, 2.0f);
                     g.fillRect (box.getX() + 8.0f, box.getBottom() - 3.0f, 6.0f, 2.0f);
                     break;
+            }
+        }
+
+        /** The star of a favourite (filled), or where a click makes one (an outline). */
+        void drawStar (juce::Graphics& g, juce::Rectangle<float> area, bool favourite)
+        {
+            juce::Path star;
+            star.addStar (area.getCentre(), 5, 2.6f, 6.0f);
+
+            if (favourite)
+            {
+                g.setColour (theme::colour::warning);
+                g.fillPath (star);
+            }
+            else
+            {
+                g.setColour (theme::colour::textSecondary.withAlpha (0.45f));
+                g.strokePath (star, juce::PathStrokeType (1.0f));
             }
         }
 
@@ -169,7 +193,8 @@ namespace harmonia::ui::browser
             g.setColour (theme::colour::textSecondary);
             g.setFont (juce::FontOptions (theme::size::fontSize));
             g.drawText (owner.getFilter().isNotEmpty() ? "Nothing here matches the search"
-                                                       : "No sounds or MIDI files in this folder",
+                            : owner.showingFavourites ? "No favourites yet: click the star in a sound's row"
+                                                      : "No sounds or MIDI files in this folder",
                         getLocalBounds(), juce::Justification::centred);
         }
 
@@ -190,23 +215,30 @@ namespace harmonia::ui::browser
             const auto playing = owner.preview.isPlaying() && owner.preview.getFile() == entry.file;
             paintStripe (g, row, width, height, isRowSelected);
 
-            auto area = juce::Rectangle<int> (0, 0, width, height).withTrimmedLeft (8).withTrimmedRight (10);
+            auto area = juce::Rectangle<int> (0, 0, width, height).withTrimmedLeft (8).withTrimmedRight (rowRightMargin);
             drawIcon (g, area.removeFromLeft (18).toFloat(), entry.kind, playing);
             area.removeFromLeft (6);
 
             if (entry.kind != Entry::Kind::folder)
             {
+                drawStar (g, area.removeFromRight (starWidth).toFloat(), owner.isFavourite (entry.file));
+
                 g.setColour (theme::colour::textSecondary);
                 g.setFont (juce::FontOptions (theme::size::smallFontSize));
                 g.drawText (entry.kind == Entry::Kind::midi ? "MIDI  " + describeSize (entry.file.getSize())
                                                             : describeSize (entry.file.getSize()),
-                            area.removeFromRight (90), juce::Justification::centredRight, false);
+                            area.removeFromRight (sizeWidth), juce::Justification::centredRight, false);
+
+                // A loop: its tempo (and the song's, while it plays at that one).
+                if (const auto tempo = owner.describeTempo (row); tempo.isNotEmpty())
+                {
+                    g.setColour (playing ? theme::colour::accent : theme::colour::textSecondary);
+                    g.drawText (tempo, area.removeFromRight (tempoWidth), juce::Justification::centredRight, false);
+                }
             }
 
-            // Found in a subfolder: which one, after the name.
-            const auto parent = entry.file.getParentDirectory();
-            const auto where = parent != owner.folder ? parent.getRelativePathFrom (owner.folder).replaceCharacter ('\\', '/')
-                                                      : juce::String();
+            // Found in a subfolder (or a favourite): which folder, after the name.
+            const auto where = owner.describeFolderOf (entry.file);
             const juce::Font nameFont { juce::FontOptions (theme::size::fontSize) };
             const auto nameWidth = juce::jmin ((float) area.getWidth(),
                                                juce::GlyphArrangement::getStringWidth (nameFont, entry.file.getFileName()) + 2.0f);
@@ -228,16 +260,25 @@ namespace harmonia::ui::browser
             if (! juce::isPositiveAndBelow (row, (int) owner.entries.size()))
                 return;
 
+            const auto rowWidth = e.eventComponent != nullptr ? e.eventComponent->getWidth() : getVisibleRowWidth();
+
             if (e.mods.isPopupMenu())
                 showMenu (row);
+            else if (owner.entries[(size_t) row].kind != Entry::Kind::folder && isOverStar (e.x, rowWidth))
+                owner.toggleFavourite (row);
             else if (! e.mods.isShiftDown() && ! e.mods.isCommandDown())
                 owner.clickEntry (row);
         }
 
-        void listBoxItemDoubleClicked (int row, const juce::MouseEvent&) override
+        void listBoxItemDoubleClicked (int row, const juce::MouseEvent& e) override
         {
             // The first click of this double-click opened a folder: this row is in the new one.
             if (juce::Time::getMillisecondCounter() - owner.folderOpenedAt < doubleClickAfterFolderMs)
+                return;
+
+            // Two clicks on the star are two clicks on the star.
+            if (juce::isPositiveAndBelow (row, (int) owner.entries.size()) && owner.entries[(size_t) row].kind != Entry::Kind::folder
+                && isOverStar (e.x, e.eventComponent != nullptr ? e.eventComponent->getWidth() : getVisibleRowWidth()))
                 return;
 
             owner.openEntry (row);
@@ -276,7 +317,7 @@ namespace harmonia::ui::browser
 
             return owner.entries[(size_t) row].kind == Entry::Kind::folder
                        ? "Click: open"
-                       : "Click: listen. Double-click or drag onto a track: add to the song";
+                       : "Click: listen. Double-click or drag onto a track: add to the song. The star: keep it in Favourites";
         }
 
         void showMenu (int row)
@@ -302,12 +343,19 @@ namespace harmonia::ui::browser
         }
         else
         {
-            menu.addItem ("Listen", [safe, entry] { if (safe != nullptr) safe->preview.play (entry.file); });
+            menu.addItem ("Listen", [safe, entry] { if (safe != nullptr) safe->listen (entry.file); });
 
             menu.addItem ("Add to the song (at the playhead)", [safe, entry]
             {
                 if (safe != nullptr && safe->onAddToSong != nullptr)
                     safe->onAddToSong (entry.file);
+            });
+
+            const auto favourite = isFavourite (entry.file);
+            menu.addItem (favourite ? "Remove from favourites" : "Add to favourites", [safe, entry, favourite]
+            {
+                if (safe != nullptr)
+                    safe->setFavourite (entry.file, ! favourite);
             });
 
             if (entry.kind == Entry::Kind::sound && onSoundMenu != nullptr)
@@ -347,7 +395,8 @@ namespace harmonia::ui::browser
                 return;
 
             const auto& place = owner.places[(size_t) row];
-            const auto here = owner.folder == place.folder || owner.folder.isAChildOf (place.folder);
+            const auto here = ! owner.showingFavourites && ! place.favourites
+                                  && (owner.folder == place.folder || owner.folder.isAChildOf (place.folder));
 
             // The nearest place that holds the current folder is marked.
             auto best = -1;
@@ -361,9 +410,14 @@ namespace harmonia::ui::browser
                     best = (int) i;
             }
 
-            paintStripe (g, 0, width, height, here && best == row);
+            paintStripe (g, 0, width, height, place.favourites ? owner.showingFavourites : here && best == row);
             auto area = juce::Rectangle<int> (0, 0, width, height).withTrimmedLeft (8).withTrimmedRight (6);
-            drawIcon (g, area.removeFromLeft (18).toFloat(), Entry::Kind::folder, false);
+
+            if (place.favourites)
+                drawStar (g, area.removeFromLeft (18).toFloat(), true);
+            else
+                drawIcon (g, area.removeFromLeft (18).toFloat(), Entry::Kind::folder, false);
+
             area.removeFromLeft (6);
             g.setColour (place.added ? theme::colour::textPrimary : theme::colour::textPrimary.withAlpha (0.85f));
             g.setFont (juce::FontOptions (theme::size::fontSize));
@@ -376,6 +430,12 @@ namespace harmonia::ui::browser
                 return;
 
             const auto place = owner.places[(size_t) row];
+
+            if (place.favourites)
+            {
+                owner.showFavourites();
+                return;
+            }
 
             if (! e.mods.isPopupMenu())
             {
@@ -393,14 +453,18 @@ namespace harmonia::ui::browser
 
         juce::String getTooltipForRow (int row) override
         {
-            return juce::isPositiveAndBelow (row, (int) owner.places.size())
-                       ? owner.places[(size_t) row].folder.getFullPathName() : juce::String();
+            if (! juce::isPositiveAndBelow (row, (int) owner.places.size()))
+                return {};
+
+            const auto& place = owner.places[(size_t) row];
+            return place.favourites ? juce::String ("The sounds you marked with a star, wherever they are")
+                                    : place.folder.getFullPathName();
         }
     };
 
     //==============================================================================
     SoundBrowser::SoundBrowser (core::Session& s, audio::FilePreview& p)
-        : session (s), preview (p),
+        : session (s), preview (p), favourites (s),
           fileList (std::make_unique<FileList> (*this)),
           placesList (std::make_unique<PlacesList> (*this))
     {
@@ -427,13 +491,20 @@ namespace harmonia::ui::browser
         stopButton.onClick = [this] { preview.stop(); };
         addAndMakeVisible (stopButton);
 
+        inTempo = session.getEngine().getPropertyStorage().getPropertiesFile().getBoolValue (inTempoKey, true);
+        tempoButton.setTooltip ("Loops play at the song's tempo, as they will sound in the song (their pitch stays)");
+        tempoButton.setClickingTogglesState (true);
+        tempoButton.setToggleState (inTempo, juce::dontSendNotification);
+        tempoButton.onClick = [this] { setPlaysInTempo (tempoButton.getToggleState()); };
+        addAndMakeVisible (tempoButton);
+
         search.setTextToShowWhenEmpty ("Search here and in subfolders", theme::colour::textSecondary);
         search.onTextChange = [this] { refresh(); };
         search.onEscapeKey = [this] { setFilter ({}); fileList->grabKeyboardFocus(); };
         search.onReturnKey = [this] { fileList->grabKeyboardFocus(); };
         addAndMakeVisible (search);
 
-        for (auto* c : std::initializer_list<juce::Component*> { &upButton, &addPlaceButton, &stopButton })
+        for (auto* c : std::initializer_list<juce::Component*> { &upButton, &addPlaceButton, &stopButton, &tempoButton })
             c->setWantsKeyboardFocus (false);
 
         addAndMakeVisible (*placesList);
@@ -452,6 +523,7 @@ namespace harmonia::ui::browser
 
     SoundBrowser::~SoundBrowser()
     {
+        stopTimer();
         preview.onStateChanged = nullptr;
     }
 
@@ -467,7 +539,8 @@ namespace harmonia::ui::browser
         g.setColour (theme::colour::textSecondary);
         g.setFont (juce::FontOptions (theme::size::smallFontSize));
         g.drawText (juce::String::fromUTF8 ("Click: listen  \xc2\xb7  Up / Down: listen to the next  \xc2\xb7  "
-                                            "Double-click, Enter or drag onto a track: add to the song  \xc2\xb7  Backspace: folder up"),
+                                            "Double-click, Enter or drag onto a track: add to the song  \xc2\xb7  "
+                                            "Star: favourite  \xc2\xb7  Backspace: folder up"),
                     getLocalBounds().removeFromBottom (hintHeight).withTrimmedLeft (placesWidth + theme::size::padding * 2),
                     juce::Justification::centredLeft, true);
     }
@@ -490,6 +563,8 @@ namespace harmonia::ui::browser
         upButton.setBounds (bar.removeFromLeft (44));
         bar.removeFromLeft (6);
         stopButton.setBounds (bar.removeFromRight (54));
+        bar.removeFromRight (6);
+        tempoButton.setBounds (bar.removeFromRight (76));
         bar.removeFromRight (6);
         search.setBounds (bar.removeFromRight (juce::jmin (240, bar.getWidth() / 2)));
         bar.removeFromRight (6);
@@ -522,6 +597,7 @@ namespace harmonia::ui::browser
             return;
 
         folder = newFolder;
+        showingFavourites = false;
         search.setText ({}, juce::dontSendNotification);
 
         auto& settings = session.getEngine().getPropertyStorage().getPropertiesFile();
@@ -534,8 +610,68 @@ namespace harmonia::ui::browser
         placesList->repaint();
     }
 
+    void SoundBrowser::showFavourites()
+    {
+        showingFavourites = true;
+        search.setText ({}, juce::dontSendNotification);
+        refresh();
+        fileList->deselectAllRows();
+        fileList->scrollToEnsureRowIsOnscreen (0);
+        placesList->repaint();
+    }
+
+    bool SoundBrowser::isFavourite (const juce::File& file) const
+    {
+        return favourites.contains (file);
+    }
+
+    void SoundBrowser::setFavourite (const juce::File& file, bool shouldBe)
+    {
+        if (favourites.contains (file) == shouldBe)
+            return;
+
+        favourites.set (file, shouldBe);
+
+        // Among the favourites, one that no longer is leaves the list.
+        if (showingFavourites)
+            refresh();
+        else
+            fileList->repaint();
+    }
+
+    void SoundBrowser::toggleFavourite (int index)
+    {
+        if (juce::isPositiveAndBelow (index, (int) entries.size()) && entries[(size_t) index].kind != Entry::Kind::folder)
+        {
+            const auto file = entries[(size_t) index].file;     // a copy: the list may change
+            setFavourite (file, ! isFavourite (file));
+        }
+    }
+
+    bool SoundBrowser::isOverStar (int x, int rowWidth) noexcept
+    {
+        return x >= rowWidth - rowRightMargin - starWidth && x < rowWidth - rowRightMargin;
+    }
+
+    juce::String SoundBrowser::describeFolderOf (const juce::File& file) const
+    {
+        const auto parent = file.getParentDirectory();
+
+        if (showingFavourites)
+            return parent.getFullPathName();
+
+        return parent != folder ? parent.getRelativePathFrom (folder).replaceCharacter ('\\', '/') : juce::String();
+    }
+
     void SoundBrowser::goUp()
     {
+        // From the favourites: back to the folder it was in.
+        if (showingFavourites)
+        {
+            setFolder (folder);
+            return;
+        }
+
         const auto parent = folder.getParentDirectory();
 
         if (parent == folder || ! parent.isDirectory())
@@ -579,12 +715,143 @@ namespace harmonia::ui::browser
 
     void SoundBrowser::refresh()
     {
-        entries = listFolder (folder, search.getText(), [this] (const juce::File& f) { return isSound (f); });
-        pathLabel.setText (folder.getFullPathName(), juce::dontSendNotification);
-        pathLabel.setTooltip (folder.getFullPathName());
-        upButton.setEnabled (folder.getParentDirectory() != folder);
+        if (showingFavourites)
+        {
+            const auto text = search.getText().trim();
+            entries.clear();
+
+            for (const auto& file : favourites.getFiles())
+                if (text.isEmpty() || file.getFileName().containsIgnoreCase (text))
+                    entries.push_back ({ file, core::midi_files::isMidiFile (file) ? Entry::Kind::midi : Entry::Kind::sound });
+
+            pathLabel.setText ("Favourites", juce::dontSendNotification);
+            pathLabel.setTooltip ("The sounds you marked with a star, wherever they are");
+            upButton.setEnabled (true);
+            search.setTextToShowWhenEmpty ("Search the favourites", theme::colour::textSecondary);
+        }
+        else
+        {
+            entries = listFolder (folder, search.getText(), [this] (const juce::File& f) { return isSound (f); });
+            pathLabel.setText (folder.getFullPathName(), juce::dontSendNotification);
+            pathLabel.setTooltip (folder.getFullPathName());
+            upButton.setEnabled (folder.getParentDirectory() != folder);
+            search.setTextToShowWhenEmpty ("Search here and in subfolders", theme::colour::textSecondary);
+        }
+
+        search.repaint();
         fileList->updateContent();
         fileList->repaint();
+
+        // A length that is a whole number of bars depends on the song's tempo: looked at anew
+        // when that has changed.
+        if (const auto bpm = songBpm(); bpm != loopBpmsFor || loopBpms.size() > maxKnownTempi)
+        {
+            loopBpms.clear();
+            loopBpmsFor = bpm;
+        }
+
+        startTimer (tempoTimerMs);
+    }
+
+    //==============================================================================
+    double SoundBrowser::songBpm() const
+    {
+        const auto bpm = getSongBpm != nullptr ? getSongBpm() : 0.0;
+        return bpm > 0.0 ? bpm : 120.0;
+    }
+
+    std::optional<double> SoundBrowser::findLoopBpm (const juce::File& file)
+    {
+        const auto path = file.getFullPathName();
+
+        if (const auto known = loopBpms.find (path); known != loopBpms.end())
+            return known->second;
+
+        const auto bpm = core::audio_tempo::findLoopBpm (session.getEngine(), file, loopBpmsFor > 0.0 ? loopBpmsFor : songBpm());
+        loopBpms[path] = bpm;
+        return bpm;
+    }
+
+    std::optional<double> SoundBrowser::getLoopBpm (int index)
+    {
+        if (! juce::isPositiveAndBelow (index, (int) entries.size()) || entries[(size_t) index].kind != Entry::Kind::sound)
+            return std::nullopt;
+
+        return findLoopBpm (entries[(size_t) index].file);
+    }
+
+    juce::String SoundBrowser::describeTempo (int index) const
+    {
+        if (! juce::isPositiveAndBelow (index, (int) entries.size()) || entries[(size_t) index].kind != Entry::Kind::sound)
+            return {};
+
+        const auto& file = entries[(size_t) index].file;
+        const auto format = [] (double bpm) { return core::audio_tempo::formatBpm (bpm); };
+
+        // Playing at the song's tempo: its own, and that one.
+        if (preview.isPlaying() && preview.getFile() == file)
+            if (const auto tempo = preview.getTempo(); tempo.has_value())
+                return format (tempo->own) == format (tempo->heard)
+                           ? format (tempo->own) + " BPM"
+                           : format (tempo->own) + juce::String::fromUTF8 (" \xe2\x86\x92 ") + format (tempo->heard) + " BPM";
+
+        const auto known = loopBpms.find (file.getFullPathName());
+        return known != loopBpms.end() && known->second.has_value() ? format (*known->second) + " BPM" : juce::String();
+    }
+
+    void SoundBrowser::timerCallback()
+    {
+        // The tempi the rows say are read from the files a few at a time (those in view first):
+        // a folder of thousands of loops mustn't hold the window.
+        const auto until = juce::Time::getMillisecondCounterHiRes() + tempoSliceMs;
+        const auto count = (int) entries.size();
+        const auto first = juce::jmax (0, fileList->getRowContainingPosition (fileList->getWidth() / 2, 2));
+        auto found = false;
+
+        for (int n = 0; n < count; ++n)
+        {
+            const auto& entry = entries[(size_t) ((first + n) % count)];
+
+            if (entry.kind != Entry::Kind::sound || loopBpms.contains (entry.file.getFullPathName()))
+                continue;
+
+            if (found && juce::Time::getMillisecondCounterHiRes() > until)
+            {
+                fileList->repaint();
+                return;     // the rest next time
+            }
+
+            findLoopBpm (entry.file);
+            found = true;
+        }
+
+        stopTimer();
+
+        if (found)
+            fileList->repaint();
+    }
+
+    void SoundBrowser::setPlaysInTempo (bool shouldPlayInTempo)
+    {
+        tempoButton.setToggleState (shouldPlayInTempo, juce::dontSendNotification);
+
+        if (inTempo == shouldPlayInTempo)
+            return;
+
+        inTempo = shouldPlayInTempo;
+
+        auto& settings = session.getEngine().getPropertyStorage().getPropertiesFile();
+        settings.setValue (inTempoKey, inTempo);
+        settings.saveIfNeeded();
+
+        // A loop that is playing: again, the new way.
+        if (const auto playing = preview.getFile(); preview.isPlaying() && findLoopBpm (playing).has_value())
+            listen (playing);
+    }
+
+    void SoundBrowser::listen (const juce::File& file)
+    {
+        preview.play (file, inTempo ? std::optional<double> (songBpm()) : std::nullopt);
     }
 
     //==============================================================================
@@ -605,13 +872,13 @@ namespace harmonia::ui::browser
         if (preview.isPlaying() && preview.getFile() == entry.file)
             preview.stop();
         else
-            preview.play (entry.file);
+            listen (entry.file);
     }
 
     void SoundBrowser::previewIfSound (int index)
     {
         if (juce::isPositiveAndBelow (index, (int) entries.size()) && entries[(size_t) index].kind != Entry::Kind::folder)
-            preview.play (entries[(size_t) index].file);
+            listen (entries[(size_t) index].file);
     }
 
     void SoundBrowser::openEntry (int index)
@@ -643,6 +910,7 @@ namespace harmonia::ui::browser
     void SoundBrowser::rebuildPlaces()
     {
         places.clear();
+        places.push_back ({ "Favourites", {}, false, true });
 
         const auto add = [this] (const juce::String& name, const juce::File& f, bool added)
         {
@@ -692,7 +960,7 @@ namespace harmonia::ui::browser
         // Kept even if it is one of the usual places' subfolders; not twice.
         if (std::none_of (places.begin(), places.end(), [&f] (const Place& p) { return p.folder == f; }))
         {
-            places.push_back ({ f.getFileName(), f, true });
+            places.push_back ({ f.getFileName(), f, true, false });
             savePlaces();
             rebuildPlaces();
         }

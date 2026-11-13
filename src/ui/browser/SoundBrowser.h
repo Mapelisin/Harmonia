@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/FilePreview.h"
+#include "ui/browser/SoundFavourites.h"
 
 namespace harmonia::ui::browser
 {
@@ -26,12 +27,14 @@ namespace harmonia::ui::browser
         mustn't take forever). */
     inline constexpr int maxSearchScanned = 50000;
 
-    /** A place on the left: one of the user's usual folders, a drive, or a folder they added. */
+    /** A place on the left: one of the user's usual folders, a drive, a folder they added, or
+        the favourite sounds (no folder: they are wherever they are). */
     struct Place
     {
         juce::String name;
         juce::File folder;
-        bool added = false;     // added by the user: can be removed
+        bool added = false;         // added by the user: can be removed
+        bool favourites = false;
     };
 
     /** The sound browser (lower panel, F6): places on the left, a folder's sounds on the right.
@@ -39,8 +42,13 @@ namespace harmonia::ui::browser
         puts it into the song at the playhead; or drag it onto a track. A click opens a folder;
         Backspace or the Up button goes back up. The search looks in the subfolders too (each
         found file says which subfolder it is in). The places added and the last folder are kept
-        in the settings. */
-    class SoundBrowser final : public juce::Component
+        in the settings.
+
+        A click on the star of a row keeps the sound among the favourites (the first place on the
+        left lists them, wherever they are). A loop that knows its tempo says it in its row, and
+        with In tempo on it is played at the song's tempo: as it will sound in the song. */
+    class SoundBrowser final : public juce::Component,
+                               private juce::Timer
     {
     public:
         SoundBrowser (core::Session&, audio::FilePreview&);
@@ -66,6 +74,33 @@ namespace harmonia::ui::browser
         /** What a double-click does: opens a folder, or puts a sound or MIDI file into the song. */
         void openEntry (int index);
 
+        /** The favourite sounds in place of a folder (Up, or any place, goes back to folders). */
+        void showFavourites();
+        bool isShowingFavourites() const noexcept       { return showingFavourites; }
+
+        bool isFavourite (const juce::File&) const;
+        void setFavourite (const juce::File&, bool shouldBe);
+
+        /** What a click on a row's star does. */
+        void toggleFavourite (int index);
+
+        /** Whether a click at `x` of a row `rowWidth` wide is on its star. */
+        static bool isOverStar (int x, int rowWidth) noexcept;
+
+        /** Loops are played at the song's tempo (on at first; kept in the settings). */
+        void setPlaysInTempo (bool);
+        bool playsInTempo() const noexcept              { return inTempo; }
+
+        /** The own tempo of a row's sound when it is a loop: what its row says. */
+        std::optional<double> getLoopBpm (int index);
+
+        /** What a row says of its tempo: "95 BPM", or, of a loop playing at the song's tempo,
+            both; nothing for a sound that isn't a loop (or hasn't been looked at yet). */
+        juce::String describeTempo (int index) const;
+
+        /** The song's tempo where a sound would go: what loops are played at. */
+        std::function<double()> getSongBpm;
+
         const std::vector<Place>& getPlaces() const noexcept    { return places; }
         void addPlace (const juce::File&);
         void removePlace (const juce::File&);
@@ -88,11 +123,15 @@ namespace harmonia::ui::browser
 
         core::Session& session;
         audio::FilePreview& preview;
+        Favourites favourites;
         juce::File folder;
         std::vector<Entry> entries;
         std::vector<Place> places;
+        bool showingFavourites = false, inTempo = true;
+        std::map<juce::String, std::optional<double>> loopBpms;     // of the sounds looked at so far, by path
+        double loopBpmsFor = 0.0;                                   // the song tempo they were found for
 
-        juce::TextButton upButton { "Up" }, addPlaceButton { "+ Folder" }, stopButton { "Stop" };
+        juce::TextButton upButton { "Up" }, addPlaceButton { "+ Folder" }, stopButton { "Stop" }, tempoButton { "In tempo" };
         juce::TextEditor search;
         juce::Label pathLabel, placesLabel;
         std::unique_ptr<FileList> fileList;
@@ -106,7 +145,12 @@ namespace harmonia::ui::browser
         void chooseFolderToAdd();
         void previewChanged();
         void previewIfSound (int index);
+        void listen (const juce::File&);
         bool isSound (const juce::File&) const;
+        double songBpm() const;
+        std::optional<double> findLoopBpm (const juce::File&);
+        juce::String describeFolderOf (const juce::File&) const;
+        void timerCallback() override;
 
         JUCE_DECLARE_NON_COPYABLE (SoundBrowser)
     };

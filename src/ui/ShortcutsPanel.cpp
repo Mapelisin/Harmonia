@@ -145,6 +145,8 @@ namespace harmonia::ui
 
             { "Sounds (F6)", {
                 { "Click a sound", "Listen (click it again: stop); MIDI files too" },
+                { "Click the star of a sound", "Keep it in Favourites (the first place on the left)" },
+                { "In tempo (the button)", "Loops play at the song's tempo, as they will sound in the song" },
                 { "Search box", "Finds sounds here and in the subfolders" },
                 { "Up / Down", "The next / previous sound, and listen to it" },
                 { "Double-click, Enter", "Put it into the song: on the current track, at the playhead" },
